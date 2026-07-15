@@ -1,21 +1,21 @@
 # ==========================================
 # Unity 핵심 무시 폴더
 # ==========================================
-/[Ll]ibrary/
-/[Tt]emp/
-/[Oo]bj/
-/[Bb]uild/
-/[Bb]uilds/
-/[Ll]ogs/
-/[Uu]ser[Ss]ettings/
-/[Mm]emoryCaptures/
-/[Ii]ntermediate/
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Ii]ntermediate/
 
 # ==========================================
 # 에셋 메타 파일 (매우 중요)
 # ==========================================
 # 에셋 폴더 안의 meta 파일은 절대 무시하면 안 됩니다.
-!/[Aa]ssets/**/*.meta
+!**/[Aa]ssets/**/*.meta
 
 # ==========================================
 # IDE 및 자동 생성 파일 (Visual Studio, VS Code, Rider)
