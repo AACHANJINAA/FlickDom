@@ -18,6 +18,8 @@ public class FlickController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
     }
 
+    private Vector3 initialCubePos;
+
     void Update()
     {
         if (Mouse.current == null) return;
@@ -25,18 +27,36 @@ public class FlickController : MonoBehaviour
         // 1. 마우스 왼쪽 버튼을 누르는 순간 (드래그 시작)
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
-            // 현재 마우스가 위치한 바닥(Plane)의 3D 좌표를 구합니다.
-            mouseStartPos = GetMousePositionOnBoard();
-            isDragging = true;
+            if (IsMouseOverCube())
+            {
+                mouseStartPos = GetMousePositionOnBoard();
+                initialCubePos = transform.position;
+                isDragging = true;
+            }
         }
-
         // 2. 마우스 왼쪽 버튼을 떼는 순간 (발사!)
-        if (Mouse.current.leftButton.wasReleasedThisFrame && isDragging)
+        else if (Mouse.current.leftButton.wasReleasedThisFrame && isDragging)
         {
             mouseEndPos = GetMousePositionOnBoard();
             isDragging = false;
             
             Flick(); // 튕기기 실행
+        }
+        // 3. 드래그 중일 때 큐브가 마우스를 따라가도록 이동
+        else if (isDragging)
+        {
+            Vector3 currentMousePos = GetMousePositionOnBoard();
+            Vector3 pullVector = currentMousePos - mouseStartPos;
+            pullVector.y = 0; // 높이는 변경하지 않음
+
+            // 드래그 거리 제한
+            if (pullVector.magnitude > maxDragDistance)
+            {
+                pullVector = pullVector.normalized * maxDragDistance;
+            }
+
+            // 큐브 위치 업데이트
+            transform.position = initialCubePos + pullVector;
         }
     }
 
@@ -71,5 +91,20 @@ public class FlickController : MonoBehaviour
             return ray.GetPoint(enter);
         }
         return Vector3.zero;
+    }
+
+    // 마우스가 현재 이 큐브 위에 있는지 확인하는 함수
+    private bool IsMouseOverCube()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            // 부딪힌 객체가 자기 자신(이 스크립트가 붙은 큐브)인지 확인
+            if (hit.collider.gameObject == this.gameObject)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }
