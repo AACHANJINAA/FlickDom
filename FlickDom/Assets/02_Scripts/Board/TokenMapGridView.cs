@@ -18,6 +18,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float cellSize = 0.8f;
         [SerializeField] private float gap = 0.05f;
         [SerializeField] private float tileHeight = 0.04f;
+        [SerializeField] private bool enableCellColliders = true;
 
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
@@ -37,6 +38,12 @@ namespace FlickDom.Gameplay
         private Material player1OwnedMaterial;
         private Material player2OwnedMaterial;
         private Transform cachedTransform;
+        private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
+
+        public Vector3 GridCenter
+        {
+            get { return gridCenter; }
+        }
 
         private void Awake()
         {
@@ -113,6 +120,43 @@ namespace FlickDom.Gameplay
             ShowCandidateCells(candidate.Owner, candidate.CandidateCells);
         }
 
+        public void ClearCandidateHighlights(PiecePlacementCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return;
+            }
+
+            ClearCandidateHighlights(candidate.Owner, candidate.CandidateCells);
+        }
+
+        public void ClearCandidateHighlights(FlickDomPlayerId player, IReadOnlyList<Vector2Int> cells)
+        {
+            if (cells == null || candidateFlags == null)
+            {
+                return;
+            }
+
+            int flag = GetCandidateFlag(player);
+            if (flag == 0)
+            {
+                return;
+            }
+
+            int removeMask = ~flag;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Vector2Int cell = cells[i];
+                if (!IsValidCell(cell))
+                {
+                    continue;
+                }
+
+                candidateFlags[cell.x, cell.y] &= removeMask;
+                RepaintCell(cell);
+            }
+        }
+
         public void ShowCandidateCells(FlickDomPlayerId player, IReadOnlyList<Vector2Int> cells)
         {
             if (cells == null || candidateFlags == null)
@@ -157,11 +201,26 @@ namespace FlickDom.Gameplay
             }
         }
 
+        public bool TryGetCell(Collider cellCollider, out Vector2Int cell)
+        {
+            if (cellCollider != null
+                && cellsByCollider.TryGetValue(cellCollider, out TokenMapGridCell gridCell)
+                && gridCell != null)
+            {
+                cell = gridCell.Cell;
+                return true;
+            }
+
+            cell = default(Vector2Int);
+            return false;
+        }
+
         private void BuildGrid()
         {
             cellRenderers = new Renderer[boardSize, boardSize];
             ownerCells = new FlickDomPlayerId[boardSize, boardSize];
             candidateFlags = new int[boardSize, boardSize];
+            cellsByCollider.Clear();
 
             float step = cellSize + gap;
             float offset = (boardSize - 1) * step * 0.5f;
@@ -179,8 +238,16 @@ namespace FlickDom.Gameplay
                         gridCenter.z + (y * step) - offset);
                     cellObject.transform.localScale = new Vector3(cellSize, tileHeight, cellSize);
 
+                    Vector2Int cell = new Vector2Int(x, y);
+                    TokenMapGridCell gridCell = cellObject.AddComponent<TokenMapGridCell>();
+                    gridCell.Initialize(cell, this);
+
                     Collider cellCollider = cellObject.GetComponent<Collider>();
-                    if (cellCollider != null)
+                    if (cellCollider != null && enableCellColliders)
+                    {
+                        cellsByCollider[cellCollider] = gridCell;
+                    }
+                    else if (cellCollider != null)
                     {
                         Destroy(cellCollider);
                     }

@@ -1,0 +1,192 @@
+using System.Collections;
+using UnityEngine;
+
+namespace FlickDom.Gameplay
+{
+    public sealed class PlacementCameraController : MonoBehaviour
+    {
+        [Header("References")]
+        [SerializeField] private GameModeManager gameModeManager;
+        [SerializeField] private TokenMapGridView tokenMapGridView;
+        [SerializeField] private Camera targetCamera;
+
+        [Header("Placement View")]
+        [SerializeField] private Vector3 placementOffset = new Vector3(0f, 6f, 0f);
+        [SerializeField] private Vector3 placementEulerAngles = new Vector3(90f, 0f, 0f);
+        [SerializeField] private bool useOrthographicDuringPlacement = true;
+        [SerializeField] private float placementOrthographicSize = 2.7f;
+        [SerializeField] private float transitionDuration = 0.45f;
+        [SerializeField] private bool returnWhenLeavingPlacement = true;
+
+        private Vector3 gameplayPosition;
+        private Quaternion gameplayRotation;
+        private bool gameplayOrthographic;
+        private float gameplayOrthographicSize;
+        private Coroutine activeTransition;
+
+        private void Awake()
+        {
+            if (gameModeManager == null)
+            {
+                gameModeManager = GetComponent<GameModeManager>();
+            }
+
+            if (tokenMapGridView == null)
+            {
+                tokenMapGridView = GetComponent<TokenMapGridView>();
+            }
+
+            if (targetCamera == null)
+            {
+                targetCamera = Camera.main;
+            }
+
+            CacheGameplayCameraPose();
+        }
+
+        private void OnEnable()
+        {
+            if (gameModeManager != null)
+            {
+                gameModeManager.StateChanged += HandleStateChanged;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (gameModeManager != null)
+            {
+                gameModeManager.StateChanged -= HandleStateChanged;
+            }
+
+            StopActiveTransition();
+        }
+
+        private void OnValidate()
+        {
+            transitionDuration = Mathf.Max(0f, transitionDuration);
+            placementOrthographicSize = Mathf.Max(0.1f, placementOrthographicSize);
+        }
+
+        private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
+        {
+            if (targetCamera == null)
+            {
+                return;
+            }
+
+            if (nextState == FlickDomGameState.PlacementSelection)
+            {
+                MoveToPlacementView();
+                return;
+            }
+
+            if (previousState == FlickDomGameState.PlacementSelection && returnWhenLeavingPlacement)
+            {
+                MoveToGameplayView();
+            }
+        }
+
+        private void CacheGameplayCameraPose()
+        {
+            if (targetCamera == null)
+            {
+                return;
+            }
+
+            Transform cameraTransform = targetCamera.transform;
+            gameplayPosition = cameraTransform.position;
+            gameplayRotation = cameraTransform.rotation;
+            gameplayOrthographic = targetCamera.orthographic;
+            gameplayOrthographicSize = targetCamera.orthographicSize;
+        }
+
+        private void MoveToPlacementView()
+        {
+            Vector3 focus = tokenMapGridView != null ? tokenMapGridView.GridCenter : Vector3.zero;
+            Vector3 targetPosition = focus + placementOffset;
+            Quaternion targetRotation = Quaternion.Euler(placementEulerAngles);
+            bool targetOrthographic = useOrthographicDuringPlacement;
+            float targetOrthographicSize = placementOrthographicSize;
+
+            BeginTransition(targetPosition, targetRotation, targetOrthographic, targetOrthographicSize);
+        }
+
+        private void MoveToGameplayView()
+        {
+            BeginTransition(gameplayPosition, gameplayRotation, gameplayOrthographic, gameplayOrthographicSize);
+        }
+
+        private void BeginTransition(
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            bool targetOrthographic,
+            float targetOrthographicSize)
+        {
+            StopActiveTransition();
+
+            if (transitionDuration <= 0f)
+            {
+                ApplyCameraPose(targetPosition, targetRotation, targetOrthographic, targetOrthographicSize);
+                return;
+            }
+
+            activeTransition = StartCoroutine(TransitionCamera(targetPosition, targetRotation, targetOrthographic, targetOrthographicSize));
+        }
+
+        private IEnumerator TransitionCamera(
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            bool targetOrthographic,
+            float targetOrthographicSize)
+        {
+            Transform cameraTransform = targetCamera.transform;
+            Vector3 startPosition = cameraTransform.position;
+            Quaternion startRotation = cameraTransform.rotation;
+            bool startOrthographic = targetCamera.orthographic;
+            float startOrthographicSize = targetCamera.orthographicSize;
+            float elapsed = 0f;
+
+            targetCamera.orthographic = targetOrthographic;
+
+            while (elapsed < transitionDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / transitionDuration);
+                float smoothT = t * t * (3f - (2f * t));
+
+                cameraTransform.position = Vector3.Lerp(startPosition, targetPosition, smoothT);
+                cameraTransform.rotation = Quaternion.Slerp(startRotation, targetRotation, smoothT);
+                targetCamera.orthographicSize = Mathf.Lerp(startOrthographicSize, targetOrthographicSize, smoothT);
+                yield return null;
+            }
+
+            ApplyCameraPose(targetPosition, targetRotation, targetOrthographic, targetOrthographicSize);
+            activeTransition = null;
+        }
+
+        private void ApplyCameraPose(
+            Vector3 targetPosition,
+            Quaternion targetRotation,
+            bool targetOrthographic,
+            float targetOrthographicSize)
+        {
+            Transform cameraTransform = targetCamera.transform;
+            cameraTransform.position = targetPosition;
+            cameraTransform.rotation = targetRotation;
+            targetCamera.orthographic = targetOrthographic;
+            targetCamera.orthographicSize = targetOrthographicSize;
+        }
+
+        private void StopActiveTransition()
+        {
+            if (activeTransition == null)
+            {
+                return;
+            }
+
+            StopCoroutine(activeTransition);
+            activeTransition = null;
+        }
+    }
+}
