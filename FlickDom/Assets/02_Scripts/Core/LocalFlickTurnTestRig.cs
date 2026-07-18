@@ -8,6 +8,7 @@ namespace FlickDom.Gameplay
     public sealed class LocalFlickTurnTestRig : MonoBehaviour
     {
         [SerializeField] private GameModeManager gameModeManager;
+        [SerializeField] private TokenMapGridView tokenMapGridView;
         [SerializeField] private TurnBasedFlickPiece[] player1Pieces;
         [SerializeField] private TurnBasedFlickPiece[] player2Pieces;
         [SerializeField] private bool startGameOnPlay = true;
@@ -20,6 +21,11 @@ namespace FlickDom.Gameplay
             if (gameModeManager == null)
             {
                 gameModeManager = GetComponent<GameModeManager>();
+            }
+
+            if (tokenMapGridView == null)
+            {
+                tokenMapGridView = GetComponent<TokenMapGridView>();
             }
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
@@ -171,6 +177,11 @@ namespace FlickDom.Gameplay
                 Debug.Log(BuildCandidateLog(candidate), this);
             }
 
+            if (tokenMapGridView != null)
+            {
+                tokenMapGridView.ShowCandidateCells(candidate);
+            }
+
             gameModeManager.CompleteCurrentPlayerPhysics();
         }
 
@@ -196,6 +207,11 @@ namespace FlickDom.Gameplay
 
         private void HandleRoundStarted(int roundNumber, IReadOnlyList<FlickDomPlayerId> turnOrder)
         {
+            if (tokenMapGridView != null)
+            {
+                tokenMapGridView.ClearCandidateHighlights();
+            }
+
             ResetPiecesForRound(player1Pieces);
             ResetPiecesForRound(player2Pieces);
 
