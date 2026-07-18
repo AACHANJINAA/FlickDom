@@ -2,22 +2,29 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+
 namespace FlickDom.Gameplay
 {
     public sealed class GameModeManager : MonoBehaviour
     {
         [Header("Scene References")]
+        // 토큰맵을 담당하는 매니저
         [SerializeField] private TokenMapManager tokenMapManager;
+        // 알이 멈춰있는 float 월드 좌표를 보고, 그 알이 걸쳐 있는 점령맵 후보 칸들을 계산
         [SerializeField] private GridCellCandidateResolver cellCandidateResolver;
 
         [Header("Local Two Player Flow")]
+         // 게임 시작 시 자동으로 로컬 게임을 시작할지 여부 
         [SerializeField] private bool startLocalGameOnStart = true;
         [SerializeField] private bool autoEnterFlickingAfterReady = true;
         [SerializeField] private FlickDomPlayerId firstPlayer = FlickDomPlayerId.Player1;
+        // 임시로 라운드가 끝날 때마다 선공을 번갈아 바꿀지
         [SerializeField] private bool alternateFirstPlayerEachRound;
 
         private readonly List<FlickDomPlayerId> roundTurnOrder = new List<FlickDomPlayerId>(2);
+        // 누가 알까기 조작 끝났는지
         private readonly HashSet<FlickDomPlayerId> playersCompletedFlicking = new HashSet<FlickDomPlayerId>();
+        // 누가 알까기 물리 시뮬레이션 끝났는지
         private readonly HashSet<FlickDomPlayerId> playersCompletedPhysics = new HashSet<FlickDomPlayerId>();
         private readonly List<PiecePlacementCandidate> pendingPlacementCandidates = new List<PiecePlacementCandidate>();
 
