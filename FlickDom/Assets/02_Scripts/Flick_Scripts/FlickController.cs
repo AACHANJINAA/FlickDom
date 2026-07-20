@@ -13,6 +13,8 @@ public class FlickController : MonoBehaviour
     private Vector3 mouseEndPos;
     private bool isDragging = false;
 
+    private LineRenderer trajectoryLine;
+
     private Material cubeMaterial;
     private Color originalEmissionColor;
 
@@ -28,6 +30,22 @@ public class FlickController : MonoBehaviour
             cubeMaterial.EnableKeyword("_EMISSION");
             originalEmissionColor = cubeMaterial.GetColor("_EmissionColor");
         }
+
+        // 궤적(선)을 그리기 위한 LineRenderer 컴포넌트를 동적으로 추가/세팅합니다.
+        trajectoryLine = GetComponent<LineRenderer>();
+        if (trajectoryLine == null)
+        {
+            trajectoryLine = gameObject.AddComponent<LineRenderer>();
+        }
+        trajectoryLine.positionCount = 2; // 선의 양 끝점 (시작과 끝)
+        trajectoryLine.enabled = false;   // 평소엔 끄기
+        trajectoryLine.startWidth = 0.2f; // 시작 두께
+        trajectoryLine.endWidth = 0.05f;  // 끝 두께 (뾰족하게)
+        
+        // 렌더러 머티리얼을 생성해서 넣어주고 그라데이션 색상(노랑->빨강)을 설정합니다.
+        trajectoryLine.material = new Material(Shader.Find("Sprites/Default"));
+        trajectoryLine.startColor = Color.yellow;
+        trajectoryLine.endColor = Color.red;
     }
 
     private Vector3 initialCubePos;
@@ -45,6 +63,7 @@ public class FlickController : MonoBehaviour
                 initialCubePos = transform.position;
                 isDragging = true;
                 SetHighlight(true); // 노란빛 켜기
+                trajectoryLine.enabled = true; // 궤적 선 표시 시작
             }
         }
         // 2. 마우스 왼쪽 버튼을 떼는 순간 (발사!)
@@ -53,6 +72,7 @@ public class FlickController : MonoBehaviour
             mouseEndPos = GetMousePositionOnBoard();
             isDragging = false;
             SetHighlight(false); // 노란빛 끄기
+            trajectoryLine.enabled = false; // 궤적 선 끄기
             
             Flick(); // 튕기기 실행
         }
@@ -71,6 +91,11 @@ public class FlickController : MonoBehaviour
 
             // 큐브 위치 업데이트
             transform.position = initialCubePos + pullVector;
+
+            // 궤적(선) 업데이트: 당기는 방향의 반대 방향으로 날아갈 것이므로 역전(-pullVector)시킴
+            Vector3 forceDirection = -pullVector;
+            trajectoryLine.SetPosition(0, initialCubePos); // 선의 시작점 (큐브 원래 위치)
+            trajectoryLine.SetPosition(1, initialCubePos + forceDirection); // 선의 끝점 (날아갈 방향)
         }
     }
 
@@ -129,8 +154,8 @@ public class FlickController : MonoBehaviour
         {
             if (isHighlighted)
             {
-                // 노란색을 2배 밝기로 설정하여 빛나는 느낌(Glow) 주기
-                cubeMaterial.SetColor("_EmissionColor", Color.yellow * 2.0f);
+                // 원래 텍스처(나무 결 등)를 가리지 않도록 밝기를 은은하게(0.4배) 줄임
+                cubeMaterial.SetColor("_EmissionColor", Color.yellow * 0.05f);
             }
             else
             {
