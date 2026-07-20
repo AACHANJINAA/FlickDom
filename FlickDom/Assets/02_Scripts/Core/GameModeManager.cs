@@ -18,10 +18,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool startLocalGameOnStart = true;
         [SerializeField] private bool autoEnterFlickingAfterReady = true;
         [SerializeField] private FlickDomPlayerId firstPlayer = FlickDomPlayerId.Player1;
+        [SerializeField] private int flicksPerPlayerPerRound = 3;
+        [SerializeField] private bool selectPieceOrderBeforeFlicking = true;
         // 임시로 라운드가 끝날 때마다 선공을 번갈아 바꿀지
         [SerializeField] private bool alternateFirstPlayerEachRound;
 
-        private readonly List<FlickDomPlayerId> roundTurnOrder = new List<FlickDomPlayerId>(2);
+        private readonly List<FlickDomPlayerId> roundTurnOrder = new List<FlickDomPlayerId>(6);
         // 누가 알까기 조작 끝났는지
         private readonly HashSet<FlickDomPlayerId> playersCompletedFlicking = new HashSet<FlickDomPlayerId>();
         // 누가 알까기 물리 시뮬레이션 끝났는지
@@ -70,6 +72,11 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void OnValidate()
+        {
+            flicksPerPlayerPerRound = Mathf.Max(1, flicksPerPlayerPerRound);
+        }
+
         public void StartLocalGame()
         {
             RoundNumber = 0;
@@ -94,8 +101,52 @@ namespace FlickDom.Gameplay
 
             if (autoEnterFlickingAfterReady)
             {
+                if (selectPieceOrderBeforeFlicking)
+                {
+                    BeginPieceOrderSelection();
+                }
+                else
+                {
+                    BeginCurrentPlayerFlicking();
+                }
+            }
+        }
+
+        public bool BeginPieceOrderSelection()
+        {
+            if (CurrentState != FlickDomGameState.Ready)
+            {
+                return false;
+            }
+
+            SetActivePlayer(currentFirstPlayer);
+            SetState(FlickDomGameState.PieceOrderSelection);
+            return true;
+        }
+
+        public bool CompleteCurrentPlayerPieceOrderSelection()
+        {
+            if (CurrentState != FlickDomGameState.PieceOrderSelection
+                || ActivePlayer == FlickDomPlayerId.None)
+            {
+                return false;
+            }
+
+            if (ActivePlayer == currentFirstPlayer)
+            {
+                SetActivePlayer(GetOtherPlayer(currentFirstPlayer));
+                return true;
+            }
+
+            SetActivePlayer(FlickDomPlayerId.None);
+            SetState(FlickDomGameState.Ready);
+
+            if (autoEnterFlickingAfterReady)
+            {
                 BeginCurrentPlayerFlicking();
             }
+
+            return true;
         }
 
         public bool BeginCurrentPlayerFlicking()
@@ -302,9 +353,14 @@ namespace FlickDom.Gameplay
         private void BuildRoundTurnOrder(FlickDomPlayerId startingPlayer)
         {
             FlickDomPlayerId normalizedStarter = NormalizePlayer(startingPlayer);
+            FlickDomPlayerId otherPlayer = GetOtherPlayer(normalizedStarter);
             roundTurnOrder.Clear();
-            roundTurnOrder.Add(normalizedStarter);
-            roundTurnOrder.Add(GetOtherPlayer(normalizedStarter));
+
+            for (int i = 0; i < flicksPerPlayerPerRound; i++)
+            {
+                roundTurnOrder.Add(normalizedStarter);
+                roundTurnOrder.Add(otherPlayer);
+            }
         }
 
         private void SetState(FlickDomGameState nextState)

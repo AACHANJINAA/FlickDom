@@ -11,29 +11,37 @@ namespace FlickDom.Gameplay
 
         [Header("Active Card")]
         [SerializeField] private PatternCardData activeCard;
+        [SerializeField] private PatternCardData[] cardDeck;
         [SerializeField] private bool autoCreateEasyFallbackCard = true;
         [SerializeField] private bool matchAnywhereOnBoard = true;
         [SerializeField] private bool resetScoresWhenMapCleared = true;
         [SerializeField] private bool logCardClaims = true;
 
-        private PatternCardData runtimeFallbackCard;
+        private PatternCardData[] runtimeFallbackDeck;
+        private PatternCardData[] runtimeCards = new PatternCardData[0];
+        private bool[] claimedCards = new bool[0];
         private FlickDomPlayerId lastChangedOwner = FlickDomPlayerId.None;
-        private bool activeCardClaimed;
         private int player1Score;
         private int player2Score;
 
         public event Action<PatternCardData> ActiveCardChanged;
         public event Action<FlickDomPlayerId, int, int, int> ScoreChanged;
         public event Action<PatternCardData, FlickDomPlayerId, int, Vector2Int> CardCompleted;
+        public event Action CardsExhausted;
 
         public PatternCardData ActiveCard
         {
-            get { return activeCard != null ? activeCard : runtimeFallbackCard; }
+            get { return GetFirstRemainingCard(); }
         }
 
         public bool IsActiveCardClaimed
         {
-            get { return activeCardClaimed; }
+            get { return ActiveCard == null; }
+        }
+
+        public int RemainingCardCount
+        {
+            get { return CountRemainingCards(); }
         }
 
         public int Player1Score
@@ -59,6 +67,7 @@ namespace FlickDom.Gameplay
             }
 
             EnsureRuntimeFallbackCard();
+            RefreshRuntimeCards();
         }
 
         private void OnEnable()
@@ -100,9 +109,36 @@ namespace FlickDom.Gameplay
         public void SetActiveCard(PatternCardData nextCard)
         {
             activeCard = nextCard;
-            activeCardClaimed = false;
+            cardDeck = null;
+            RefreshRuntimeCards();
             ActiveCardChanged?.Invoke(ActiveCard);
             EvaluateAllPlayers();
+        }
+
+        public PatternCardData GetRemainingCard(int index)
+        {
+            if (index < 0)
+            {
+                return null;
+            }
+
+            int remainingIndex = 0;
+            for (int i = 0; i < runtimeCards.Length; i++)
+            {
+                if (!IsCardAvailable(i))
+                {
+                    continue;
+                }
+
+                if (remainingIndex == index)
+                {
+                    return runtimeCards[i];
+                }
+
+                remainingIndex++;
+            }
+
+            return null;
         }
 
         public int GetScore(FlickDomPlayerId player)
@@ -135,7 +171,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            if (lastChangedOwner != FlickDomPlayerId.None && TryClaimActiveCard(lastChangedOwner))
+            if (lastChangedOwner != FlickDomPlayerId.None && TryClaimMatchingCards(lastChangedOwner))
             {
                 lastChangedOwner = FlickDomPlayerId.None;
                 return;
@@ -147,7 +183,7 @@ namespace FlickDom.Gameplay
 
         private void HandleMapCleared()
         {
-            activeCardClaimed = false;
+            ResetClaimedCards();
             lastChangedOwner = FlickDomPlayerId.None;
 
             if (resetScoresWhenMapCleared)
@@ -171,55 +207,75 @@ namespace FlickDom.Gameplay
 
         private void EvaluateAllPlayers()
         {
-            if (!CanScoreNow() || activeCardClaimed)
+            if (!CanScoreNow() || RemainingCardCount <= 0)
             {
                 return;
             }
 
-            if (lastChangedOwner != FlickDomPlayerId.None && TryClaimActiveCard(lastChangedOwner))
+            if (lastChangedOwner != FlickDomPlayerId.None && TryClaimMatchingCards(lastChangedOwner))
             {
                 lastChangedOwner = FlickDomPlayerId.None;
                 return;
             }
 
-            if (TryClaimActiveCard(FlickDomPlayerId.Player1))
+            if (TryClaimMatchingCards(FlickDomPlayerId.Player1))
             {
                 return;
             }
 
-            TryClaimActiveCard(FlickDomPlayerId.Player2);
+            TryClaimMatchingCards(FlickDomPlayerId.Player2);
         }
 
-        private bool TryClaimActiveCard(FlickDomPlayerId player)
+        private bool TryClaimMatchingCards(FlickDomPlayerId player)
         {
-            PatternCardData card = ActiveCard;
-            if (activeCardClaimed || card == null)
+            if (player == FlickDomPlayerId.None)
             {
                 return false;
             }
 
-            if (!PatternCardMatcher.TryFindMatch(
-                    tokenMapManager,
-                    card,
-                    player,
-                    matchAnywhereOnBoard,
-                    out Vector2Int matchOrigin))
+            bool claimedAnyCard = false;
+            for (int i = 0; i < runtimeCards.Length; i++)
             {
-                return false;
+                PatternCardData card = runtimeCards[i];
+                if (!IsCardAvailable(i))
+                {
+                    continue;
+                }
+
+                if (!PatternCardMatcher.TryFindMatch(
+                        tokenMapManager,
+                        card,
+                        player,
+                        matchAnywhereOnBoard,
+                        out Vector2Int matchOrigin))
+                {
+                    continue;
+                }
+
+                ClaimCard(i, card, player, matchOrigin);
+                claimedAnyCard = true;
             }
 
-            activeCardClaimed = true;
+            return claimedAnyCard;
+        }
+
+        private void ClaimCard(int cardIndex, PatternCardData card, FlickDomPlayerId player, Vector2Int matchOrigin)
+        {
+            claimedCards[cardIndex] = true;
             int gainedScore = card.ScoreValue;
             AddScore(player, gainedScore);
             CardCompleted?.Invoke(card, player, gainedScore, matchOrigin);
-            ActiveCardChanged?.Invoke(card);
+            ActiveCardChanged?.Invoke(ActiveCard);
 
             if (logCardClaims)
             {
                 Debug.Log("[PatternCard] " + player + " completed " + card.CardId + " and gained " + gainedScore + " point(s).", this);
             }
 
-            return true;
+            if (RemainingCardCount <= 0)
+            {
+                CardsExhausted?.Invoke();
+            }
         }
 
         private void AddScore(FlickDomPlayerId player, int score)
@@ -249,15 +305,104 @@ namespace FlickDom.Gameplay
 
         private void EnsureRuntimeFallbackCard()
         {
-            if (activeCard != null || !autoCreateEasyFallbackCard)
+            if (activeCard != null || HasConfiguredDeck() || !autoCreateEasyFallbackCard)
             {
                 return;
             }
 
-            if (runtimeFallbackCard == null)
+            if (runtimeFallbackDeck == null || runtimeFallbackDeck.Length <= 0)
             {
-                runtimeFallbackCard = PatternCardData.CreateRuntimeEasyCard();
+                runtimeFallbackDeck = PatternCardData.CreateRuntimeEasyDeck();
             }
+        }
+
+        private void RefreshRuntimeCards()
+        {
+            runtimeCards = ResolveRuntimeCards();
+            claimedCards = new bool[runtimeCards.Length];
+        }
+
+        private PatternCardData[] ResolveRuntimeCards()
+        {
+            if (HasConfiguredDeck())
+            {
+                return cardDeck;
+            }
+
+            if (activeCard != null)
+            {
+                return new[] { activeCard };
+            }
+
+            return runtimeFallbackDeck ?? new PatternCardData[0];
+        }
+
+        private bool HasConfiguredDeck()
+        {
+            if (cardDeck == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < cardDeck.Length; i++)
+            {
+                if (cardDeck[i] != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ResetClaimedCards()
+        {
+            if (runtimeCards == null || runtimeCards.Length <= 0)
+            {
+                RefreshRuntimeCards();
+                return;
+            }
+
+            for (int i = 0; i < claimedCards.Length; i++)
+            {
+                claimedCards[i] = false;
+            }
+        }
+
+        private PatternCardData GetFirstRemainingCard()
+        {
+            for (int i = 0; i < runtimeCards.Length; i++)
+            {
+                if (IsCardAvailable(i))
+                {
+                    return runtimeCards[i];
+                }
+            }
+
+            return null;
+        }
+
+        private int CountRemainingCards()
+        {
+            int count = 0;
+            for (int i = 0; i < runtimeCards.Length; i++)
+            {
+                if (IsCardAvailable(i))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool IsCardAvailable(int index)
+        {
+            return index >= 0
+                && index < runtimeCards.Length
+                && index < claimedCards.Length
+                && runtimeCards[index] != null
+                && !claimedCards[index];
         }
     }
 }

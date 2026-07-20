@@ -22,6 +22,11 @@ namespace FlickDom.Gameplay
         private Quaternion gameplayRotation;
         private bool gameplayOrthographic;
         private float gameplayOrthographicSize;
+        private Vector3 manualPreviewPosition;
+        private Quaternion manualPreviewRotation;
+        private bool manualPreviewOrthographic;
+        private float manualPreviewOrthographicSize;
+        private bool hasManualPreviewPose;
         private Coroutine activeTransition;
 
         private void Awake()
@@ -68,6 +73,44 @@ namespace FlickDom.Gameplay
             placementOrthographicSize = Mathf.Max(0.1f, placementOrthographicSize);
         }
 
+        public void ShowPlacementBoardPreview()
+        {
+            if (targetCamera == null)
+            {
+                return;
+            }
+
+            if (!hasManualPreviewPose)
+            {
+                CacheManualPreviewCameraPose();
+                hasManualPreviewPose = true;
+            }
+
+            MoveToPlacementView();
+        }
+
+        public void ReturnFromPlacementBoardPreview()
+        {
+            if (targetCamera == null || !hasManualPreviewPose)
+            {
+                return;
+            }
+
+            hasManualPreviewPose = false;
+
+            if (gameModeManager != null && gameModeManager.CurrentState == FlickDomGameState.PlacementSelection)
+            {
+                MoveToPlacementView();
+                return;
+            }
+
+            BeginTransition(
+                manualPreviewPosition,
+                manualPreviewRotation,
+                manualPreviewOrthographic,
+                manualPreviewOrthographicSize);
+        }
+
         private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
         {
             if (targetCamera == null)
@@ -99,6 +142,15 @@ namespace FlickDom.Gameplay
             gameplayRotation = cameraTransform.rotation;
             gameplayOrthographic = targetCamera.orthographic;
             gameplayOrthographicSize = targetCamera.orthographicSize;
+        }
+
+        private void CacheManualPreviewCameraPose()
+        {
+            Transform cameraTransform = targetCamera.transform;
+            manualPreviewPosition = cameraTransform.position;
+            manualPreviewRotation = cameraTransform.rotation;
+            manualPreviewOrthographic = targetCamera.orthographic;
+            manualPreviewOrthographicSize = targetCamera.orthographicSize;
         }
 
         private void MoveToPlacementView()

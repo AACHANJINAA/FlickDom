@@ -30,6 +30,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color player1Color = new Color(0.1f, 0.35f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.2f, 0.15f);
         [SerializeField] private Color inactiveTint = new Color(0.45f, 0.45f, 0.45f);
+        [SerializeField] private Color currentFlickTargetColor = new Color(1f, 0.86f, 0.05f);
+        [SerializeField] private Color selectedOrderColor = new Color(1f, 0.68f, 0.05f);
 
         private Rigidbody cachedRigidbody;
         private Collider cachedCollider;
@@ -50,6 +52,7 @@ namespace FlickDom.Gameplay
         private bool isDead;
         private bool invalidatedThisTurn;
         private bool enteredPlayableBoardAfterLaunch;
+        private bool canInteractThisTurn = true;
         private float stoppedTimer;
         private bool originalUseGravity;
         private bool originalIsKinematic;
@@ -80,6 +83,11 @@ namespace FlickDom.Gameplay
         public bool IsDead
         {
             get { return isDead; }
+        }
+
+        public bool HasLaunchedThisRound
+        {
+            get { return launchedThisTurn; }
         }
 
         private void Awake()
@@ -180,8 +188,32 @@ namespace FlickDom.Gameplay
             ApplyBaseColor();
         }
 
+        public void SetRoundStartPose(Vector3 position, Quaternion rotation)
+        {
+            EnsureCachedComponents();
+
+            flickStartPosition = position;
+            flickStartRotation = rotation;
+            transform.SetPositionAndRotation(position, rotation);
+
+            if (cachedRigidbody == null)
+            {
+                return;
+            }
+
+            cachedRigidbody.position = position;
+            cachedRigidbody.rotation = rotation;
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
+        }
+
         public void SetTurnHighlight(bool isActiveTurn)
         {
+            EnsureCachedComponents();
+            canInteractThisTurn = isActiveTurn;
             UpdateCollisionForTurnState(isActiveTurn);
 
             if (cachedRenderer == null)
@@ -204,6 +236,71 @@ namespace FlickDom.Gameplay
             cachedRenderer.material.color = isActiveTurn ? GetOwnerColor() : inactiveTint;
         }
 
+        public void SetFlickTurnHighlight(bool isActivePlayerPiece, bool isCurrentFlickTarget)
+        {
+            EnsureCachedComponents();
+            canInteractThisTurn = isCurrentFlickTarget;
+            UpdateCollisionForTurnState(isCurrentFlickTarget);
+
+            if (cachedRenderer == null)
+            {
+                return;
+            }
+
+            if (isDead)
+            {
+                cachedRenderer.material.color = deadTint;
+                return;
+            }
+
+            if (isCurrentFlickTarget)
+            {
+                cachedRenderer.material.color = currentFlickTargetColor;
+                return;
+            }
+
+            cachedRenderer.material.color = isActivePlayerPiece ? GetOwnerColor() : inactiveTint;
+        }
+
+        public void SetOrderSelectionHighlight(bool isSelectingPlayerPiece, bool isAlreadySelected)
+        {
+            EnsureCachedComponents();
+            canInteractThisTurn = false;
+
+            if (isDead)
+            {
+                StopDeadPieceSimulation();
+                if (cachedRenderer != null)
+                {
+                    cachedRenderer.material.color = deadTint;
+                }
+
+                return;
+            }
+
+            if (isSelectingPlayerPiece && !isAlreadySelected)
+            {
+                EnableInputOnlyCollision();
+            }
+            else
+            {
+                ParkWithoutCollision();
+            }
+
+            if (cachedRenderer == null)
+            {
+                return;
+            }
+
+            if (isSelectingPlayerPiece && isAlreadySelected)
+            {
+                cachedRenderer.material.color = selectedOrderColor;
+                return;
+            }
+
+            cachedRenderer.material.color = isSelectingPlayerPiece ? GetOwnerColor() : inactiveTint;
+        }
+
         public void ResetRoundUse()
         {
             ResetToFlickStartPose();
@@ -214,9 +311,30 @@ namespace FlickDom.Gameplay
             isDead = false;
             invalidatedThisTurn = false;
             enteredPlayableBoardAfterLaunch = false;
+            canInteractThisTurn = false;
             stoppedTimer = 0f;
             ApplyBaseColor();
             UpdateCollisionForTurnState(false);
+        }
+
+        public bool TryRaycast(Ray ray, float maxDistance, out float distance)
+        {
+            EnsureCachedComponents();
+
+            if (cachedCollider == null || !cachedCollider.enabled)
+            {
+                distance = 0f;
+                return false;
+            }
+
+            if (cachedCollider.Raycast(ray, out RaycastHit hit, maxDistance))
+            {
+                distance = hit.distance;
+                return true;
+            }
+
+            distance = 0f;
+            return false;
         }
 
         private bool CanInteractThisFrame()
@@ -227,6 +345,11 @@ namespace FlickDom.Gameplay
             }
 
             if (isDead || launchedThisTurn)
+            {
+                return false;
+            }
+
+            if (!canInteractThisTurn)
             {
                 return false;
             }
@@ -515,12 +638,32 @@ namespace FlickDom.Gameplay
 
         private void ApplyBaseColor()
         {
+            EnsureCachedComponents();
+
             if (cachedRenderer == null)
             {
                 return;
             }
 
             cachedRenderer.material.color = GetOwnerColor();
+        }
+
+        private void EnsureCachedComponents()
+        {
+            if (cachedRigidbody == null)
+            {
+                cachedRigidbody = GetComponent<Rigidbody>();
+            }
+
+            if (cachedCollider == null)
+            {
+                cachedCollider = GetComponent<Collider>();
+            }
+
+            if (cachedRenderer == null)
+            {
+                cachedRenderer = GetComponentInChildren<Renderer>();
+            }
         }
 
         private Color GetOwnerColor()

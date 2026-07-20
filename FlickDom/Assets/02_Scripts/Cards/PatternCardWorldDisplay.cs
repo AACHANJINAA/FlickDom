@@ -8,6 +8,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private PatternCardManager cardManager;
         [SerializeField] private PatternCardSlot cardSlot;
         [SerializeField] private PatternCardData explicitCard;
+        [SerializeField] private PatternCardTextureBinding[] cardTextureBindings;
         [SerializeField] private Texture2D cardTextureOverride;
 
         [Header("Display")]
@@ -153,6 +154,12 @@ namespace FlickDom.Gameplay
 
         private Texture2D ResolveTexture(PatternCardData card)
         {
+            Texture2D boundTexture = PatternCardTextureBinding.Resolve(cardTextureBindings, card);
+            if (boundTexture != null)
+            {
+                return boundTexture;
+            }
+
             if (cardTextureOverride != null)
             {
                 return cardTextureOverride;

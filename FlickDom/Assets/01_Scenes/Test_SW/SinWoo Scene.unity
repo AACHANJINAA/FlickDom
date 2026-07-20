@@ -768,6 +768,7 @@ GameObject:
   - component: {fileID: 1371976860}
   - component: {fileID: 1371976861}
   - component: {fileID: 1371976862}
+  - component: {fileID: 1371976863}
   m_Layer: 0
   m_Name: Game Systems
   m_TagString: Untagged
@@ -830,6 +831,8 @@ MonoBehaviour:
   startLocalGameOnStart: 1
   autoEnterFlickingAfterReady: 1
   firstPlayer: 1
+  flicksPerPlayerPerRound: 3
+  selectPieceOrderBeforeFlicking: 1
   alternateFirstPlayerEachRound: 1
 --- !u!4 &1371976855
 Transform:
@@ -860,11 +863,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.LocalFlickTurnTestRig
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
+  inputCamera: {fileID: 961739752}
   player1Pieces:
   - {fileID: 1307856382}
   player2Pieces:
   - {fileID: 405217532}
   startGameOnPlay: 1
+  autoCreateMissingPieces: 1
+  targetPiecesPerPlayer: 3
+  generatedPieceSpacing: 1.1
+  pieceSelectionRaycastDistance: 1000
   logStateChanges: 1
 --- !u!114 &1371976857
 MonoBehaviour:
@@ -957,6 +965,7 @@ MonoBehaviour:
   gameModeManager: {fileID: 1371976854}
   tokenMapManager: {fileID: 1371976852}
   activeCard: {fileID: 0}
+  cardDeck: []
   autoCreateEasyFallbackCard: 1
   matchAnywhereOnBoard: 1
   resetScoresWhenMapCleared: 1
@@ -976,6 +985,11 @@ MonoBehaviour:
   cardManager: {fileID: 1371976860}
   cardSlot: {fileID: 1800000003}
   explicitCard: {fileID: 0}
+  cardTextureBindings:
+  - cardId: EasyCard_1
+    texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  - cardId: EasyCard_2
+    texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
   cardTextureOverride: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
   preferTexture: 1
   preserveTextureAspect: 1
@@ -1016,6 +1030,63 @@ MonoBehaviour:
   player2Color: {r: 1, g: 0.22, b: 0.18, a: 1}
   outlineColor: {r: 0, g: 0, b: 0, a: 0.8}
   outlineDistance: {x: 2, y: -2}
+--- !u!114 &1371976863
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1371976851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ddc8f51602c4984bfbd9e74f96d9e5a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GameViewMenuHud
+  cardManager: {fileID: 1371976860}
+  placementCameraController: {fileID: 1371976858}
+  font: {fileID: 0}
+  fallbackFontNames:
+  - Malgun Gothic
+  - Segoe UI
+  - Arial Unicode MS
+  - Arial
+  cardTextureBindings:
+  - cardId: EasyCard_1
+    texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  - cardId: EasyCard_2
+    texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  cardTextures:
+  - {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  - {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  cardPanelSize: {x: 680, y: 520}
+  cardImageSize: {x: 260, y: 360}
+  cardImageSpacing: 28
+  menuButtonSize: {x: 140, y: 46}
+  menuButtonOffset: {x: 0, y: -22}
+  menuPanelSize: {x: 280, y: 210}
+  menuPanelOffset: {x: 0, y: -82}
+  returnButtonSize: {x: 160, y: 48}
+  returnButtonOffset: {x: 0, y: -22}
+  buttonFontSize: 24
+  emptyCardFontSize: 28
+  roundChangePanelSize: {x: 420, y: 110}
+  roundChangeFontSize: 42
+  roundChangeMessageSeconds: 1.6
+  menuText: "\uBA54\uB274"
+  cardViewText: "\uCE74\uB4DC \uBCF4\uAE30"
+  placementViewText: "\uC810\uB839\uCE78 \uBCF4\uAE30"
+  returnText: "\uB3CC\uC544\uAC00\uAE30"
+  emptyCardText: "\uCE74\uB4DC \uC5C6\uC74C"
+  roundChangeText: Round Change
+  panelColor: {r: 0.08, g: 0.09, b: 0.1, a: 0.86}
+  buttonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.96}
+  buttonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
+  buttonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
+  buttonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
+  cardBackgroundColor: {r: 1, g: 1, b: 1, a: 0.97}
+  emptyCardTextColor: {r: 0.94, g: 0.96, b: 0.98, a: 1}
+  roundChangePanelColor: {r: 0.05, g: 0.06, b: 0.07, a: 0.9}
+  roundChangeTextColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &1560702337
 GameObject:
   m_ObjectHideFlags: 0

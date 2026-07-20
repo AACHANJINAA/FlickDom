@@ -74,6 +74,11 @@ namespace FlickDom.Gameplay
 
         public static PatternCardData CreateRuntimeEasyCard()
         {
+            return CreateRuntimeEasyCard1();
+        }
+
+        public static PatternCardData CreateRuntimeEasyCard1()
+        {
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "EasyCard_1";
             card.difficulty = PatternCardDifficulty.Easy;
@@ -87,6 +92,32 @@ namespace FlickDom.Gameplay
                 new Vector2Int(2, 3)
             };
             return card;
+        }
+
+        public static PatternCardData CreateRuntimeEasyCard2()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "EasyCard_2";
+            card.difficulty = PatternCardDifficulty.Easy;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 5;
+            card.resourcesImagePath = "Cards/EasyCard_2";
+            card.filledCells = new[]
+            {
+                new Vector2Int(1, 3),
+                new Vector2Int(2, 2)
+            };
+            return card;
+        }
+
+        public static PatternCardData[] CreateRuntimeEasyDeck()
+        {
+            return new[]
+            {
+                CreateRuntimeEasyCard1(),
+                CreateRuntimeEasyCard2()
+            };
         }
     }
 }

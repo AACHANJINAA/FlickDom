@@ -8,6 +8,7 @@ namespace FlickDom.Gameplay
         PhysicsProcessing = 3,
         PlacementSelection = 4,
         CardMatch = 5,
-        RoundEnd = 6
+        RoundEnd = 6,
+        PieceOrderSelection = 7
     }
 }
