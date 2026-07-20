@@ -54,6 +54,7 @@ namespace FlickDom.Gameplay
         private bool originalUseGravity;
         private bool originalIsKinematic;
         private bool originalColliderEnabled;
+        private bool originalColliderIsTrigger;
         private bool originalRendererEnabled;
         private RigidbodyConstraints originalConstraints;
 
@@ -91,6 +92,7 @@ namespace FlickDom.Gameplay
             originalUseGravity = cachedRigidbody.useGravity;
             originalIsKinematic = cachedRigidbody.isKinematic;
             originalColliderEnabled = cachedCollider.enabled;
+            originalColliderIsTrigger = cachedCollider.isTrigger;
             originalRendererEnabled = cachedRenderer == null || cachedRenderer.enabled;
             originalConstraints = cachedRigidbody.constraints;
 
@@ -141,14 +143,19 @@ namespace FlickDom.Gameplay
         {
             if (isDragging)
             {
-                cachedRigidbody.linearVelocity = Vector3.zero;
-                cachedRigidbody.angularVelocity = Vector3.zero;
+                if (!cachedRigidbody.isKinematic)
+                {
+                    cachedRigidbody.linearVelocity = Vector3.zero;
+                    cachedRigidbody.angularVelocity = Vector3.zero;
+                }
+
                 cachedRigidbody.MovePosition(dragTargetPosition);
             }
 
             if (launchQueued)
             {
                 launchQueued = false;
+                EnableDynamicFlickPhysics();
                 cachedRigidbody.linearVelocity = Vector3.zero;
                 cachedRigidbody.angularVelocity = Vector3.zero;
                 cachedRigidbody.AddForce(queuedImpulse, ForceMode.Impulse);
@@ -175,6 +182,8 @@ namespace FlickDom.Gameplay
 
         public void SetTurnHighlight(bool isActiveTurn)
         {
+            UpdateCollisionForTurnState(isActiveTurn);
+
             if (cachedRenderer == null)
             {
                 return;
@@ -207,6 +216,7 @@ namespace FlickDom.Gameplay
             enteredPlayableBoardAfterLaunch = false;
             stoppedTimer = 0f;
             ApplyBaseColor();
+            UpdateCollisionForTurnState(false);
         }
 
         private bool CanInteractThisFrame()
@@ -216,7 +226,7 @@ namespace FlickDom.Gameplay
                 return true;
             }
 
-            if (isDead || launchedThisTurn || !IsInsidePlayableBoard())
+            if (isDead || launchedThisTurn)
             {
                 return false;
             }
@@ -367,6 +377,7 @@ namespace FlickDom.Gameplay
 
             cachedRigidbody.useGravity = false;
             cachedRigidbody.isKinematic = true;
+            cachedCollider.isTrigger = originalColliderIsTrigger;
             cachedCollider.enabled = false;
         }
 
@@ -388,10 +399,84 @@ namespace FlickDom.Gameplay
             }
 
             cachedCollider.enabled = originalColliderEnabled;
+            cachedCollider.isTrigger = originalColliderIsTrigger;
             if (cachedRenderer != null)
             {
                 cachedRenderer.enabled = originalRendererEnabled;
             }
+        }
+
+        private void UpdateCollisionForTurnState(bool isActiveTurn)
+        {
+            if (isDead)
+            {
+                StopDeadPieceSimulation();
+                return;
+            }
+
+            if (isDragging)
+            {
+                EnableInputOnlyCollision();
+                return;
+            }
+
+            if (waitingForStop)
+            {
+                EnableDynamicFlickPhysics();
+                return;
+            }
+
+            if (launchedThisTurn)
+            {
+                if (IsInsidePlayableBoard())
+                {
+                    EnableDynamicFlickPhysics();
+                }
+                else
+                {
+                    ParkWithoutCollision();
+                }
+
+                return;
+            }
+
+            if (isActiveTurn)
+            {
+                EnableInputOnlyCollision();
+                return;
+            }
+
+            ParkWithoutCollision();
+        }
+
+        private void EnableInputOnlyCollision()
+        {
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+            cachedCollider.enabled = true;
+            cachedCollider.isTrigger = true;
+        }
+
+        private void EnableDynamicFlickPhysics()
+        {
+            cachedCollider.enabled = true;
+            cachedCollider.isTrigger = originalColliderIsTrigger;
+            cachedRigidbody.useGravity = originalUseGravity;
+            cachedRigidbody.isKinematic = false;
+        }
+
+        private void ParkWithoutCollision()
+        {
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
+
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+            cachedCollider.isTrigger = originalColliderIsTrigger;
+            cachedCollider.enabled = false;
         }
 
         private bool IsInsidePlayableBoard()
@@ -419,6 +504,11 @@ namespace FlickDom.Gameplay
 
         private bool IsMouseOverPiece()
         {
+            if (!cachedCollider.enabled)
+            {
+                return false;
+            }
+
             Ray ray = inputCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
             return cachedCollider.Raycast(ray, out _, 1000f);
         }
