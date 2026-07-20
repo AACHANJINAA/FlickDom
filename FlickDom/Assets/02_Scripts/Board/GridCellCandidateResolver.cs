@@ -13,6 +13,17 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool includeCellsTouchedOnlyByLine = true;
         [SerializeField] private float contactTolerance = 0.001f;
 
+        [Header("Board Visual")]
+        [SerializeField] private bool showBoardVisual;
+        [SerializeField] private Vector3 visualOffset = new Vector3(0f, 0.03f, 0f);
+        [SerializeField] private float visualCellHeight = 0.04f;
+        [SerializeField] private float visualGap = 0.035f;
+        [SerializeField] private Color visualCellColor = new Color(0.45f, 0.48f, 0.5f);
+        [SerializeField] private Color visualAlternateCellColor = new Color(0.55f, 0.58f, 0.6f);
+
+        private Material visualCellMaterial;
+        private Material visualAlternateCellMaterial;
+
         public int BoardSize
         {
             get { return boardSize; }
@@ -50,6 +61,29 @@ namespace FlickDom.Gameplay
             cellSize = Mathf.Max(0.01f, cellSize);
             defaultTokenRadius = Mathf.Max(0.01f, defaultTokenRadius);
             contactTolerance = Mathf.Max(0f, contactTolerance);
+            visualCellHeight = Mathf.Max(0.001f, visualCellHeight);
+            visualGap = Mathf.Clamp(visualGap, 0f, cellSize * 0.45f);
+        }
+
+        private void Awake()
+        {
+            if (showBoardVisual)
+            {
+                BuildBoardVisual();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (visualCellMaterial != null)
+            {
+                Destroy(visualCellMaterial);
+            }
+
+            if (visualAlternateCellMaterial != null)
+            {
+                Destroy(visualAlternateCellMaterial);
+            }
         }
 
         public PiecePlacementCandidate ResolveCandidate(
@@ -174,6 +208,61 @@ namespace FlickDom.Gameplay
 
             float overlapRadius = Mathf.Max(0f, radius - contactTolerance);
             return distanceSqr < overlapRadius * overlapRadius;
+        }
+
+        private void BuildBoardVisual()
+        {
+            CreateVisualMaterials();
+
+            GameObject rootObject = new GameObject("Generated Physical Board Grid");
+            rootObject.transform.SetParent(transform, false);
+
+            float visibleCellSize = Mathf.Max(0.01f, cellSize - visualGap);
+            for (int y = 0; y < boardSize; y++)
+            {
+                for (int x = 0; x < boardSize; x++)
+                {
+                    GameObject cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    cellObject.name = "Physical Board Cell " + x + "," + y;
+                    cellObject.transform.SetParent(rootObject.transform, false);
+                    cellObject.transform.position = new Vector3(
+                        boardOrigin.x + ((x + 0.5f) * cellSize) + visualOffset.x,
+                        boardOrigin.y + visualOffset.y,
+                        boardOrigin.z + ((y + 0.5f) * cellSize) + visualOffset.z);
+                    cellObject.transform.localScale = new Vector3(visibleCellSize, visualCellHeight, visibleCellSize);
+
+                    Collider cellCollider = cellObject.GetComponent<Collider>();
+                    if (cellCollider != null)
+                    {
+                        Destroy(cellCollider);
+                    }
+
+                    Renderer cellRenderer = cellObject.GetComponent<Renderer>();
+                    cellRenderer.sharedMaterial = ((x + y) & 1) == 0
+                        ? visualCellMaterial
+                        : visualAlternateCellMaterial;
+                }
+            }
+        }
+
+        private void CreateVisualMaterials()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+
+            visualCellMaterial = CreateVisualMaterial(shader, "Physical Board Cell", visualCellColor);
+            visualAlternateCellMaterial = CreateVisualMaterial(shader, "Physical Board Alternate Cell", visualAlternateCellColor);
+        }
+
+        private static Material CreateVisualMaterial(Shader shader, string materialName, Color color)
+        {
+            Material material = new Material(shader);
+            material.name = materialName;
+            material.color = color;
+            return material;
         }
     }
 }

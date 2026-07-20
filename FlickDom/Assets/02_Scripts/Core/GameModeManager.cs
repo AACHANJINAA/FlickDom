@@ -143,7 +143,9 @@ namespace FlickDom.Gameplay
             }
 
             SetActivePlayer(FlickDomPlayerId.None);
-            SetState(FlickDomGameState.PlacementSelection);
+            SetState(pendingPlacementCandidates.Count > 0
+                ? FlickDomGameState.PlacementSelection
+                : FlickDomGameState.CardMatch);
             return true;
         }
 
@@ -190,6 +192,16 @@ namespace FlickDom.Gameplay
             currentFirstPlayer = NormalizePlayer(player);
         }
 
+        public bool IsWorldPositionInsideFlickBoard(Vector3 worldPosition)
+        {
+            if (cellCandidateResolver == null)
+            {
+                return true;
+            }
+
+            return cellCandidateResolver.IsWorldPositionInsideBoard(worldPosition);
+        }
+
         public PiecePlacementCandidate RegisterStoppedPieceCandidate(
             FlickDomPlayerId player,
             string pieceId,
@@ -207,6 +219,12 @@ namespace FlickDom.Gameplay
                 pieceId,
                 worldPosition,
                 tokenRadius);
+
+            if (candidate.CandidateCells.Count <= 0)
+            {
+                Debug.Log("[GameMode] Ignored stopped piece with no valid placement cells: " + pieceId, this);
+                return null;
+            }
 
             pendingPlacementCandidates.Add(candidate);
             return candidate;

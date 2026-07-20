@@ -132,11 +132,13 @@ namespace FlickDom.Gameplay
                 {
                     piece.FlickStarted += HandlePieceFlickStarted;
                     piece.SettledAfterFlick += HandlePieceSettled;
+                    piece.InvalidatedAfterFlick += HandlePieceInvalidated;
                 }
                 else
                 {
                     piece.FlickStarted -= HandlePieceFlickStarted;
                     piece.SettledAfterFlick -= HandlePieceSettled;
+                    piece.InvalidatedAfterFlick -= HandlePieceInvalidated;
                 }
             }
         }
@@ -156,6 +158,22 @@ namespace FlickDom.Gameplay
             }
 
             gameModeManager.CompleteCurrentPlayerFlicking();
+        }
+
+        private void HandlePieceInvalidated(TurnBasedFlickPiece piece)
+        {
+            if (gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing)
+            {
+                return;
+            }
+
+            if (logStateChanges)
+            {
+                Debug.Log("[TurnTest] Piece died: " + piece.PieceId + " left the playable board.", this);
+            }
+
+            gameModeManager.CompleteCurrentPlayerPhysics();
         }
 
         private void HandlePieceSettled(TurnBasedFlickPiece piece)

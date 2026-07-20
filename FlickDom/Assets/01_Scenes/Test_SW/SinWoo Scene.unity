@@ -397,7 +397,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 2.25, y: 0.5, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -423,6 +423,9 @@ MonoBehaviour:
   tokenRadius: 0.5
   stopSpeed: 0.05
   stopConfirmSeconds: 0.4
+  fallYThreshold: -1
+  hideDeadPiece: 1
+  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
   player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
   player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -714,7 +717,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -2.41, y: 0.5, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -740,6 +743,9 @@ MonoBehaviour:
   tokenRadius: 0.5
   stopSpeed: 0.05
   stopConfirmSeconds: 0.4
+  fallYThreshold: -1
+  hideDeadPiece: 1
+  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
   player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
   player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -798,6 +804,12 @@ MonoBehaviour:
   defaultTokenRadius: 0.5
   includeCellsTouchedOnlyByLine: 1
   contactTolerance: 0.001
+  showBoardVisual: 1
+  visualOffset: {x: 0, y: 0.03, z: 0}
+  visualCellHeight: 0.04
+  visualGap: 0.035
+  visualCellColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
+  visualAlternateCellColor: {r: 0.55, g: 0.58, b: 0.6, a: 1}
 --- !u!114 &1371976854
 MonoBehaviour:
   m_ObjectHideFlags: 0

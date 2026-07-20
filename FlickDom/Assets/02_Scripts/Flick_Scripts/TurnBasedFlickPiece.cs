@@ -21,6 +21,11 @@ namespace FlickDom.Gameplay
         [SerializeField] private float stopSpeed = 0.05f;
         [SerializeField] private float stopConfirmSeconds = 0.4f;
 
+        [Header("Invalid Flick")]
+        [SerializeField] private float fallYThreshold = -1f;
+        [SerializeField] private bool hideDeadPiece = true;
+        [SerializeField] private Color deadTint = new Color(0.08f, 0.08f, 0.08f);
+
         [Header("Visuals")]
         [SerializeField] private Color player1Color = new Color(0.1f, 0.35f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.2f, 0.15f);
@@ -35,15 +40,26 @@ namespace FlickDom.Gameplay
         private Vector3 initialPiecePosition;
         private Vector3 dragTargetPosition;
         private Vector3 queuedImpulse;
+        private Vector3 flickStartPosition;
+        private Quaternion flickStartRotation;
 
         private bool isDragging;
         private bool launchQueued;
         private bool waitingForStop;
         private bool launchedThisTurn;
+        private bool isDead;
+        private bool invalidatedThisTurn;
+        private bool enteredPlayableBoardAfterLaunch;
         private float stoppedTimer;
+        private bool originalUseGravity;
+        private bool originalIsKinematic;
+        private bool originalColliderEnabled;
+        private bool originalRendererEnabled;
+        private RigidbodyConstraints originalConstraints;
 
         public event Action<TurnBasedFlickPiece> FlickStarted;
         public event Action<TurnBasedFlickPiece> SettledAfterFlick;
+        public event Action<TurnBasedFlickPiece> InvalidatedAfterFlick;
 
         public FlickDomPlayerId Owner
         {
@@ -60,11 +76,23 @@ namespace FlickDom.Gameplay
             get { return tokenRadius; }
         }
 
+        public bool IsDead
+        {
+            get { return isDead; }
+        }
+
         private void Awake()
         {
             cachedRigidbody = GetComponent<Rigidbody>();
             cachedCollider = GetComponent<Collider>();
             cachedRenderer = GetComponentInChildren<Renderer>();
+            flickStartPosition = transform.position;
+            flickStartRotation = transform.rotation;
+            originalUseGravity = cachedRigidbody.useGravity;
+            originalIsKinematic = cachedRigidbody.isKinematic;
+            originalColliderEnabled = cachedCollider.enabled;
+            originalRendererEnabled = cachedRenderer == null || cachedRenderer.enabled;
+            originalConstraints = cachedRigidbody.constraints;
 
             if (inputCamera == null)
             {
@@ -126,6 +154,7 @@ namespace FlickDom.Gameplay
                 cachedRigidbody.AddForce(queuedImpulse, ForceMode.Impulse);
                 waitingForStop = true;
                 launchedThisTurn = true;
+                enteredPlayableBoardAfterLaunch = IsInsidePlayableBoard();
                 stoppedTimer = 0f;
                 FlickStarted?.Invoke(this);
             }
@@ -151,16 +180,33 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (isDead)
+            {
+                cachedRenderer.material.color = deadTint;
+                return;
+            }
+
+            if (!IsInsidePlayableBoard())
+            {
+                cachedRenderer.material.color = inactiveTint;
+                return;
+            }
+
             cachedRenderer.material.color = isActiveTurn ? GetOwnerColor() : inactiveTint;
         }
 
         public void ResetRoundUse()
         {
+            ResetToFlickStartPose();
             isDragging = false;
             launchQueued = false;
             waitingForStop = false;
             launchedThisTurn = false;
+            isDead = false;
+            invalidatedThisTurn = false;
+            enteredPlayableBoardAfterLaunch = false;
             stoppedTimer = 0f;
+            ApplyBaseColor();
         }
 
         private bool CanInteractThisFrame()
@@ -170,7 +216,7 @@ namespace FlickDom.Gameplay
                 return true;
             }
 
-            if (launchedThisTurn)
+            if (isDead || launchedThisTurn || !IsInsidePlayableBoard())
             {
                 return false;
             }
@@ -225,6 +271,12 @@ namespace FlickDom.Gameplay
 
         private void TickStopDetection()
         {
+            if (transform.position.y <= fallYThreshold || HasExitedBoardAfterLaunch())
+            {
+                InvalidateCurrentFlick();
+                return;
+            }
+
             float linearSpeedSqr = cachedRigidbody.linearVelocity.sqrMagnitude;
             float angularSpeedSqr = cachedRigidbody.angularVelocity.sqrMagnitude;
             float stopSpeedSqr = stopSpeed * stopSpeed;
@@ -242,6 +294,114 @@ namespace FlickDom.Gameplay
             {
                 stoppedTimer = 0f;
             }
+        }
+
+        private bool HasExitedBoardAfterLaunch()
+        {
+            bool isInsideBoard = IsInsidePlayableBoard();
+            if (isInsideBoard)
+            {
+                enteredPlayableBoardAfterLaunch = true;
+                return false;
+            }
+
+            return enteredPlayableBoardAfterLaunch;
+        }
+
+        private void InvalidateCurrentFlick()
+        {
+            if (invalidatedThisTurn)
+            {
+                return;
+            }
+
+            isDragging = false;
+            launchQueued = false;
+            waitingForStop = false;
+            invalidatedThisTurn = true;
+            stoppedTimer = 0f;
+
+            cachedRigidbody.linearVelocity = Vector3.zero;
+            cachedRigidbody.angularVelocity = Vector3.zero;
+
+            KillPiece();
+
+            InvalidatedAfterFlick?.Invoke(this);
+        }
+
+        private void KillPiece()
+        {
+            if (isDead)
+            {
+                return;
+            }
+
+            isDead = true;
+            StopDeadPieceSimulation();
+
+            if (cachedRenderer != null)
+            {
+                if (hideDeadPiece)
+                {
+                    cachedRenderer.enabled = false;
+                }
+                else
+                {
+                    cachedRenderer.material.color = deadTint;
+                }
+            }
+        }
+
+        private void StopDeadPieceSimulation()
+        {
+            isDragging = false;
+            launchQueued = false;
+            waitingForStop = false;
+            stoppedTimer = 0f;
+
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
+
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+            cachedCollider.enabled = false;
+        }
+
+        private void ResetToFlickStartPose()
+        {
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+            cachedRigidbody.position = flickStartPosition;
+            cachedRigidbody.rotation = flickStartRotation;
+            transform.SetPositionAndRotation(flickStartPosition, flickStartRotation);
+
+            cachedRigidbody.constraints = originalConstraints;
+            cachedRigidbody.useGravity = originalUseGravity;
+            cachedRigidbody.isKinematic = originalIsKinematic;
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
+
+            cachedCollider.enabled = originalColliderEnabled;
+            if (cachedRenderer != null)
+            {
+                cachedRenderer.enabled = originalRendererEnabled;
+            }
+        }
+
+        private bool IsInsidePlayableBoard()
+        {
+            if (gameModeManager == null)
+            {
+                return true;
+            }
+
+            return gameModeManager.IsWorldPositionInsideFlickBoard(transform.position);
         }
 
         private Vector3 GetMousePositionOnBoard()
