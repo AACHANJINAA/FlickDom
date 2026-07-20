@@ -238,6 +238,22 @@ namespace FlickDom.Gameplay
             return true;
         }
 
+        public bool ForceFinishRoundAndStartNext()
+        {
+            if (CurrentState == FlickDomGameState.NotStarted)
+            {
+                return false;
+            }
+
+            if (CurrentState != FlickDomGameState.RoundEnd)
+            {
+                SetActivePlayer(FlickDomPlayerId.None);
+                SetState(FlickDomGameState.RoundEnd);
+            }
+
+            return FinishRoundAndStartNext();
+        }
+
         public void SetFirstPlayerForNextRound(FlickDomPlayerId player)
         {
             currentFirstPlayer = NormalizePlayer(player);

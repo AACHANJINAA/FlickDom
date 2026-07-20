@@ -13,16 +13,21 @@ namespace FlickDom.Gameplay
         [SerializeField] private PatternCardData activeCard;
         [SerializeField] private PatternCardData[] cardDeck;
         [SerializeField] private bool autoCreateEasyFallbackCard = true;
+        [SerializeField] private bool advanceFallbackDeckOnExhaustion = true;
+        [SerializeField] private bool clearTokenMapOnFallbackDeckAdvance = true;
+        [SerializeField] private bool finishRoundOnCardsExhausted = true;
         [SerializeField] private bool matchAnywhereOnBoard = true;
         [SerializeField] private bool resetScoresWhenMapCleared = true;
         [SerializeField] private bool logCardClaims = true;
 
-        private PatternCardData[] runtimeFallbackDeck;
+        private PatternCardData[][] runtimeFallbackDecks = new PatternCardData[0][];
+        private int currentFallbackDeckIndex;
         private PatternCardData[] runtimeCards = new PatternCardData[0];
         private bool[] claimedCards = new bool[0];
         private FlickDomPlayerId lastChangedOwner = FlickDomPlayerId.None;
         private int player1Score;
         private int player2Score;
+        private bool isClearingMapForCardRoundChange;
 
         public event Action<PatternCardData> ActiveCardChanged;
         public event Action<FlickDomPlayerId, int, int, int> ScoreChanged;
@@ -66,7 +71,7 @@ namespace FlickDom.Gameplay
                 tokenMapManager = GetComponent<TokenMapManager>();
             }
 
-            EnsureRuntimeFallbackCard();
+            EnsureRuntimeFallbackDecks();
             RefreshRuntimeCards();
         }
 
@@ -166,6 +171,11 @@ namespace FlickDom.Gameplay
 
         private void HandleMapChanged()
         {
+            if (isClearingMapForCardRoundChange)
+            {
+                return;
+            }
+
             if (!CanScoreNow())
             {
                 return;
@@ -183,14 +193,23 @@ namespace FlickDom.Gameplay
 
         private void HandleMapCleared()
         {
-            ResetClaimedCards();
             lastChangedOwner = FlickDomPlayerId.None;
+
+            if (isClearingMapForCardRoundChange)
+            {
+                return;
+            }
 
             if (resetScoresWhenMapCleared)
             {
+                ResetCardProgress();
                 player1Score = 0;
                 player2Score = 0;
                 ScoreChanged?.Invoke(FlickDomPlayerId.None, 0, player1Score, player2Score);
+            }
+            else
+            {
+                ResetClaimedCards();
             }
 
             ActiveCardChanged?.Invoke(ActiveCard);
@@ -275,6 +294,19 @@ namespace FlickDom.Gameplay
             if (RemainingCardCount <= 0)
             {
                 CardsExhausted?.Invoke();
+
+                bool advancedDeck = TryAdvanceToNextFallbackDeck();
+                if (advancedDeck)
+                {
+                    ClearTokenMapForCardRoundChange();
+                }
+
+                FinishRoundForCardsExhausted();
+
+                if (advancedDeck)
+                {
+                    ActiveCardChanged?.Invoke(ActiveCard);
+                }
             }
         }
 
@@ -303,16 +335,17 @@ namespace FlickDom.Gameplay
                 || gameModeManager.CurrentState == FlickDomGameState.CardMatch;
         }
 
-        private void EnsureRuntimeFallbackCard()
+        private void EnsureRuntimeFallbackDecks()
         {
             if (activeCard != null || HasConfiguredDeck() || !autoCreateEasyFallbackCard)
             {
                 return;
             }
 
-            if (runtimeFallbackDeck == null || runtimeFallbackDeck.Length <= 0)
+            if (runtimeFallbackDecks == null || runtimeFallbackDecks.Length <= 0)
             {
-                runtimeFallbackDeck = PatternCardData.CreateRuntimeEasyDeck();
+                runtimeFallbackDecks = PatternCardData.CreateRuntimeProgressionDecks();
+                currentFallbackDeckIndex = 0;
             }
         }
 
@@ -334,7 +367,78 @@ namespace FlickDom.Gameplay
                 return new[] { activeCard };
             }
 
-            return runtimeFallbackDeck ?? new PatternCardData[0];
+            if (runtimeFallbackDecks == null
+                || runtimeFallbackDecks.Length <= 0
+                || currentFallbackDeckIndex < 0
+                || currentFallbackDeckIndex >= runtimeFallbackDecks.Length)
+            {
+                return new PatternCardData[0];
+            }
+
+            return runtimeFallbackDecks[currentFallbackDeckIndex] ?? new PatternCardData[0];
+        }
+
+        private void ResetCardProgress()
+        {
+            currentFallbackDeckIndex = 0;
+            EnsureRuntimeFallbackDecks();
+            RefreshRuntimeCards();
+        }
+
+        private bool TryAdvanceToNextFallbackDeck()
+        {
+            if (!advanceFallbackDeckOnExhaustion
+                || activeCard != null
+                || HasConfiguredDeck()
+                || !autoCreateEasyFallbackCard)
+            {
+                return false;
+            }
+
+            EnsureRuntimeFallbackDecks();
+            int nextDeckIndex = currentFallbackDeckIndex + 1;
+            if (runtimeFallbackDecks == null || nextDeckIndex >= runtimeFallbackDecks.Length)
+            {
+                return false;
+            }
+
+            currentFallbackDeckIndex = nextDeckIndex;
+            RefreshRuntimeCards();
+
+            if (logCardClaims && ActiveCard != null)
+            {
+                Debug.Log("[PatternCard] Card round changed to " + ActiveCard.Difficulty + ".", this);
+            }
+
+            return true;
+        }
+
+        private void ClearTokenMapForCardRoundChange()
+        {
+            if (!clearTokenMapOnFallbackDeckAdvance || tokenMapManager == null)
+            {
+                return;
+            }
+
+            isClearingMapForCardRoundChange = true;
+            try
+            {
+                tokenMapManager.ClearMap();
+            }
+            finally
+            {
+                isClearingMapForCardRoundChange = false;
+            }
+        }
+
+        private void FinishRoundForCardsExhausted()
+        {
+            if (!finishRoundOnCardsExhausted || gameModeManager == null)
+            {
+                return;
+            }
+
+            gameModeManager.ForceFinishRoundAndStartNext();
         }
 
         private bool HasConfiguredDeck()

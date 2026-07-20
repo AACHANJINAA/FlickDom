@@ -205,6 +205,7 @@ namespace FlickDom.Gameplay
             }
 
             order.Add(piece);
+            BlockFlickInputUntilPointerReleased();
 
             if (logStateChanges)
             {
@@ -217,6 +218,28 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.CompleteCurrentPlayerPieceOrderSelection();
                 RefreshPieceHighlights();
+            }
+        }
+
+        private void BlockFlickInputUntilPointerReleased()
+        {
+            BlockFlickInputUntilPointerReleased(player1Pieces);
+            BlockFlickInputUntilPointerReleased(player2Pieces);
+        }
+
+        private static void BlockFlickInputUntilPointerReleased(TurnBasedFlickPiece[] pieces)
+        {
+            if (pieces == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                if (pieces[i] != null)
+                {
+                    pieces[i].BlockInputUntilPointerReleased();
+                }
             }
         }
 

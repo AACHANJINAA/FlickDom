@@ -148,7 +148,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
   m_Name:
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   m_UsePipelineSettings: 1
   m_AdditionalLightsShadowResolutionTier: 2
   m_CustomShadowLayers: 0
@@ -246,7 +246,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
---- !u!1 &405217525
+--- !u!1 &789277668
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -254,13 +254,17 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 405217531}
-  - component: {fileID: 405217530}
-  - component: {fileID: 405217529}
-  - component: {fileID: 405217528}
-  - component: {fileID: 405217527}
-  - component: {fileID: 405217526}
-  - component: {fileID: 405217532}
+  - component: {fileID: 789277679}
+  - component: {fileID: 789277678}
+  - component: {fileID: 789277677}
+  - component: {fileID: 789277676}
+  - component: {fileID: 789277675}
+  - component: {fileID: 789277674}
+  - component: {fileID: 789277673}
+  - component: {fileID: 789277672}
+  - component: {fileID: 789277671}
+  - component: {fileID: 789277670}
+  - component: {fileID: 789277669}
   m_Layer: 0
   m_Name: Player2
   m_TagString: Untagged
@@ -268,27 +272,122 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &405217526
+--- !u!114 &789277669
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
-  m_Enabled: 0
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dd9a71f4fa0bbbf4b8b0808110231705, type: 3}
+  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
   m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::FlickController
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
+  gameModeManager: {fileID: 0}
+  owner: 1
+  pieceId: Piece
+  inputCamera: {fileID: 0}
   forceMultiplier: 10
   maxDragDistance: 3
---- !u!54 &405217527
+  tokenRadius: 0.5
+  stopSpeed: 0.05
+  stopConfirmSeconds: 0.4
+  fallYThreshold: -1
+  hideDeadPiece: 1
+  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
+  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
+  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
+  currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
+  selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+--- !u!114 &789277670
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
+  gameModeManager: {fileID: 0}
+  owner: 1
+  pieceId: Piece
+  inputCamera: {fileID: 0}
+  forceMultiplier: 10
+  maxDragDistance: 3
+  tokenRadius: 0.5
+  stopSpeed: 0.05
+  stopConfirmSeconds: 0.4
+  fallYThreshold: -1
+  hideDeadPiece: 1
+  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
+  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
+  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
+  currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
+  selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+--- !u!114 &789277671
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39a4bdf1d54dfcc49a48e99e30680ea0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TokenSetup
+  tokenData: {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
+--- !u!114 &789277672
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd92029284e74f74b963995ee71600c0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickVisuals
+--- !u!114 &789277673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 250209acfe7372f4fa319bd578647b9b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickMovement
+  forceMultiplier: 10
+  maxDragDistance: 3
+--- !u!114 &789277674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 789277668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4bdc42e84d6b9d448dad9d6c034b0d7, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickController
+--- !u!54 &789277675
 Rigidbody:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
+  m_GameObject: {fileID: 789277668}
   serializedVersion: 5
   m_Mass: 1
   m_LinearDamping: 0
@@ -309,13 +408,13 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 0
---- !u!65 &405217528
+--- !u!65 &789277676
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
+  m_GameObject: {fileID: 789277668}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -330,13 +429,13 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &405217529
+--- !u!23 &789277677
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
+  m_GameObject: {fileID: 789277668}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -355,7 +454,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 6af2486f4b27ff0418fd364f3650b3f4, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -379,56 +478,29 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &405217530
+--- !u!33 &789277678
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
+  m_GameObject: {fileID: 789277668}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &405217531
+--- !u!4 &789277679
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
+  m_GameObject: {fileID: 789277668}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.25, y: 0.5, z: 0}
+  m_LocalPosition: {x: -3, y: 0.5, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &405217532
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405217525}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
-  gameModeManager: {fileID: 0}
-  owner: 1
-  pieceId: Piece
-  inputCamera: {fileID: 0}
-  forceMultiplier: 10
-  maxDragDistance: 3
-  tokenRadius: 0.5
-  stopSpeed: 0.05
-  stopConfirmSeconds: 0.4
-  fallYThreshold: -1
-  hideDeadPiece: 1
-  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
-  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
-  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
-  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
 --- !u!1 &961739749
 GameObject:
   m_ObjectHideFlags: 0
@@ -459,7 +531,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
   m_Name:
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
   m_RequiresOpaqueTextureOption: 2
@@ -566,7 +638,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 33.821, y: 0, z: 0}
---- !u!1 &1307856375
+--- !u!1 &1305843885
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -574,13 +646,16 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1307856381}
-  - component: {fileID: 1307856380}
-  - component: {fileID: 1307856379}
-  - component: {fileID: 1307856378}
-  - component: {fileID: 1307856377}
-  - component: {fileID: 1307856376}
-  - component: {fileID: 1307856382}
+  - component: {fileID: 1305843895}
+  - component: {fileID: 1305843894}
+  - component: {fileID: 1305843893}
+  - component: {fileID: 1305843892}
+  - component: {fileID: 1305843891}
+  - component: {fileID: 1305843890}
+  - component: {fileID: 1305843889}
+  - component: {fileID: 1305843888}
+  - component: {fileID: 1305843887}
+  - component: {fileID: 1305843886}
   m_Layer: 0
   m_Name: Player1
   m_TagString: Untagged
@@ -588,27 +663,93 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1307856376
+--- !u!114 &1305843886
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
-  m_Enabled: 0
+  m_GameObject: {fileID: 1305843885}
+  m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dd9a71f4fa0bbbf4b8b0808110231705, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickController
+  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
+  gameModeManager: {fileID: 0}
+  owner: 1
+  pieceId: Piece
+  inputCamera: {fileID: 0}
   forceMultiplier: 10
   maxDragDistance: 3
---- !u!54 &1307856377
+  tokenRadius: 0.5
+  stopSpeed: 0.05
+  stopConfirmSeconds: 0.4
+  fallYThreshold: -1
+  hideDeadPiece: 1
+  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
+  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
+  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
+  currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
+  selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+--- !u!114 &1305843887
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305843885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39a4bdf1d54dfcc49a48e99e30680ea0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TokenSetup
+  tokenData: {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
+--- !u!114 &1305843888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305843885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd92029284e74f74b963995ee71600c0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickVisuals
+--- !u!114 &1305843889
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305843885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 250209acfe7372f4fa319bd578647b9b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickMovement
+  forceMultiplier: 10
+  maxDragDistance: 3
+--- !u!114 &1305843890
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305843885}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4bdc42e84d6b9d448dad9d6c034b0d7, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FlickController
+--- !u!54 &1305843891
 Rigidbody:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
+  m_GameObject: {fileID: 1305843885}
   serializedVersion: 5
   m_Mass: 1
   m_LinearDamping: 0
@@ -629,13 +770,13 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 0
---- !u!65 &1307856378
+--- !u!65 &1305843892
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
+  m_GameObject: {fileID: 1305843885}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -650,13 +791,13 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &1307856379
+--- !u!23 &1305843893
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
+  m_GameObject: {fileID: 1305843885}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -675,7 +816,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 9d0244e1fd4fd9443b21c92246269a2c, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -699,56 +840,29 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &1307856380
+--- !u!33 &1305843894
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
+  m_GameObject: {fileID: 1305843885}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &1307856381
+--- !u!4 &1305843895
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
+  m_GameObject: {fileID: 1305843885}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.41, y: 0.5, z: 0}
+  m_LocalPosition: {x: 3, y: 0.5, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1307856382
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1307856375}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
-  gameModeManager: {fileID: 0}
-  owner: 1
-  pieceId: Piece
-  inputCamera: {fileID: 0}
-  forceMultiplier: 10
-  maxDragDistance: 3
-  tokenRadius: 0.5
-  stopSpeed: 0.05
-  stopConfirmSeconds: 0.4
-  fallYThreshold: -1
-  hideDeadPiece: 1
-  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
-  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
-  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
-  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
 --- !u!1 &1371976851
 GameObject:
   m_ObjectHideFlags: 0
@@ -786,7 +900,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c637d60ea4bb431fabae12ca84842b93, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapManager
   boardSize: 5
   maxTokensPerPlayer: 5
@@ -800,7 +914,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21798900014d4f9fac102d81ee74975f, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GridCellCandidateResolver
   boardSize: 5
   cellSize: 1
@@ -824,7 +938,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c1914800f88d4203adf0193b1985adb6, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GameModeManager
   tokenMapManager: {fileID: 1371976852}
   cellCandidateResolver: {fileID: 1371976853}
@@ -859,15 +973,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2999348c99574aed80230c30ccd4468c, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.LocalFlickTurnTestRig
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
   inputCamera: {fileID: 961739752}
   player1Pieces:
-  - {fileID: 1307856382}
+  - {fileID: 1305843886}
   player2Pieces:
-  - {fileID: 405217532}
+  - {fileID: 789277670}
   startGameOnPlay: 1
   autoCreateMissingPieces: 1
   targetPiecesPerPlayer: 3
@@ -884,7 +998,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a3f28129d76e4d71a9f82b3e25b387de, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapGridView
   tokenMapManager: {fileID: 1371976852}
   syncBoardSizeFromTokenMap: 1
@@ -914,7 +1028,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c5530594d13d401687a67cbd9e452570, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlacementCameraController
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
@@ -935,7 +1049,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b38c6013f404a2097d54c52047ec23b, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapPlacementSelector
   gameModeManager: {fileID: 1371976854}
   tokenMapManager: {fileID: 1371976852}
@@ -967,6 +1081,9 @@ MonoBehaviour:
   activeCard: {fileID: 0}
   cardDeck: []
   autoCreateEasyFallbackCard: 1
+  advanceFallbackDeckOnExhaustion: 1
+  clearTokenMapOnFallbackDeckAdvance: 1
+  finishRoundOnCardsExhausted: 1
   matchAnywhereOnBoard: 1
   resetScoresWhenMapCleared: 1
   logCardClaims: 1
@@ -990,6 +1107,12 @@ MonoBehaviour:
     texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
   - cardId: EasyCard_2
     texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  - cardId: NormalCard_1
+    texture: {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
+  - cardId: NormalCard_2
+    texture: {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
+  - cardId: NormalCard_3
+    texture: {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
   cardTextureOverride: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
   preferTexture: 1
   preserveTextureAspect: 1
@@ -1055,9 +1178,18 @@ MonoBehaviour:
     texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
   - cardId: EasyCard_2
     texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  - cardId: NormalCard_1
+    texture: {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
+  - cardId: NormalCard_2
+    texture: {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
+  - cardId: NormalCard_3
+    texture: {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
   cardTextures:
   - {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
   - {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  - {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
+  - {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
+  - {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
   cardPanelSize: {x: 680, y: 520}
   cardImageSize: {x: 260, y: 360}
   cardImageSpacing: 28
@@ -1258,7 +1390,7 @@ SceneRoots:
   - {fileID: 961739753}
   - {fileID: 203844589}
   - {fileID: 1371976855}
-  - {fileID: 1307856381}
   - {fileID: 1560702341}
-  - {fileID: 405217531}
   - {fileID: 1800000002}
+  - {fileID: 1305843895}
+  - {fileID: 789277679}

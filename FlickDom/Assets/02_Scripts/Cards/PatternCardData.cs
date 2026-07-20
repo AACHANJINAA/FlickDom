@@ -119,5 +119,78 @@ namespace FlickDom.Gameplay
                 CreateRuntimeEasyCard2()
             };
         }
+
+        public static PatternCardData CreateRuntimeNormalCard1()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "NormalCard_1";
+            card.difficulty = PatternCardDifficulty.Normal;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 5;
+            card.resourcesImagePath = "Cards/NormalCard_1";
+            card.filledCells = new[]
+            {
+                new Vector2Int(1, 3),
+                new Vector2Int(1, 2),
+                new Vector2Int(2, 2)
+            };
+            return card;
+        }
+
+        public static PatternCardData CreateRuntimeNormalCard2()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "NormalCard_2";
+            card.difficulty = PatternCardDifficulty.Normal;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 5;
+            card.resourcesImagePath = "Cards/NormalCard_2";
+            card.filledCells = new[]
+            {
+                new Vector2Int(2, 4),
+                new Vector2Int(1, 3),
+                new Vector2Int(1, 2)
+            };
+            return card;
+        }
+
+        public static PatternCardData CreateRuntimeNormalCard3()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "NormalCard_3";
+            card.difficulty = PatternCardDifficulty.Normal;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 5;
+            card.resourcesImagePath = "Cards/NormalCard_3";
+            card.filledCells = new[]
+            {
+                new Vector2Int(0, 4),
+                new Vector2Int(1, 3),
+                new Vector2Int(2, 2)
+            };
+            return card;
+        }
+
+        public static PatternCardData[] CreateRuntimeNormalDeck()
+        {
+            return new[]
+            {
+                CreateRuntimeNormalCard1(),
+                CreateRuntimeNormalCard2(),
+                CreateRuntimeNormalCard3()
+            };
+        }
+
+        public static PatternCardData[][] CreateRuntimeProgressionDecks()
+        {
+            return new[]
+            {
+                CreateRuntimeEasyDeck(),
+                CreateRuntimeNormalDeck()
+            };
+        }
     }
 }

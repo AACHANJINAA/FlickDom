@@ -53,6 +53,7 @@ namespace FlickDom.Gameplay
         private bool invalidatedThisTurn;
         private bool enteredPlayableBoardAfterLaunch;
         private bool canInteractThisTurn = true;
+        private bool waitForPointerReleaseBeforeInput;
         private float stoppedTimer;
         private bool originalUseGravity;
         private bool originalIsKinematic;
@@ -125,6 +126,16 @@ namespace FlickDom.Gameplay
         {
             if (Mouse.current == null || inputCamera == null)
             {
+                return;
+            }
+
+            if (waitForPointerReleaseBeforeInput)
+            {
+                if (!Mouse.current.leftButton.isPressed)
+                {
+                    waitForPointerReleaseBeforeInput = false;
+                }
+
                 return;
             }
 
@@ -312,9 +323,17 @@ namespace FlickDom.Gameplay
             invalidatedThisTurn = false;
             enteredPlayableBoardAfterLaunch = false;
             canInteractThisTurn = false;
+            waitForPointerReleaseBeforeInput = false;
             stoppedTimer = 0f;
             ApplyBaseColor();
             UpdateCollisionForTurnState(false);
+        }
+
+        public void BlockInputUntilPointerReleased()
+        {
+            waitForPointerReleaseBeforeInput = true;
+            isDragging = false;
+            launchQueued = false;
         }
 
         public bool TryRaycast(Ray ray, float maxDistance, out float distance)
