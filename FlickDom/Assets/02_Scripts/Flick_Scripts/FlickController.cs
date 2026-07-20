@@ -13,9 +13,21 @@ public class FlickController : MonoBehaviour
     private Vector3 mouseEndPos;
     private bool isDragging = false;
 
+    private Material cubeMaterial;
+    private Color originalEmissionColor;
+
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        
+        MeshRenderer renderer = GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            // 머티리얼 복사본을 가져오고 Emission 키워드를 활성화합니다.
+            cubeMaterial = renderer.material;
+            cubeMaterial.EnableKeyword("_EMISSION");
+            originalEmissionColor = cubeMaterial.GetColor("_EmissionColor");
+        }
     }
 
     private Vector3 initialCubePos;
@@ -32,6 +44,7 @@ public class FlickController : MonoBehaviour
                 mouseStartPos = GetMousePositionOnBoard();
                 initialCubePos = transform.position;
                 isDragging = true;
+                SetHighlight(true); // 노란빛 켜기
             }
         }
         // 2. 마우스 왼쪽 버튼을 떼는 순간 (발사!)
@@ -39,6 +52,7 @@ public class FlickController : MonoBehaviour
         {
             mouseEndPos = GetMousePositionOnBoard();
             isDragging = false;
+            SetHighlight(false); // 노란빛 끄기
             
             Flick(); // 튕기기 실행
         }
@@ -106,5 +120,23 @@ public class FlickController : MonoBehaviour
             }
         }
         return false;
+    }
+
+    // 객체 발광(노란빛)을 켜고 끄는 함수
+    private void SetHighlight(bool isHighlighted)
+    {
+        if (cubeMaterial != null)
+        {
+            if (isHighlighted)
+            {
+                // 노란색을 2배 밝기로 설정하여 빛나는 느낌(Glow) 주기
+                cubeMaterial.SetColor("_EmissionColor", Color.yellow * 2.0f);
+            }
+            else
+            {
+                // 원래 색상으로 복구
+                cubeMaterial.SetColor("_EmissionColor", originalEmissionColor);
+            }
+        }
     }
 }
