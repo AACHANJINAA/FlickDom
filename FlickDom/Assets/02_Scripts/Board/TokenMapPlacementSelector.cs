@@ -18,10 +18,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool autoCompleteWhenAllCandidatesPlaced = true;
         [SerializeField] private bool autoStartNextRoundAfterPlacement = true;
         [SerializeField] private bool autoRelocateOldestTokenForLocalTest = true;
+        [SerializeField] private bool showOnlyCurrentCandidate = true;
         [SerializeField] private bool logSelections = true;
 
         private readonly HashSet<PiecePlacementCandidate> resolvedCandidates = new HashSet<PiecePlacementCandidate>();
         private readonly RaycastHit[] raycastHits = new RaycastHit[8];
+        private PiecePlacementCandidate activeCandidate;
         private bool selectionActive;
 
         private void Awake()
@@ -53,6 +55,10 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.StateChanged += HandleStateChanged;
                 selectionActive = gameModeManager.CurrentState == FlickDomGameState.PlacementSelection;
+                if (selectionActive)
+                {
+                    RefreshActiveCandidateHighlight();
+                }
             }
         }
 
@@ -96,6 +102,15 @@ namespace FlickDom.Gameplay
             if (selectionActive)
             {
                 resolvedCandidates.Clear();
+                RefreshActiveCandidateHighlight();
+            }
+            else if (previousState == FlickDomGameState.PlacementSelection)
+            {
+                activeCandidate = null;
+                if (tokenMapGridView != null)
+                {
+                    tokenMapGridView.ClearCandidateHighlights();
+                }
             }
         }
 
@@ -141,7 +156,7 @@ namespace FlickDom.Gameplay
             }
 
             resolvedCandidates.Add(candidate);
-            tokenMapGridView.ClearCandidateHighlights(candidate);
+            RefreshActiveCandidateHighlight();
 
             if (logSelections)
             {
@@ -172,6 +187,13 @@ namespace FlickDom.Gameplay
 
         private PiecePlacementCandidate FindCandidateForCell(Vector2Int cell)
         {
+            if (showOnlyCurrentCandidate && activeCandidate != null)
+            {
+                return !resolvedCandidates.Contains(activeCandidate) && activeCandidate.ContainsCell(cell)
+                    ? activeCandidate
+                    : null;
+            }
+
             IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
             for (int i = 0; i < candidates.Count; i++)
             {
@@ -183,6 +205,73 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        private void RefreshActiveCandidateHighlight()
+        {
+            if (!selectionActive || gameModeManager == null || tokenMapGridView == null)
+            {
+                return;
+            }
+
+            activeCandidate = FindNextUnresolvedCandidate();
+            tokenMapGridView.ClearCandidateHighlights();
+
+            if (!showOnlyCurrentCandidate)
+            {
+                ShowAllUnresolvedCandidateHighlights();
+                return;
+            }
+
+            if (activeCandidate == null)
+            {
+                return;
+            }
+
+            tokenMapGridView.ShowCandidateCells(activeCandidate);
+
+            if (logSelections)
+            {
+                Debug.Log("[PlacementSelect] Waiting for " + activeCandidate.Owner + " to choose a cell from " + activeCandidate.PieceId + ".", this);
+            }
+        }
+
+        private PiecePlacementCandidate FindNextUnresolvedCandidate()
+        {
+            if (gameModeManager == null)
+            {
+                return null;
+            }
+
+            IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                PiecePlacementCandidate candidate = candidates[i];
+                if (candidate != null && !resolvedCandidates.Contains(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private void ShowAllUnresolvedCandidateHighlights()
+        {
+            if (gameModeManager == null || tokenMapGridView == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                PiecePlacementCandidate candidate = candidates[i];
+                if (candidate != null && !resolvedCandidates.Contains(candidate))
+                {
+                    tokenMapGridView.ShowCandidateCells(candidate);
+                }
+            }
         }
 
         private void CompleteSelectionIfReady()

@@ -6,25 +6,26 @@ namespace FlickDom.Gameplay
     {
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
+        [SerializeField] private PatternCardSlot cardSlot;
         [SerializeField] private PatternCardData explicitCard;
         [SerializeField] private Texture2D cardTextureOverride;
 
-        [Header("World Layout")]
-        [SerializeField] private Vector3 displayCenter = new Vector3(0f, 0.18f, 4.35f);
-        [SerializeField] private float cardHeight = 2.35f;
+        [Header("Display")]
         [SerializeField] private bool preferTexture = true;
+        [SerializeField] private bool preserveTextureAspect = true;
+        [SerializeField] private bool hideWhenClaimed = true;
+        [SerializeField] private Vector3 localOffset = new Vector3(0f, 0.035f, 0f);
+        [SerializeField] private Vector2 fallbackCardSize = new Vector2(1.9f, 2.55f);
 
         [Header("Fallback Generated Card")]
-        [SerializeField] private float fallbackCellSize = 0.34f;
         [SerializeField] private float fallbackGap = 0.015f;
-        [SerializeField] private float fallbackHeaderHeight = 0.46f;
+        [SerializeField] private float fallbackHeaderRatio = 0.2f;
         [SerializeField] private float fallbackPadding = 0.12f;
         [SerializeField] private float fallbackThickness = 0.025f;
         [SerializeField] private float fallbackLineWidth = 0.018f;
 
         [Header("Colors")]
         [SerializeField] private Color cardTint = Color.white;
-        [SerializeField] private Color completedTint = new Color(1f, 0.9f, 0.35f, 1f);
         [SerializeField] private Color cardBaseColor = Color.white;
         [SerializeField] private Color easyColor = new Color(0.42f, 0.68f, 0.12f, 1f);
         [SerializeField] private Color normalColor = new Color(0.95f, 0.72f, 0.12f, 1f);
@@ -36,7 +37,6 @@ namespace FlickDom.Gameplay
         private Material lineMaterial;
         private Material fillMaterial;
         private Mesh textureMesh;
-        private bool displayCompleted;
 
         private void Awake()
         {
@@ -61,7 +61,6 @@ namespace FlickDom.Gameplay
 
         private void Start()
         {
-            displayCompleted = cardManager != null && cardManager.IsActiveCardClaimed;
             Rebuild();
         }
 
@@ -85,9 +84,19 @@ namespace FlickDom.Gameplay
             DestroyMaterial(fillMaterial);
         }
 
+        private void OnValidate()
+        {
+            fallbackCardSize.x = Mathf.Max(0.1f, fallbackCardSize.x);
+            fallbackCardSize.y = Mathf.Max(0.1f, fallbackCardSize.y);
+            fallbackGap = Mathf.Max(0f, fallbackGap);
+            fallbackHeaderRatio = Mathf.Clamp01(fallbackHeaderRatio);
+            fallbackPadding = Mathf.Max(0f, fallbackPadding);
+            fallbackThickness = Mathf.Max(0.001f, fallbackThickness);
+            fallbackLineWidth = Mathf.Max(0.001f, fallbackLineWidth);
+        }
+
         private void HandleActiveCardChanged(PatternCardData card)
         {
-            displayCompleted = cardManager != null && cardManager.IsActiveCardClaimed;
             Rebuild();
         }
 
@@ -97,7 +106,6 @@ namespace FlickDom.Gameplay
             int score,
             Vector2Int matchOrigin)
         {
-            displayCompleted = true;
             Rebuild();
         }
 
@@ -105,14 +113,23 @@ namespace FlickDom.Gameplay
         {
             DestroyGeneratedRoot();
 
+            if (hideWhenClaimed && cardManager != null && cardManager.IsActiveCardClaimed)
+            {
+                return;
+            }
+
             PatternCardData card = ResolveCard();
             if (card == null)
             {
                 return;
             }
 
+            Transform rootParent = cardSlot != null ? cardSlot.transform : transform;
             generatedRoot = new GameObject("Generated Pattern Card Display");
-            generatedRoot.transform.SetParent(transform, false);
+            generatedRoot.transform.SetParent(rootParent, false);
+            generatedRoot.transform.localPosition = localOffset;
+            generatedRoot.transform.localRotation = Quaternion.identity;
+            generatedRoot.transform.localScale = Vector3.one;
 
             Texture2D texture = ResolveTexture(card);
             if (preferTexture && texture != null)
@@ -149,18 +166,37 @@ namespace FlickDom.Gameplay
             return Resources.Load<Texture2D>(card.ResourcesImagePath);
         }
 
+        private Vector2 ResolveCardSize(Texture2D texture)
+        {
+            Vector2 slotSize = cardSlot != null ? cardSlot.SlotSize : fallbackCardSize;
+            if (!preserveTextureAspect || texture == null || texture.height <= 0)
+            {
+                return slotSize;
+            }
+
+            float textureAspect = texture.width / (float)texture.height;
+            float slotAspect = slotSize.x / slotSize.y;
+
+            if (textureAspect >= slotAspect)
+            {
+                return new Vector2(slotSize.x, slotSize.x / textureAspect);
+            }
+
+            return new Vector2(slotSize.y * textureAspect, slotSize.y);
+        }
+
         private void BuildTextureCard(Texture2D texture)
         {
             GameObject cardObject = new GameObject("Pattern Card Texture");
             cardObject.transform.SetParent(generatedRoot.transform, false);
-            cardObject.transform.position = displayCenter;
+            cardObject.transform.localPosition = Vector3.zero;
 
             MeshFilter meshFilter = cardObject.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = cardObject.AddComponent<MeshRenderer>();
 
-            float aspect = texture.height > 0 ? texture.width / (float)texture.height : 0.75f;
-            float halfWidth = cardHeight * aspect * 0.5f;
-            float halfHeight = cardHeight * 0.5f;
+            Vector2 size = ResolveCardSize(texture);
+            float halfWidth = size.x * 0.5f;
+            float halfHeight = size.y * 0.5f;
 
             textureMesh = new Mesh();
             textureMesh.name = "Pattern Card Quad";
@@ -183,33 +219,40 @@ namespace FlickDom.Gameplay
             meshFilter.sharedMesh = textureMesh;
 
             SetMaterialTexture(textureMaterial, texture);
-            SetMaterialColor(textureMaterial, displayCompleted ? completedTint : cardTint);
+            SetMaterialColor(textureMaterial, cardTint);
             meshRenderer.sharedMaterial = textureMaterial;
         }
 
         private void BuildFallbackCard(PatternCardData card)
         {
+            Vector2 cardSize = cardSlot != null ? cardSlot.SlotSize : fallbackCardSize;
             Color accent = GetDifficultyColor(card.Difficulty);
             SetMaterialColor(baseMaterial, cardBaseColor);
             SetMaterialColor(lineMaterial, accent);
-            SetMaterialColor(fillMaterial, displayCompleted ? completedTint : accent);
+            SetMaterialColor(fillMaterial, accent);
 
-            float gridWidth = (card.Width * fallbackCellSize) + ((card.Width - 1) * fallbackGap);
-            float gridHeight = (card.Height * fallbackCellSize) + ((card.Height - 1) * fallbackGap);
-            float totalWidth = gridWidth + (fallbackPadding * 2f);
-            float totalHeight = gridHeight + fallbackHeaderHeight + (fallbackPadding * 2f);
-            float gridBottom = displayCenter.z - (totalHeight * 0.5f) + fallbackPadding;
-            float gridLeft = displayCenter.x - (gridWidth * 0.5f);
+            float headerHeight = cardSize.y * fallbackHeaderRatio;
+            float gridAvailableWidth = Mathf.Max(0.1f, cardSize.x - (fallbackPadding * 2f));
+            float gridAvailableHeight = Mathf.Max(0.1f, cardSize.y - headerHeight - (fallbackPadding * 2f));
+            float cellSize = Mathf.Min(
+                (gridAvailableWidth - ((card.Width - 1) * fallbackGap)) / card.Width,
+                (gridAvailableHeight - ((card.Height - 1) * fallbackGap)) / card.Height);
+            cellSize = Mathf.Max(0.01f, cellSize);
+
+            float gridWidth = (card.Width * cellSize) + ((card.Width - 1) * fallbackGap);
+            float gridHeight = (card.Height * cellSize) + ((card.Height - 1) * fallbackGap);
+            float gridBottom = (-cardSize.y * 0.5f) + fallbackPadding;
+            float gridLeft = -gridWidth * 0.5f;
 
             CreateCube(
                 "Pattern Card Base",
-                new Vector3(displayCenter.x, displayCenter.y - 0.01f, displayCenter.z),
-                new Vector3(totalWidth, fallbackThickness, totalHeight),
+                Vector3.zero,
+                new Vector3(cardSize.x, fallbackThickness, cardSize.y),
                 baseMaterial);
 
             for (int x = 0; x <= card.Width; x++)
             {
-                float lineX = gridLeft + (x * (fallbackCellSize + fallbackGap)) - (fallbackGap * 0.5f);
+                float lineX = gridLeft + (x * (cellSize + fallbackGap)) - (fallbackGap * 0.5f);
                 if (x == 0)
                 {
                     lineX = gridLeft - (fallbackLineWidth * 0.5f);
@@ -221,14 +264,14 @@ namespace FlickDom.Gameplay
 
                 CreateCube(
                     "Pattern Card Vertical Line",
-                    new Vector3(lineX, displayCenter.y + 0.005f, gridBottom + (gridHeight * 0.5f)),
+                    new Vector3(lineX, 0.015f, gridBottom + (gridHeight * 0.5f)),
                     new Vector3(fallbackLineWidth, fallbackThickness, gridHeight + fallbackLineWidth),
                     lineMaterial);
             }
 
             for (int y = 0; y <= card.Height; y++)
             {
-                float lineZ = gridBottom + (y * (fallbackCellSize + fallbackGap)) - (fallbackGap * 0.5f);
+                float lineZ = gridBottom + (y * (cellSize + fallbackGap)) - (fallbackGap * 0.5f);
                 if (y == 0)
                 {
                     lineZ = gridBottom - (fallbackLineWidth * 0.5f);
@@ -240,7 +283,7 @@ namespace FlickDom.Gameplay
 
                 CreateCube(
                     "Pattern Card Horizontal Line",
-                    new Vector3(displayCenter.x, displayCenter.y + 0.005f, lineZ),
+                    new Vector3(0f, 0.015f, lineZ),
                     new Vector3(gridWidth + fallbackLineWidth, fallbackThickness, fallbackLineWidth),
                     lineMaterial);
             }
@@ -250,25 +293,25 @@ namespace FlickDom.Gameplay
             {
                 Vector2Int cell = filledCells[i];
                 Vector3 cellCenter = new Vector3(
-                    gridLeft + (cell.x * (fallbackCellSize + fallbackGap)) + (fallbackCellSize * 0.5f),
-                    displayCenter.y + 0.012f,
-                    gridBottom + (cell.y * (fallbackCellSize + fallbackGap)) + (fallbackCellSize * 0.5f));
+                    gridLeft + (cell.x * (cellSize + fallbackGap)) + (cellSize * 0.5f),
+                    0.025f,
+                    gridBottom + (cell.y * (cellSize + fallbackGap)) + (cellSize * 0.5f));
 
                 CreateCube(
                     "Pattern Card Filled Cell",
                     cellCenter,
-                    new Vector3(fallbackCellSize * 0.9f, fallbackThickness, fallbackCellSize * 0.9f),
+                    new Vector3(cellSize * 0.9f, fallbackThickness, cellSize * 0.9f),
                     fillMaterial);
             }
         }
 
-        private GameObject CreateCube(string objectName, Vector3 position, Vector3 scale, Material material)
+        private GameObject CreateCube(string objectName, Vector3 localPosition, Vector3 localScale, Material material)
         {
             GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = objectName;
             cube.transform.SetParent(generatedRoot.transform, false);
-            cube.transform.position = position;
-            cube.transform.localScale = scale;
+            cube.transform.localPosition = localPosition;
+            cube.transform.localScale = localScale;
 
             Collider cubeCollider = cube.GetComponent<Collider>();
             if (cubeCollider != null)

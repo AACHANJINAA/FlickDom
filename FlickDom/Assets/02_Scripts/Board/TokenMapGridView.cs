@@ -28,7 +28,15 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color player1OwnedColor = new Color(0.02f, 0.12f, 0.65f);
         [SerializeField] private Color player2OwnedColor = new Color(0.65f, 0.04f, 0.02f);
 
+        [Header("Candidate Marker")]
+        [SerializeField] private bool showCandidateMarkers = true;
+        [SerializeField] private float candidateMarkerSizeRatio = 0.52f;
+        [SerializeField] private float candidateMarkerHeight = 0.035f;
+        [SerializeField] private float candidateMarkerYOffset = 0.045f;
+
         private Renderer[,] cellRenderers;
+        private Renderer[,] candidateMarkerRenderers;
+        private GameObject[,] candidateMarkerObjects;
         private FlickDomPlayerId[,] ownerCells;
         private int[,] candidateFlags;
         private Material emptyMaterial;
@@ -91,6 +99,9 @@ namespace FlickDom.Gameplay
             cellSize = Mathf.Max(0.05f, cellSize);
             gap = Mathf.Max(0f, gap);
             tileHeight = Mathf.Max(0.01f, tileHeight);
+            candidateMarkerSizeRatio = Mathf.Clamp(candidateMarkerSizeRatio, 0.1f, 0.95f);
+            candidateMarkerHeight = Mathf.Max(0.001f, candidateMarkerHeight);
+            candidateMarkerYOffset = Mathf.Max(0.001f, candidateMarkerYOffset);
         }
 
         public void ClearCandidateHighlights()
@@ -218,6 +229,8 @@ namespace FlickDom.Gameplay
         private void BuildGrid()
         {
             cellRenderers = new Renderer[boardSize, boardSize];
+            candidateMarkerRenderers = new Renderer[boardSize, boardSize];
+            candidateMarkerObjects = new GameObject[boardSize, boardSize];
             ownerCells = new FlickDomPlayerId[boardSize, boardSize];
             candidateFlags = new int[boardSize, boardSize];
             cellsByCollider.Clear();
@@ -255,8 +268,36 @@ namespace FlickDom.Gameplay
                     Renderer cellRenderer = cellObject.GetComponent<Renderer>();
                     cellRenderer.sharedMaterial = emptyMaterial;
                     cellRenderers[x, y] = cellRenderer;
+
+                    CreateCandidateMarker(x, y, cellObject.transform.position);
                 }
             }
+        }
+
+        private void CreateCandidateMarker(int x, int y, Vector3 cellPosition)
+        {
+            GameObject markerObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            markerObject.name = "Token Map Candidate Marker " + x + "," + y;
+            markerObject.transform.SetParent(cachedTransform, false);
+            markerObject.transform.position = new Vector3(
+                cellPosition.x,
+                cellPosition.y + (tileHeight * 0.5f) + candidateMarkerYOffset,
+                cellPosition.z);
+            float markerSize = cellSize * candidateMarkerSizeRatio;
+            markerObject.transform.localScale = new Vector3(markerSize, candidateMarkerHeight, markerSize);
+
+            Collider markerCollider = markerObject.GetComponent<Collider>();
+            if (markerCollider != null)
+            {
+                Destroy(markerCollider);
+            }
+
+            Renderer markerRenderer = markerObject.GetComponent<Renderer>();
+            markerRenderer.sharedMaterial = sharedCandidateMaterial;
+            markerObject.SetActive(false);
+
+            candidateMarkerObjects[x, y] = markerObject;
+            candidateMarkerRenderers[x, y] = markerRenderer;
         }
 
         private void CreateMaterials()
@@ -290,12 +331,53 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            cellRenderers[cell.x, cell.y].sharedMaterial = ResolveMaterial(cell);
+            cellRenderers[cell.x, cell.y].sharedMaterial = ResolveBaseMaterial(cell);
+            RepaintCandidateMarker(cell);
         }
 
-        private Material ResolveMaterial(Vector2Int cell)
+        private Material ResolveBaseMaterial(Vector2Int cell)
         {
+            FlickDomPlayerId owner = ownerCells[cell.x, cell.y];
+            if (owner == FlickDomPlayerId.Player1)
+            {
+                return player1OwnedMaterial;
+            }
+
+            if (owner == FlickDomPlayerId.Player2)
+            {
+                return player2OwnedMaterial;
+            }
+
+            return emptyMaterial;
+        }
+
+        private void RepaintCandidateMarker(Vector2Int cell)
+        {
+            if (candidateMarkerObjects == null || candidateMarkerRenderers == null)
+            {
+                return;
+            }
+
+            GameObject markerObject = candidateMarkerObjects[cell.x, cell.y];
+            Renderer markerRenderer = candidateMarkerRenderers[cell.x, cell.y];
+            if (markerObject == null || markerRenderer == null)
+            {
+                return;
+            }
+
             int flags = candidateFlags[cell.x, cell.y];
+            bool hasCandidate = showCandidateMarkers && flags != 0;
+            markerObject.SetActive(hasCandidate);
+            if (!hasCandidate)
+            {
+                return;
+            }
+
+            markerRenderer.sharedMaterial = ResolveCandidateMarkerMaterial(flags);
+        }
+
+        private Material ResolveCandidateMarkerMaterial(int flags)
+        {
             if ((flags & Player1CandidateFlag) != 0 && (flags & Player2CandidateFlag) != 0)
             {
                 return sharedCandidateMaterial;
@@ -311,18 +393,7 @@ namespace FlickDom.Gameplay
                 return player2CandidateMaterial;
             }
 
-            FlickDomPlayerId owner = ownerCells[cell.x, cell.y];
-            if (owner == FlickDomPlayerId.Player1)
-            {
-                return player1OwnedMaterial;
-            }
-
-            if (owner == FlickDomPlayerId.Player2)
-            {
-                return player2OwnedMaterial;
-            }
-
-            return emptyMaterial;
+            return sharedCandidateMaterial;
         }
 
         private void HandleCellOwnerChanged(Vector2Int cell, FlickDomPlayerId previousOwner, FlickDomPlayerId nextOwner)
@@ -333,7 +404,6 @@ namespace FlickDom.Gameplay
             }
 
             ownerCells[cell.x, cell.y] = nextOwner;
-            candidateFlags[cell.x, cell.y] = 0;
             RepaintCell(cell);
         }
 
