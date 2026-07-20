@@ -39,8 +39,15 @@ public class FlickController : MonoBehaviour
         }
         trajectoryLine.positionCount = 2; // 선의 양 끝점 (시작과 끝)
         trajectoryLine.enabled = false;   // 평소엔 끄기
-        trajectoryLine.startWidth = 0.2f; // 시작 두께
-        trajectoryLine.endWidth = 0.05f;  // 끝 두께 (뾰족하게)
+        
+        // 선의 두께 곡선(AnimationCurve)을 조작하여 화살표(Arrow) 모양으로 만듭니다.
+        Keyframe[] keys = new Keyframe[4];
+        keys[0] = new Keyframe(0.0f, 0.2f);    // 화살표 꼬리 시작 (일정한 두께)
+        keys[1] = new Keyframe(0.75f, 0.2f);   // 화살촉 뻗어나가기 직전
+        keys[2] = new Keyframe(0.751f, 0.6f);  // 화살촉 시작 (갑자기 넓어짐)
+        keys[3] = new Keyframe(1.0f, 0.0f);    // 화살촉 끝 (완전히 뾰족해짐)
+        trajectoryLine.widthCurve = new AnimationCurve(keys);
+        trajectoryLine.widthMultiplier = 1f;
         
         // 렌더러 머티리얼을 생성해서 넣어주고 그라데이션 색상(노랑->빨강)을 설정합니다.
         trajectoryLine.material = new Material(Shader.Find("Sprites/Default"));
