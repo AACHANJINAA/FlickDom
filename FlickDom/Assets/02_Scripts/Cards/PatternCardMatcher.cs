@@ -8,6 +8,7 @@ namespace FlickDom.Gameplay
             TokenMapManager tokenMapManager,
             PatternCardData card,
             FlickDomPlayerId player,
+            bool allowRotatedMatches,
             bool matchAnywhereOnBoard,
             out Vector2Int matchOrigin)
         {
@@ -24,6 +25,57 @@ namespace FlickDom.Gameplay
 
             int boardSize = tokenMapManager.BoardSize;
             Vector2Int[] normalizedCells = BuildNormalizedFilledCells(card.FilledCells, out Vector2Int shapeSize);
+            if (TryFindMatchForShape(
+                    tokenMapManager,
+                    normalizedCells,
+                    shapeSize,
+                    player,
+                    matchAnywhereOnBoard,
+                    boardSize,
+                    out matchOrigin))
+            {
+                return true;
+            }
+
+            if (!allowRotatedMatches)
+            {
+                return false;
+            }
+
+            for (int rotationIndex = 1; rotationIndex < 4; rotationIndex++)
+            {
+                Vector2Int[] rotatedCells = BuildRotatedCells(
+                    normalizedCells,
+                    shapeSize,
+                    rotationIndex,
+                    out Vector2Int rotatedShapeSize);
+
+                if (TryFindMatchForShape(
+                        tokenMapManager,
+                        rotatedCells,
+                        rotatedShapeSize,
+                        player,
+                        matchAnywhereOnBoard,
+                        boardSize,
+                        out matchOrigin))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryFindMatchForShape(
+            TokenMapManager tokenMapManager,
+            Vector2Int[] normalizedCells,
+            Vector2Int shapeSize,
+            FlickDomPlayerId player,
+            bool matchAnywhereOnBoard,
+            int boardSize,
+            out Vector2Int matchOrigin)
+        {
+            matchOrigin = default(Vector2Int);
             int maxOriginX = matchAnywhereOnBoard ? boardSize - shapeSize.x : 0;
             int maxOriginY = matchAnywhereOnBoard ? boardSize - shapeSize.y : 0;
 
@@ -46,6 +98,33 @@ namespace FlickDom.Gameplay
             }
 
             return false;
+        }
+
+        private static Vector2Int[] BuildRotatedCells(
+            Vector2Int[] normalizedCells,
+            Vector2Int shapeSize,
+            int rotationIndex,
+            out Vector2Int rotatedShapeSize)
+        {
+            Vector2Int[] rotatedCells = new Vector2Int[normalizedCells.Length];
+            for (int i = 0; i < normalizedCells.Length; i++)
+            {
+                Vector2Int cell = normalizedCells[i];
+                if (rotationIndex == 1)
+                {
+                    rotatedCells[i] = new Vector2Int(shapeSize.y - 1 - cell.y, cell.x);
+                }
+                else if (rotationIndex == 2)
+                {
+                    rotatedCells[i] = new Vector2Int(shapeSize.x - 1 - cell.x, shapeSize.y - 1 - cell.y);
+                }
+                else
+                {
+                    rotatedCells[i] = new Vector2Int(cell.y, shapeSize.x - 1 - cell.x);
+                }
+            }
+
+            return BuildNormalizedFilledCells(rotatedCells, out rotatedShapeSize);
         }
 
         private static bool MatchesAt(

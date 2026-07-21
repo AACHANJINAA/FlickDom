@@ -184,12 +184,100 @@ namespace FlickDom.Gameplay
             };
         }
 
+        public static PatternCardData CreateRuntimeHardCard1()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "HardCard_1";
+            card.difficulty = PatternCardDifficulty.Hard;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 4;
+            card.resourcesImagePath = "Cards/HardCard_1";
+            card.filledCells = new[]
+            {
+                new Vector2Int(1, 3),
+                new Vector2Int(1, 2),
+                new Vector2Int(1, 1),
+                new Vector2Int(2, 1)
+            };
+            return card;
+        }
+
+        public static PatternCardData CreateRuntimeHardCard2()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "HardCard_2";
+            card.difficulty = PatternCardDifficulty.Hard;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 4;
+            card.resourcesImagePath = "Cards/HardCard_2";
+            card.filledCells = new[]
+            {
+                new Vector2Int(1, 2),
+                new Vector2Int(2, 2),
+                new Vector2Int(1, 1),
+                new Vector2Int(2, 1)
+            };
+            return card;
+        }
+
+        public static PatternCardData CreateRuntimeHardCard3()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "HardCard_3";
+            card.difficulty = PatternCardDifficulty.Hard;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 4;
+            card.resourcesImagePath = "Cards/HardCard_3";
+            card.filledCells = new[]
+            {
+                new Vector2Int(0, 3),
+                new Vector2Int(1, 2),
+                new Vector2Int(2, 1),
+                new Vector2Int(3, 0)
+            };
+            return card;
+        }
+
+        public static PatternCardData CreateRuntimeHardCard4()
+        {
+            PatternCardData card = CreateInstance<PatternCardData>();
+            card.cardId = "HardCard_4";
+            card.difficulty = PatternCardDifficulty.Hard;
+            card.scoreValue = 1;
+            card.width = 4;
+            card.height = 4;
+            card.resourcesImagePath = "Cards/HardCard_4";
+            card.filledCells = new[]
+            {
+                new Vector2Int(1, 3),
+                new Vector2Int(1, 2),
+                new Vector2Int(2, 2),
+                new Vector2Int(2, 1)
+            };
+            return card;
+        }
+
+        public static PatternCardData[] CreateRuntimeHardDeck()
+        {
+            return new[]
+            {
+                CreateRuntimeHardCard1(),
+                CreateRuntimeHardCard2(),
+                CreateRuntimeHardCard3(),
+                CreateRuntimeHardCard4()
+            };
+        }
+
         public static PatternCardData[][] CreateRuntimeProgressionDecks()
         {
             return new[]
             {
                 CreateRuntimeEasyDeck(),
-                CreateRuntimeNormalDeck()
+                CreateRuntimeNormalDeck(),
+                CreateRuntimeHardDeck()
             };
         }
     }

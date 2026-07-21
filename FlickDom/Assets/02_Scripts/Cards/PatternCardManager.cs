@@ -16,6 +16,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool advanceFallbackDeckOnExhaustion = true;
         [SerializeField] private bool clearTokenMapOnFallbackDeckAdvance = true;
         [SerializeField] private bool finishRoundOnCardsExhausted = true;
+        [SerializeField] private bool allowRotatedMatches = true;
         [SerializeField] private bool matchAnywhereOnBoard = true;
         [SerializeField] private bool resetScoresWhenMapCleared = true;
         [SerializeField] private bool logCardClaims = true;
@@ -265,6 +266,7 @@ namespace FlickDom.Gameplay
                         tokenMapManager,
                         card,
                         player,
+                        allowRotatedMatches,
                         matchAnywhereOnBoard,
                         out Vector2Int matchOrigin))
                 {
