@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -22,8 +23,10 @@ namespace FlickDom.Gameplay
         private readonly StringBuilder logBuilder = new StringBuilder(256);
         private readonly List<TurnBasedFlickPiece> player1PieceOrder = new List<TurnBasedFlickPiece>(3);
         private readonly List<TurnBasedFlickPiece> player2PieceOrder = new List<TurnBasedFlickPiece>(3);
+        private readonly WaitForFixedUpdate waitForFixedUpdate = new WaitForFixedUpdate();
         private int player1NextOrderIndex;
         private int player2NextOrderIndex;
+        private Coroutine physicsCompletionRoutine;
 
         private void Awake()
         {
@@ -66,6 +69,7 @@ namespace FlickDom.Gameplay
                 gameModeManager.StateChanged += HandleStateChanged;
                 gameModeManager.ActivePlayerChanged += HandleActivePlayerChanged;
                 gameModeManager.RoundStarted += HandleRoundStarted;
+                gameModeManager.BeforePlacementSelectionStarted += HandleBeforePlacementSelectionStarted;
             }
 
             SubscribePieces(player1Pieces, true);
@@ -79,8 +83,10 @@ namespace FlickDom.Gameplay
                 gameModeManager.StateChanged -= HandleStateChanged;
                 gameModeManager.ActivePlayerChanged -= HandleActivePlayerChanged;
                 gameModeManager.RoundStarted -= HandleRoundStarted;
+                gameModeManager.BeforePlacementSelectionStarted -= HandleBeforePlacementSelectionStarted;
             }
 
+            StopPendingPhysicsCompletion();
             SubscribePieces(player1Pieces, false);
             SubscribePieces(player2Pieces, false);
         }
@@ -391,7 +397,8 @@ namespace FlickDom.Gameplay
                 Debug.Log("[TurnTest] Piece died: " + piece.PieceId + " left the playable board.", this);
             }
 
-            gameModeManager.CompleteCurrentPlayerPhysics();
+            gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
+            BeginPhysicsCompletionAfterLaunchedPiecesSettle();
         }
 
         private void HandlePieceSettled(TurnBasedFlickPiece piece)
@@ -410,7 +417,7 @@ namespace FlickDom.Gameplay
 
             if (logStateChanges && candidate != null)
             {
-                Debug.Log(BuildCandidateLog(candidate), this);
+                Debug.Log(BuildCandidateLog(candidate, false), this);
             }
 
             if (tokenMapGridView != null)
@@ -418,7 +425,96 @@ namespace FlickDom.Gameplay
                 tokenMapGridView.ShowCandidateCells(candidate);
             }
 
-            gameModeManager.CompleteCurrentPlayerPhysics();
+            BeginPhysicsCompletionAfterLaunchedPiecesSettle();
+        }
+
+        private void BeginPhysicsCompletionAfterLaunchedPiecesSettle()
+        {
+            StopPendingPhysicsCompletion();
+            physicsCompletionRoutine = StartCoroutine(CompletePhysicsWhenLaunchedPiecesSettle());
+        }
+
+        private IEnumerator CompletePhysicsWhenLaunchedPiecesSettle()
+        {
+            while (gameModeManager != null && gameModeManager.CurrentState == FlickDomGameState.PhysicsProcessing)
+            {
+                RemoveExitedLaunchedPieces(player1Pieces);
+                RemoveExitedLaunchedPieces(player2Pieces);
+
+                if (AreLaunchedPiecesSettled(player1Pieces) && AreLaunchedPiecesSettled(player2Pieces))
+                {
+                    break;
+                }
+
+                yield return waitForFixedUpdate;
+            }
+
+            physicsCompletionRoutine = null;
+            if (gameModeManager != null && gameModeManager.CurrentState == FlickDomGameState.PhysicsProcessing)
+            {
+                gameModeManager.CompleteCurrentPlayerPhysics();
+            }
+        }
+
+        private void StopPendingPhysicsCompletion()
+        {
+            if (physicsCompletionRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(physicsCompletionRoutine);
+            physicsCompletionRoutine = null;
+        }
+
+        private void RemoveExitedLaunchedPieces(TurnBasedFlickPiece[] pieces)
+        {
+            if (pieces == null || gameModeManager == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null
+                    || piece.IsDead
+                    || !piece.HasLaunchedThisRound
+                    || !piece.ShouldBeRemovedAfterLeavingPlayableBoard())
+                {
+                    continue;
+                }
+
+                piece.MarkDeadAfterExternalBoardExit();
+                gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
+
+                if (logStateChanges)
+                {
+                    Debug.Log("[TurnTest] Piece died after being pushed out: " + piece.PieceId + ".", this);
+                }
+            }
+        }
+
+        private static bool AreLaunchedPiecesSettled(TurnBasedFlickPiece[] pieces)
+        {
+            if (pieces == null)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece != null
+                    && piece.HasLaunchedThisRound
+                    && !piece.IsDead
+                    && !piece.IsSettledForPlacement())
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
@@ -440,6 +536,11 @@ namespace FlickDom.Gameplay
             RefreshPieceHighlights();
         }
 
+        private void HandleBeforePlacementSelectionStarted()
+        {
+            RebuildPendingPlacementCandidatesFromFinalPiecePositions();
+        }
+
         private void HandleActivePlayerChanged(FlickDomPlayerId activePlayer)
         {
             if (logStateChanges)
@@ -457,6 +558,8 @@ namespace FlickDom.Gameplay
 
         private void HandleRoundStarted(int roundNumber, IReadOnlyList<FlickDomPlayerId> turnOrder)
         {
+            StopPendingPhysicsCompletion();
+
             if (tokenMapGridView != null)
             {
                 tokenMapGridView.ClearCandidateHighlights();
@@ -484,6 +587,57 @@ namespace FlickDom.Gameplay
             }
 
             Debug.Log(logBuilder.ToString(), this);
+        }
+
+        private void RebuildPendingPlacementCandidatesFromFinalPiecePositions()
+        {
+            if (gameModeManager == null)
+            {
+                return;
+            }
+
+            gameModeManager.ClearPendingPlacementCandidates();
+            if (tokenMapGridView != null)
+            {
+                tokenMapGridView.ClearCandidateHighlights();
+            }
+
+            RegisterFinalPlacementCandidates(player1Pieces);
+            RegisterFinalPlacementCandidates(player2Pieces);
+        }
+
+        private void RegisterFinalPlacementCandidates(TurnBasedFlickPiece[] pieces)
+        {
+            if (pieces == null || gameModeManager == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null || piece.IsDead || !piece.HasLaunchedThisRound)
+                {
+                    continue;
+                }
+
+                if (piece.ShouldBeRemovedAfterLeavingPlayableBoard())
+                {
+                    piece.MarkDeadAfterExternalBoardExit();
+                    continue;
+                }
+
+                PiecePlacementCandidate candidate = gameModeManager.RegisterStoppedPieceCandidate(
+                    piece.Owner,
+                    piece.PieceId,
+                    piece.transform.position,
+                    piece.TokenRadius);
+
+                if (logStateChanges && candidate != null)
+                {
+                    Debug.Log(BuildCandidateLog(candidate, true), this);
+                }
+            }
         }
 
         private void RefreshPieceHighlights()
@@ -585,7 +739,7 @@ namespace FlickDom.Gameplay
             {
                 if (pieces[i] != null)
                 {
-                    pieces[i].SetFlickTurnHighlight(false, false);
+                    pieces[i].SetTurnHighlight(false);
                 }
             }
         }
@@ -732,10 +886,12 @@ namespace FlickDom.Gameplay
             return count;
         }
 
-        private string BuildCandidateLog(PiecePlacementCandidate candidate)
+        private string BuildCandidateLog(PiecePlacementCandidate candidate, bool isFinalCandidate)
         {
             logBuilder.Clear();
-            logBuilder.Append("[TurnTest] Candidate cells for ")
+            logBuilder.Append(isFinalCandidate
+                    ? "[TurnTest] Final candidate cells for "
+                    : "[TurnTest] Candidate cells for ")
                 .Append(candidate.PieceId)
                 .Append(" (")
                 .Append(candidate.Owner)

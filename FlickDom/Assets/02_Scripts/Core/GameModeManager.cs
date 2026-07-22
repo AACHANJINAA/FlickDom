@@ -36,6 +36,7 @@ namespace FlickDom.Gameplay
         public event Action<FlickDomGameState, FlickDomGameState> StateChanged;
         public event Action<FlickDomPlayerId> ActivePlayerChanged;
         public event Action<int, IReadOnlyList<FlickDomPlayerId>> RoundStarted;
+        public event Action BeforePlacementSelectionStarted;
 
         public FlickDomGameState CurrentState { get; private set; } = FlickDomGameState.NotStarted;
         public FlickDomPlayerId ActivePlayer { get; private set; } = FlickDomPlayerId.None;
@@ -194,6 +195,7 @@ namespace FlickDom.Gameplay
             }
 
             SetActivePlayer(FlickDomPlayerId.None);
+            BeforePlacementSelectionStarted?.Invoke();
             SetState(pendingPlacementCandidates.Count > 0
                 ? FlickDomGameState.PlacementSelection
                 : FlickDomGameState.CardMatch);
@@ -275,6 +277,14 @@ namespace FlickDom.Gameplay
             Vector3 worldPosition,
             float tokenRadius)
         {
+            if (player == FlickDomPlayerId.None || string.IsNullOrEmpty(pieceId))
+            {
+                return null;
+            }
+
+            FlickDomPlayerId normalizedPlayer = NormalizePlayer(player);
+            RemovePendingPlacementCandidate(normalizedPlayer, pieceId);
+
             if (cellCandidateResolver == null)
             {
                 Debug.LogError("GridCellCandidateResolver is required before registering stopped pieces.", this);
@@ -282,7 +292,7 @@ namespace FlickDom.Gameplay
             }
 
             PiecePlacementCandidate candidate = cellCandidateResolver.ResolveCandidate(
-                NormalizePlayer(player),
+                normalizedPlayer,
                 pieceId,
                 worldPosition,
                 tokenRadius);
@@ -295,6 +305,21 @@ namespace FlickDom.Gameplay
 
             pendingPlacementCandidates.Add(candidate);
             return candidate;
+        }
+
+        public void ClearPendingPlacementCandidates()
+        {
+            pendingPlacementCandidates.Clear();
+        }
+
+        public bool RemoveStoppedPieceCandidate(FlickDomPlayerId player, string pieceId)
+        {
+            if (player == FlickDomPlayerId.None || string.IsNullOrEmpty(pieceId))
+            {
+                return false;
+            }
+
+            return RemovePendingPlacementCandidate(NormalizePlayer(player), pieceId);
         }
 
         public PiecePlacementCandidate RegisterStoppedPieceCandidate(
@@ -364,6 +389,24 @@ namespace FlickDom.Gameplay
             playersCompletedFlicking.Clear();
             playersCompletedPhysics.Clear();
             pendingPlacementCandidates.Clear();
+        }
+
+        private bool RemovePendingPlacementCandidate(FlickDomPlayerId player, string pieceId)
+        {
+            bool removed = false;
+            for (int i = pendingPlacementCandidates.Count - 1; i >= 0; i--)
+            {
+                PiecePlacementCandidate candidate = pendingPlacementCandidates[i];
+                if (candidate != null
+                    && candidate.Owner == player
+                    && string.Equals(candidate.PieceId, pieceId, StringComparison.Ordinal))
+                {
+                    pendingPlacementCandidates.RemoveAt(i);
+                    removed = true;
+                }
+            }
+
+            return removed;
         }
 
         private void BuildRoundTurnOrder(FlickDomPlayerId startingPlayer)

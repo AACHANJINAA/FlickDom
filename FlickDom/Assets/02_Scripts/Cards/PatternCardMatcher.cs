@@ -24,7 +24,39 @@ namespace FlickDom.Gameplay
             }
 
             int boardSize = tokenMapManager.BoardSize;
-            Vector2Int[] normalizedCells = BuildNormalizedFilledCells(card.FilledCells, out Vector2Int shapeSize);
+            if (TryFindMatchForCardCells(
+                    tokenMapManager,
+                    card.FilledCells,
+                    player,
+                    allowRotatedMatches,
+                    matchAnywhereOnBoard,
+                    boardSize,
+                    out matchOrigin))
+            {
+                return true;
+            }
+
+            Vector2Int[] displayFacingCells = BuildDisplayFacingCells(card);
+            return TryFindMatchForCardCells(
+                tokenMapManager,
+                displayFacingCells,
+                player,
+                allowRotatedMatches,
+                matchAnywhereOnBoard,
+                boardSize,
+                out matchOrigin);
+        }
+
+        private static bool TryFindMatchForCardCells(
+            TokenMapManager tokenMapManager,
+            Vector2Int[] cardCells,
+            FlickDomPlayerId player,
+            bool allowRotatedMatches,
+            bool matchAnywhereOnBoard,
+            int boardSize,
+            out Vector2Int matchOrigin)
+        {
+            Vector2Int[] normalizedCells = BuildNormalizedFilledCells(cardCells, out Vector2Int shapeSize);
             if (TryFindMatchForShape(
                     tokenMapManager,
                     normalizedCells,
@@ -37,33 +69,47 @@ namespace FlickDom.Gameplay
                 return true;
             }
 
-            if (!allowRotatedMatches)
+            if (allowRotatedMatches)
             {
-                return false;
-            }
-
-            for (int rotationIndex = 1; rotationIndex < 4; rotationIndex++)
-            {
-                Vector2Int[] rotatedCells = BuildRotatedCells(
-                    normalizedCells,
-                    shapeSize,
-                    rotationIndex,
-                    out Vector2Int rotatedShapeSize);
-
-                if (TryFindMatchForShape(
-                        tokenMapManager,
-                        rotatedCells,
-                        rotatedShapeSize,
-                        player,
-                        matchAnywhereOnBoard,
-                        boardSize,
-                        out matchOrigin))
+                for (int rotationIndex = 1; rotationIndex < 4; rotationIndex++)
                 {
-                    return true;
+                    Vector2Int[] rotatedCells = BuildRotatedCells(
+                        normalizedCells,
+                        shapeSize,
+                        rotationIndex,
+                        out Vector2Int rotatedShapeSize);
+
+                    if (TryFindMatchForShape(
+                            tokenMapManager,
+                            rotatedCells,
+                            rotatedShapeSize,
+                            player,
+                            matchAnywhereOnBoard,
+                            boardSize,
+                            out matchOrigin))
+                    {
+                        return true;
+                    }
                 }
             }
 
+            matchOrigin = default(Vector2Int);
             return false;
+        }
+
+        private static Vector2Int[] BuildDisplayFacingCells(PatternCardData card)
+        {
+            Vector2Int[] filledCells = card.FilledCells;
+            Vector2Int[] displayFacingCells = new Vector2Int[filledCells.Length];
+            int cardHeight = Mathf.Max(1, card.Height);
+
+            for (int i = 0; i < filledCells.Length; i++)
+            {
+                Vector2Int cell = filledCells[i];
+                displayFacingCells[i] = new Vector2Int(cell.x, cardHeight - 1 - cell.y);
+            }
+
+            return displayFacingCells;
         }
 
         private static bool TryFindMatchForShape(

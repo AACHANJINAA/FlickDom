@@ -15,6 +15,12 @@ public class FlickMain : MonoBehaviour
     void Start()
     {
         // 큐브에 붙어있는 나머지 두 컴포넌트를 찾아서 가져옵니다.
+        if (GetComponent<FlickDom.Gameplay.TurnBasedFlickPiece>() != null)
+        {
+            enabled = false;
+            return;
+        }
+
         movement = GetComponent<FlickMovement>();
         visuals = GetComponent<FlickVisuals>();
     }

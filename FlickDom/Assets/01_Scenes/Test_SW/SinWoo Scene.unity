@@ -147,8 +147,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_UsePipelineSettings: 1
   m_AdditionalLightsShadowResolutionTier: 2
   m_CustomShadowLayers: 0
@@ -282,7 +282,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
   gameModeManager: {fileID: 0}
   owner: 1
@@ -301,6 +301,12 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  showStateIndicator: 0
+  stateIndicatorYOffset: 0.72
+  stateIndicatorHeight: 0.035
+  currentTargetIndicatorDiameterMultiplier: 1.5
+  activeIndicatorDiameterMultiplier: 1.1
+  inactiveIndicatorDiameterMultiplier: 0.75
 --- !u!114 &789277670
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -311,7 +317,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
   gameModeManager: {fileID: 0}
   owner: 1
@@ -330,6 +336,12 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  showStateIndicator: 0
+  stateIndicatorYOffset: 0.72
+  stateIndicatorHeight: 0.035
+  currentTargetIndicatorDiameterMultiplier: 1.5
+  activeIndicatorDiameterMultiplier: 1.1
+  inactiveIndicatorDiameterMultiplier: 0.75
 --- !u!114 &789277671
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -340,7 +352,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 39a4bdf1d54dfcc49a48e99e30680ea0, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TokenSetup
   tokenData: {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
 --- !u!114 &789277672
@@ -353,7 +365,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dd92029284e74f74b963995ee71600c0, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickVisuals
 --- !u!114 &789277673
 MonoBehaviour:
@@ -365,7 +377,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 250209acfe7372f4fa319bd578647b9b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickMovement
   forceMultiplier: 10
   maxDragDistance: 3
@@ -379,7 +391,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4bdc42e84d6b9d448dad9d6c034b0d7, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickController
 --- !u!54 &789277675
 Rigidbody:
@@ -485,7 +497,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 789277668}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &789277679
 Transform:
   m_ObjectHideFlags: 0
@@ -530,8 +542,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
   m_RequiresOpaqueTextureOption: 2
@@ -673,7 +685,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
   gameModeManager: {fileID: 0}
   owner: 1
@@ -692,6 +704,12 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  showStateIndicator: 0
+  stateIndicatorYOffset: 0.72
+  stateIndicatorHeight: 0.035
+  currentTargetIndicatorDiameterMultiplier: 1.5
+  activeIndicatorDiameterMultiplier: 1.1
+  inactiveIndicatorDiameterMultiplier: 0.75
 --- !u!114 &1305843887
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -702,7 +720,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 39a4bdf1d54dfcc49a48e99e30680ea0, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TokenSetup
   tokenData: {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
 --- !u!114 &1305843888
@@ -715,7 +733,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dd92029284e74f74b963995ee71600c0, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickVisuals
 --- !u!114 &1305843889
 MonoBehaviour:
@@ -727,7 +745,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 250209acfe7372f4fa319bd578647b9b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickMovement
   forceMultiplier: 10
   maxDragDistance: 3
@@ -741,7 +759,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4bdc42e84d6b9d448dad9d6c034b0d7, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickController
 --- !u!54 &1305843891
 Rigidbody:
@@ -847,7 +865,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1305843885}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &1305843895
 Transform:
   m_ObjectHideFlags: 0
@@ -900,7 +918,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c637d60ea4bb431fabae12ca84842b93, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapManager
   boardSize: 5
   maxTokensPerPlayer: 5
@@ -914,7 +932,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21798900014d4f9fac102d81ee74975f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GridCellCandidateResolver
   boardSize: 5
   cellSize: 1
@@ -938,7 +956,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c1914800f88d4203adf0193b1985adb6, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GameModeManager
   tokenMapManager: {fileID: 1371976852}
   cellCandidateResolver: {fileID: 1371976853}
@@ -973,7 +991,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2999348c99574aed80230c30ccd4468c, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.LocalFlickTurnTestRig
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
@@ -998,7 +1016,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a3f28129d76e4d71a9f82b3e25b387de, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapGridView
   tokenMapManager: {fileID: 1371976852}
   syncBoardSizeFromTokenMap: 1
@@ -1028,7 +1046,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c5530594d13d401687a67cbd9e452570, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlacementCameraController
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
@@ -1049,7 +1067,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b38c6013f404a2097d54c52047ec23b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapPlacementSelector
   gameModeManager: {fileID: 1371976854}
   tokenMapManager: {fileID: 1371976852}
@@ -1074,7 +1092,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b4b714b57c214c438375f293999cd7d3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardManager
   gameModeManager: {fileID: 1371976854}
   tokenMapManager: {fileID: 1371976852}
@@ -1098,7 +1116,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e9051f9b2d3b4a0fa65c8ff7e1a2a5bb, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardWorldDisplay
   cardManager: {fileID: 1371976860}
   cardSlot: {fileID: 1800000003}
@@ -1148,7 +1166,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9b786d5b9f0949d2a88f196cb103ef84, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlayerScoreHud
   cardManager: {fileID: 1371976860}
   font: {fileID: 0}
@@ -1172,7 +1190,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6ddc8f51602c4984bfbd9e74f96d9e5a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GameViewMenuHud
   cardManager: {fileID: 1371976860}
   placementCameraController: {fileID: 1371976858}
@@ -1348,7 +1366,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.70673, y: -0, z: 0.01527}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.7571, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -1395,7 +1413,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9dc02af6f4c34caf9d8a125e3c8be31e, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardSlot
   slotSize: {x: 1, y: 1}
   showEmptySlot: 1

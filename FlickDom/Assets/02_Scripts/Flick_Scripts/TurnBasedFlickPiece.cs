@@ -32,10 +32,21 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color inactiveTint = new Color(0.45f, 0.45f, 0.45f);
         [SerializeField] private Color currentFlickTargetColor = new Color(1f, 0.86f, 0.05f);
         [SerializeField] private Color selectedOrderColor = new Color(1f, 0.68f, 0.05f);
+        [SerializeField] private bool showStateIndicator;
+        [SerializeField] private float stateIndicatorYOffset = 0.72f;
+        [SerializeField] private float stateIndicatorHeight = 0.035f;
+        [SerializeField] private float currentTargetIndicatorDiameterMultiplier = 1.5f;
+        [SerializeField] private float activeIndicatorDiameterMultiplier = 1.1f;
+        [SerializeField] private float inactiveIndicatorDiameterMultiplier = 0.75f;
 
         private Rigidbody cachedRigidbody;
         private Collider cachedCollider;
         private Renderer cachedRenderer;
+        private FlickVisuals cachedVisuals;
+        private GameObject stateIndicatorObject;
+        private Renderer stateIndicatorRenderer;
+        private Material stateIndicatorMaterial;
+        private MaterialPropertyBlock rendererPropertyBlock;
 
         private Vector3 mouseStartPosition;
         private Vector3 mouseEndPosition;
@@ -61,6 +72,11 @@ namespace FlickDom.Gameplay
         private bool originalColliderIsTrigger;
         private bool originalRendererEnabled;
         private RigidbodyConstraints originalConstraints;
+        private float activeIndicatorDiameterMultiplierRuntime;
+
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+        private static readonly int EmissionColorPropertyId = Shader.PropertyToID("_EmissionColor");
 
         public event Action<TurnBasedFlickPiece> FlickStarted;
         public event Action<TurnBasedFlickPiece> SettledAfterFlick;
@@ -96,6 +112,7 @@ namespace FlickDom.Gameplay
             cachedRigidbody = GetComponent<Rigidbody>();
             cachedCollider = GetComponent<Collider>();
             cachedRenderer = GetComponentInChildren<Renderer>();
+            cachedVisuals = GetComponent<FlickVisuals>();
             flickStartPosition = transform.position;
             flickStartRotation = transform.rotation;
             originalUseGravity = cachedRigidbody.useGravity;
@@ -104,6 +121,7 @@ namespace FlickDom.Gameplay
             originalColliderIsTrigger = cachedCollider.isTrigger;
             originalRendererEnabled = cachedRenderer == null || cachedRenderer.enabled;
             originalConstraints = cachedRigidbody.constraints;
+            activeIndicatorDiameterMultiplierRuntime = activeIndicatorDiameterMultiplier;
 
             if (inputCamera == null)
             {
@@ -120,6 +138,44 @@ namespace FlickDom.Gameplay
             tokenRadius = Mathf.Max(0.01f, tokenRadius);
             stopSpeed = Mathf.Max(0.001f, stopSpeed);
             stopConfirmSeconds = Mathf.Max(0f, stopConfirmSeconds);
+            stateIndicatorYOffset = Mathf.Max(0.01f, stateIndicatorYOffset);
+            stateIndicatorHeight = Mathf.Max(0.001f, stateIndicatorHeight);
+            currentTargetIndicatorDiameterMultiplier = Mathf.Max(0.1f, currentTargetIndicatorDiameterMultiplier);
+            activeIndicatorDiameterMultiplier = Mathf.Max(0.1f, activeIndicatorDiameterMultiplier);
+            inactiveIndicatorDiameterMultiplier = Mathf.Max(0.1f, inactiveIndicatorDiameterMultiplier);
+        }
+
+        private void LateUpdate()
+        {
+            if (stateIndicatorObject != null && stateIndicatorObject.activeSelf)
+            {
+                UpdateStateIndicatorTransform();
+            }
+        }
+
+        private void OnDisable()
+        {
+            HideFlickPreview();
+
+            if (stateIndicatorObject != null)
+            {
+                stateIndicatorObject.SetActive(false);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (stateIndicatorObject != null)
+            {
+                Destroy(stateIndicatorObject);
+                stateIndicatorObject = null;
+            }
+
+            if (stateIndicatorMaterial != null)
+            {
+                Destroy(stateIndicatorMaterial);
+                stateIndicatorMaterial = null;
+            }
         }
 
         private void Update()
@@ -234,17 +290,20 @@ namespace FlickDom.Gameplay
 
             if (isDead)
             {
-                cachedRenderer.material.color = deadTint;
+                ApplyPieceColor(deadTint);
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
                 return;
             }
 
             if (!IsInsidePlayableBoard())
             {
-                cachedRenderer.material.color = inactiveTint;
+                ApplyPieceColor(inactiveTint);
+                SetStateIndicator(false, inactiveTint, inactiveIndicatorDiameterMultiplier);
                 return;
             }
 
-            cachedRenderer.material.color = isActiveTurn ? GetOwnerColor() : inactiveTint;
+            ApplyPieceColor(isActiveTurn ? GetOwnerColor() : inactiveTint);
+            SetStateIndicator(isActiveTurn, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier);
         }
 
         public void SetFlickTurnHighlight(bool isActivePlayerPiece, bool isCurrentFlickTarget)
@@ -260,17 +319,25 @@ namespace FlickDom.Gameplay
 
             if (isDead)
             {
-                cachedRenderer.material.color = deadTint;
+                ApplyPieceColor(deadTint);
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
                 return;
             }
 
             if (isCurrentFlickTarget)
             {
-                cachedRenderer.material.color = currentFlickTargetColor;
+                ApplyPieceColor(currentFlickTargetColor);
+                SetStateIndicator(true, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier);
                 return;
             }
 
-            cachedRenderer.material.color = isActivePlayerPiece ? GetOwnerColor() : inactiveTint;
+            Color color = isActivePlayerPiece ? GetOwnerColor() : inactiveTint;
+            float indicatorMultiplier = isActivePlayerPiece
+                ? activeIndicatorDiameterMultiplier
+                : inactiveIndicatorDiameterMultiplier;
+
+            ApplyPieceColor(color);
+            SetStateIndicator(true, color, indicatorMultiplier);
         }
 
         public void SetOrderSelectionHighlight(bool isSelectingPlayerPiece, bool isAlreadySelected)
@@ -283,9 +350,10 @@ namespace FlickDom.Gameplay
                 StopDeadPieceSimulation();
                 if (cachedRenderer != null)
                 {
-                    cachedRenderer.material.color = deadTint;
+                    ApplyPieceColor(deadTint);
                 }
 
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
                 return;
             }
 
@@ -305,11 +373,18 @@ namespace FlickDom.Gameplay
 
             if (isSelectingPlayerPiece && isAlreadySelected)
             {
-                cachedRenderer.material.color = selectedOrderColor;
+                ApplyPieceColor(selectedOrderColor);
+                SetStateIndicator(true, selectedOrderColor, activeIndicatorDiameterMultiplier);
                 return;
             }
 
-            cachedRenderer.material.color = isSelectingPlayerPiece ? GetOwnerColor() : inactiveTint;
+            Color color = isSelectingPlayerPiece ? GetOwnerColor() : inactiveTint;
+            float indicatorMultiplier = isSelectingPlayerPiece
+                ? activeIndicatorDiameterMultiplier
+                : inactiveIndicatorDiameterMultiplier;
+
+            ApplyPieceColor(color);
+            SetStateIndicator(true, color, indicatorMultiplier);
         }
 
         public void ResetRoundUse()
@@ -325,8 +400,50 @@ namespace FlickDom.Gameplay
             canInteractThisTurn = false;
             waitForPointerReleaseBeforeInput = false;
             stoppedTimer = 0f;
+            HideFlickPreview();
             ApplyBaseColor();
             UpdateCollisionForTurnState(false);
+        }
+
+        public bool IsSettledForPlacement()
+        {
+            EnsureCachedComponents();
+
+            if (isDead || !launchedThisTurn || ShouldBeRemovedAfterLeavingPlayableBoard())
+            {
+                return true;
+            }
+
+            if (cachedRigidbody == null || cachedRigidbody.isKinematic)
+            {
+                return true;
+            }
+
+            float stopSpeedSqr = stopSpeed * stopSpeed;
+            return cachedRigidbody.linearVelocity.sqrMagnitude <= stopSpeedSqr
+                && cachedRigidbody.angularVelocity.sqrMagnitude <= stopSpeedSqr;
+        }
+
+        public bool ShouldBeRemovedAfterLeavingPlayableBoard()
+        {
+            if (isDead)
+            {
+                return false;
+            }
+
+            if (transform.position.y <= fallYThreshold)
+            {
+                return true;
+            }
+
+            return launchedThisTurn && !IsInsidePlayableBoard();
+        }
+
+        public void MarkDeadAfterExternalBoardExit()
+        {
+            EnsureCachedComponents();
+            invalidatedThisTurn = true;
+            KillPiece();
         }
 
         public void BlockInputUntilPointerReleased()
@@ -334,6 +451,7 @@ namespace FlickDom.Gameplay
             waitForPointerReleaseBeforeInput = true;
             isDragging = false;
             launchQueued = false;
+            HideFlickPreview();
         }
 
         public bool TryRaycast(Ray ray, float maxDistance, out float distance)
@@ -388,6 +506,7 @@ namespace FlickDom.Gameplay
             initialPiecePosition = transform.position;
             dragTargetPosition = initialPiecePosition;
             isDragging = true;
+            ShowFlickPreview(Vector3.zero);
         }
 
         private void UpdateDragTarget()
@@ -402,12 +521,14 @@ namespace FlickDom.Gameplay
             }
 
             dragTargetPosition = initialPiecePosition + pullVector;
+            ShowFlickPreview(-pullVector);
         }
 
         private void EndDragAndQueueFlick()
         {
             mouseEndPosition = GetMousePositionOnBoard();
             isDragging = false;
+            HideFlickPreview();
 
             Vector3 forceVector = mouseStartPosition - mouseEndPosition;
             forceVector.y = 0f;
@@ -472,6 +593,7 @@ namespace FlickDom.Gameplay
             waitingForStop = false;
             invalidatedThisTurn = true;
             stoppedTimer = 0f;
+            HideFlickPreview();
 
             cachedRigidbody.linearVelocity = Vector3.zero;
             cachedRigidbody.angularVelocity = Vector3.zero;
@@ -499,9 +621,11 @@ namespace FlickDom.Gameplay
                 }
                 else
                 {
-                    cachedRenderer.material.color = deadTint;
+                    ApplyPieceColor(deadTint);
                 }
             }
+
+            SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
         }
 
         private void StopDeadPieceSimulation()
@@ -510,6 +634,7 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             waitingForStop = false;
             stoppedTimer = 0f;
+            HideFlickPreview();
 
             if (!cachedRigidbody.isKinematic)
             {
@@ -664,7 +789,8 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            cachedRenderer.material.color = GetOwnerColor();
+            ApplyPieceColor(GetOwnerColor());
+            SetStateIndicator(false, GetOwnerColor(), activeIndicatorDiameterMultiplier);
         }
 
         private void EnsureCachedComponents()
@@ -683,11 +809,199 @@ namespace FlickDom.Gameplay
             {
                 cachedRenderer = GetComponentInChildren<Renderer>();
             }
+
+            if (cachedVisuals == null)
+            {
+                cachedVisuals = GetComponent<FlickVisuals>();
+            }
+        }
+
+        private void ShowFlickPreview(Vector3 forceDirection)
+        {
+            EnsureCachedComponents();
+
+            if (cachedVisuals == null)
+            {
+                return;
+            }
+
+            cachedVisuals.SetHighlight(true);
+            cachedVisuals.ShowTrajectory(true);
+            cachedVisuals.UpdateTrajectory(initialPiecePosition, forceDirection);
+        }
+
+        private void HideFlickPreview()
+        {
+            if (cachedVisuals == null)
+            {
+                cachedVisuals = GetComponent<FlickVisuals>();
+            }
+
+            if (cachedVisuals == null)
+            {
+                return;
+            }
+
+            cachedVisuals.SetHighlight(false);
+            cachedVisuals.ShowTrajectory(false);
         }
 
         private Color GetOwnerColor()
         {
             return owner == FlickDomPlayerId.Player2 ? player2Color : player1Color;
+        }
+
+        private void ApplyPieceColor(Color color)
+        {
+            EnsureCachedComponents();
+
+            if (cachedRenderer == null)
+            {
+                return;
+            }
+
+            if (rendererPropertyBlock == null)
+            {
+                rendererPropertyBlock = new MaterialPropertyBlock();
+            }
+
+            cachedRenderer.GetPropertyBlock(rendererPropertyBlock);
+            Material sharedMaterial = cachedRenderer.sharedMaterial;
+            bool setAnyColor = false;
+
+            if (sharedMaterial == null || sharedMaterial.HasProperty(BaseColorPropertyId))
+            {
+                rendererPropertyBlock.SetColor(BaseColorPropertyId, color);
+                setAnyColor = true;
+            }
+
+            if (sharedMaterial == null || sharedMaterial.HasProperty(ColorPropertyId))
+            {
+                rendererPropertyBlock.SetColor(ColorPropertyId, color);
+                setAnyColor = true;
+            }
+
+            if (sharedMaterial != null && sharedMaterial.HasProperty(EmissionColorPropertyId))
+            {
+                rendererPropertyBlock.SetColor(EmissionColorPropertyId, color * 0.35f);
+                setAnyColor = true;
+            }
+
+            if (setAnyColor)
+            {
+                cachedRenderer.SetPropertyBlock(rendererPropertyBlock);
+            }
+        }
+
+        private void SetStateIndicator(bool visible, Color color, float diameterMultiplier)
+        {
+            if (!showStateIndicator)
+            {
+                if (stateIndicatorObject != null)
+                {
+                    stateIndicatorObject.SetActive(false);
+                }
+
+                return;
+            }
+
+            if (isDead)
+            {
+                visible = false;
+            }
+
+            EnsureStateIndicator();
+            if (stateIndicatorObject == null)
+            {
+                return;
+            }
+
+            stateIndicatorObject.SetActive(visible);
+            if (!visible)
+            {
+                return;
+            }
+
+            activeIndicatorDiameterMultiplierRuntime = diameterMultiplier;
+            UpdateStateIndicatorTransform();
+            SetMaterialColor(stateIndicatorMaterial, color);
+        }
+
+        private void EnsureStateIndicator()
+        {
+            if (stateIndicatorObject != null)
+            {
+                return;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Color");
+            }
+
+            if (shader == null)
+            {
+                shader = Shader.Find("Sprites/Default");
+            }
+
+            if (shader == null)
+            {
+                return;
+            }
+
+            stateIndicatorMaterial = new Material(shader);
+            stateIndicatorMaterial.name = name + " State Indicator";
+
+            stateIndicatorObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            stateIndicatorObject.name = name + " State Indicator";
+            stateIndicatorRenderer = stateIndicatorObject.GetComponent<Renderer>();
+            if (stateIndicatorRenderer != null)
+            {
+                stateIndicatorRenderer.sharedMaterial = stateIndicatorMaterial;
+            }
+
+            Collider indicatorCollider = stateIndicatorObject.GetComponent<Collider>();
+            if (indicatorCollider != null)
+            {
+                Destroy(indicatorCollider);
+            }
+
+            stateIndicatorObject.SetActive(false);
+        }
+
+        private void UpdateStateIndicatorTransform()
+        {
+            if (stateIndicatorObject == null)
+            {
+                return;
+            }
+
+            float diameter = Mathf.Max(0.05f, tokenRadius * 2f * activeIndicatorDiameterMultiplierRuntime);
+            stateIndicatorObject.transform.position = transform.position + (Vector3.up * stateIndicatorYOffset);
+            stateIndicatorObject.transform.rotation = Quaternion.identity;
+            stateIndicatorObject.transform.localScale = new Vector3(
+                diameter,
+                stateIndicatorHeight * 0.5f,
+                diameter);
+        }
+
+        private static void SetMaterialColor(Material material, Color color)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty(BaseColorPropertyId))
+            {
+                material.SetColor(BaseColorPropertyId, color);
+            }
+
+            if (material.HasProperty(ColorPropertyId))
+            {
+                material.SetColor(ColorPropertyId, color);
+            }
         }
     }
 }
