@@ -60,3 +60,5 @@ crashlytics-build.properties
 .Trashes
 ehthumbs.db
 Thumbs.db
+# 로컬 도구 검색 인덱스 캐시 (Bleve)
+docs/index.bleve/
