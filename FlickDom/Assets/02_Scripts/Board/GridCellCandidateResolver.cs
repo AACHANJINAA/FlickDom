@@ -21,8 +21,16 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color visualCellColor = new Color(0.45f, 0.48f, 0.5f);
         [SerializeField] private Color visualAlternateCellColor = new Color(0.55f, 0.58f, 0.6f);
 
+        [Header("Board Boundary Walls")]
+        [SerializeField] private bool buildTopBottomBoundaryWalls = true;
+        [SerializeField] private float boundaryWallHeight = 0.7f;
+        [SerializeField] private float boundaryWallThickness = 0.28f;
+        [SerializeField] private float boundaryWallOverhang = 0.15f;
+        [SerializeField] private Color boundaryWallColor = new Color(0.42f, 0.46f, 0.5f);
+
         private Material visualCellMaterial;
         private Material visualAlternateCellMaterial;
+        private Material boundaryWallMaterial;
 
         public int BoardSize
         {
@@ -63,6 +71,9 @@ namespace FlickDom.Gameplay
             contactTolerance = Mathf.Max(0f, contactTolerance);
             visualCellHeight = Mathf.Max(0.001f, visualCellHeight);
             visualGap = Mathf.Clamp(visualGap, 0f, cellSize * 0.45f);
+            boundaryWallHeight = Mathf.Max(0.05f, boundaryWallHeight);
+            boundaryWallThickness = Mathf.Max(0.05f, boundaryWallThickness);
+            boundaryWallOverhang = Mathf.Max(0f, boundaryWallOverhang);
         }
 
         private void Awake()
@@ -70,6 +81,11 @@ namespace FlickDom.Gameplay
             if (showBoardVisual)
             {
                 BuildBoardVisual();
+            }
+
+            if (buildTopBottomBoundaryWalls)
+            {
+                BuildTopBottomBoundaryWalls();
             }
         }
 
@@ -83,6 +99,11 @@ namespace FlickDom.Gameplay
             if (visualAlternateCellMaterial != null)
             {
                 Destroy(visualAlternateCellMaterial);
+            }
+
+            if (boundaryWallMaterial != null)
+            {
+                Destroy(boundaryWallMaterial);
             }
         }
 
@@ -255,6 +276,69 @@ namespace FlickDom.Gameplay
 
             visualCellMaterial = CreateVisualMaterial(shader, "Physical Board Cell", visualCellColor);
             visualAlternateCellMaterial = CreateVisualMaterial(shader, "Physical Board Alternate Cell", visualAlternateCellColor);
+        }
+
+        private void BuildTopBottomBoundaryWalls()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+
+            boundaryWallMaterial = CreateVisualMaterial(shader, "Physical Board Boundary Wall", boundaryWallColor);
+
+            GameObject rootObject = new GameObject("Generated Physical Board Boundary Walls");
+            rootObject.transform.SetParent(transform, false);
+
+            Bounds wallBounds = GetBoundaryWallBounds();
+            float boardWidth = wallBounds.size.x;
+            float wallLength = boardWidth + boundaryWallOverhang * 2f;
+            float centerX = wallBounds.center.x;
+            float centerY = wallBounds.max.y + boundaryWallHeight * 0.5f;
+
+            CreateBoundaryWall(
+                rootObject.transform,
+                "Bottom Boundary Wall",
+                new Vector3(centerX, centerY, wallBounds.min.z - boundaryWallThickness * 0.5f),
+                new Vector3(wallLength, boundaryWallHeight, boundaryWallThickness));
+
+            CreateBoundaryWall(
+                rootObject.transform,
+                "Top Boundary Wall",
+                new Vector3(centerX, centerY, wallBounds.max.z + boundaryWallThickness * 0.5f),
+                new Vector3(wallLength, boundaryWallHeight, boundaryWallThickness));
+        }
+
+        private Bounds GetBoundaryWallBounds()
+        {
+            Vector3 center = new Vector3(
+                boardOrigin.x + (boardSize * cellSize * 0.5f),
+                boardOrigin.y,
+                boardOrigin.z + (boardSize * cellSize * 0.5f));
+            Vector3 size = new Vector3(boardSize * cellSize, 0.01f, boardSize * cellSize);
+            return new Bounds(center, size);
+        }
+
+        private void CreateBoundaryWall(Transform parent, string objectName, Vector3 position, Vector3 scale)
+        {
+            GameObject wallObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wallObject.name = objectName;
+            wallObject.transform.SetParent(parent, false);
+            wallObject.transform.position = position;
+            wallObject.transform.localScale = scale;
+
+            Renderer wallRenderer = wallObject.GetComponent<Renderer>();
+            if (wallRenderer != null)
+            {
+                wallRenderer.sharedMaterial = boundaryWallMaterial;
+            }
+
+            Collider wallCollider = wallObject.GetComponent<Collider>();
+            if (wallCollider != null)
+            {
+                wallCollider.isTrigger = false;
+            }
         }
 
         private static Material CreateVisualMaterial(Shader shader, string materialName, Color color)

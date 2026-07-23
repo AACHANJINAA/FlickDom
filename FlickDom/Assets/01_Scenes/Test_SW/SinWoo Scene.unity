@@ -921,6 +921,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapManager
   boardSize: 5
+  limitOwnedCellsPerPlayer: 1
   maxTokensPerPlayer: 5
 --- !u!114 &1371976853
 MonoBehaviour:
@@ -946,6 +947,11 @@ MonoBehaviour:
   visualGap: 0.035
   visualCellColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   visualAlternateCellColor: {r: 0.55, g: 0.58, b: 0.6, a: 1}
+  buildTopBottomBoundaryWalls: 1
+  boundaryWallHeight: 0.7
+  boundaryWallThickness: 0.28
+  boundaryWallOverhang: 0.15
+  boundaryWallColor: {r: 0.42, g: 0.46, b: 0.5, a: 1}
 --- !u!114 &1371976854
 MonoBehaviour:
   m_ObjectHideFlags: 0

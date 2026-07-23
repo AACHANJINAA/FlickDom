@@ -7,6 +7,7 @@ namespace FlickDom.Gameplay
     public sealed class TokenMapManager : MonoBehaviour
     {
         [SerializeField] private int boardSize = 5;
+        [SerializeField] private bool limitOwnedCellsPerPlayer = true;
         [SerializeField] private int maxTokensPerPlayer = 5;
 
         private FlickDomPlayerId[,] owners;
@@ -25,6 +26,11 @@ namespace FlickDom.Gameplay
         public int MaxTokensPerPlayer
         {
             get { return maxTokensPerPlayer; }
+        }
+
+        public bool LimitOwnedCellsPerPlayer
+        {
+            get { return limitOwnedCellsPerPlayer; }
         }
 
         private void Awake()
@@ -80,7 +86,7 @@ namespace FlickDom.Gameplay
             }
 
             List<Vector2Int> playerCells = GetMutableCells(player);
-            bool requiresRelocation = playerCells.Count >= maxTokensPerPlayer;
+            bool requiresRelocation = limitOwnedCellsPerPlayer && playerCells.Count >= maxTokensPerPlayer;
             Vector2Int source = default(Vector2Int);
 
             if (requiresRelocation)

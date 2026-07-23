@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace FlickDom.Gameplay
 {
@@ -17,14 +18,34 @@ namespace FlickDom.Gameplay
         [SerializeField] private float raycastDistance = 100f;
         [SerializeField] private bool autoCompleteWhenAllCandidatesPlaced = true;
         [SerializeField] private bool autoStartNextRoundAfterPlacement = true;
-        [SerializeField] private bool autoRelocateOldestTokenForLocalTest = true;
         [SerializeField] private bool showOnlyCurrentCandidate = true;
         [SerializeField] private bool logSelections = true;
+
+        [Header("Selection UI")]
+        [SerializeField] private bool showSelectionMessages = true;
+        [SerializeField] private Font messageFont;
+        [SerializeField] private int messageFontSize = 28;
+        [SerializeField] private Vector2 messagePanelSize = new Vector2(560f, 72f);
+        [SerializeField] private Vector2 messagePanelOffset = new Vector2(0f, -92f);
+        [SerializeField] private Color messagePanelColor = new Color(0.05f, 0.06f, 0.07f, 0.82f);
+        [SerializeField] private Color messageTextColor = Color.white;
+        [SerializeField] private string claimPromptText = "점령할 칸을 선택하세요";
+        [SerializeField] private string relocationPromptText = "점령칸이 5개입니다. 지울 내 점령칸을 선택하세요";
+        [SerializeField] private string invalidClaimText = "선택할 수 없는 점령칸입니다";
+        [SerializeField] private string invalidRelocationText = "내 점령칸만 지울 수 있습니다";
+        [SerializeField] private string claimCompleteText = "점령 완료";
+        [SerializeField] private string relocationCompleteText = "점령칸 교체 완료";
 
         private readonly HashSet<PiecePlacementCandidate> resolvedCandidates = new HashSet<PiecePlacementCandidate>();
         private readonly RaycastHit[] raycastHits = new RaycastHit[8];
         private PiecePlacementCandidate activeCandidate;
+        private PiecePlacementCandidate pendingRelocationCandidate;
+        private Vector2Int pendingRelocationDestination;
         private bool selectionActive;
+        private bool waitingForRelocationSource;
+        private Canvas messageCanvas;
+        private Text messageText;
+        private Font resolvedMessageFont;
 
         private void Awake()
         {
@@ -47,6 +68,16 @@ namespace FlickDom.Gameplay
             {
                 inputCamera = Camera.main;
             }
+
+            BuildSelectionMessageUi();
+        }
+
+        private void OnValidate()
+        {
+            raycastDistance = Mathf.Max(1f, raycastDistance);
+            messageFontSize = Mathf.Max(8, messageFontSize);
+            messagePanelSize.x = Mathf.Max(120f, messagePanelSize.x);
+            messagePanelSize.y = Mathf.Max(32f, messagePanelSize.y);
         }
 
         private void OnEnable()
@@ -70,6 +101,15 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void OnDestroy()
+        {
+            if (messageCanvas != null)
+            {
+                Destroy(messageCanvas.gameObject);
+                messageCanvas = null;
+            }
+        }
+
         private void Update()
         {
             if (!selectionActive || gameModeManager == null || tokenMapGridView == null || inputCamera == null)
@@ -90,7 +130,15 @@ namespace FlickDom.Gameplay
                 Collider hitCollider = raycastHits[i].collider;
                 if (tokenMapGridView.TryGetCell(hitCollider, out Vector2Int cell))
                 {
-                    TrySelectCell(cell);
+                    if (waitingForRelocationSource)
+                    {
+                        TrySelectRelocationSource(cell);
+                    }
+                    else
+                    {
+                        TrySelectCell(cell);
+                    }
+
                     return;
                 }
             }
@@ -102,11 +150,14 @@ namespace FlickDom.Gameplay
             if (selectionActive)
             {
                 resolvedCandidates.Clear();
+                ClearPendingRelocation();
                 RefreshActiveCandidateHighlight();
             }
             else if (previousState == FlickDomGameState.PlacementSelection)
             {
                 activeCandidate = null;
+                ClearPendingRelocation();
+                HideSelectionMessage();
                 if (tokenMapGridView != null)
                 {
                     tokenMapGridView.ClearCandidateHighlights();
@@ -124,6 +175,7 @@ namespace FlickDom.Gameplay
                     Debug.Log("[PlacementSelect] No unresolved candidate can claim " + cell + ".", this);
                 }
 
+                SetSelectionMessage(invalidClaimText);
                 return;
             }
 
@@ -133,16 +185,10 @@ namespace FlickDom.Gameplay
                 null,
                 out TokenPlacementResult result);
 
-            if (!placed
-                && autoRelocateOldestTokenForLocalTest
-                && result.Status == TokenPlacementStatus.NeedsRelocationSource
-                && TryGetAutoRelocationSource(candidate.Owner, out Vector2Int relocationSource))
+            if (!placed && result.Status == TokenPlacementStatus.NeedsRelocationSource)
             {
-                placed = gameModeManager.TryApplyCandidatePlacement(
-                    candidate,
-                    cell,
-                    relocationSource,
-                    out result);
+                BeginRelocationSourceSelection(candidate, cell);
+                return;
             }
 
             if (!placed || !result.IsSuccess)
@@ -152,37 +198,58 @@ namespace FlickDom.Gameplay
                     Debug.Log("[PlacementSelect] Failed to claim " + cell + ": " + result.Status, this);
                 }
 
+                SetSelectionMessage(invalidClaimText);
                 return;
             }
 
-            resolvedCandidates.Add(candidate);
-            RefreshActiveCandidateHighlight();
+            CompleteCandidatePlacement(candidate, result.RelocatedOwnToken ? relocationCompleteText : claimCompleteText);
 
             if (logSelections)
             {
                 Debug.Log("[PlacementSelect] " + candidate.Owner + " claimed " + cell + " from " + candidate.PieceId + ".", this);
             }
-
-            CompleteSelectionIfReady();
         }
 
-        private bool TryGetAutoRelocationSource(FlickDomPlayerId player, out Vector2Int relocationSource)
+        private void TrySelectRelocationSource(Vector2Int cell)
         {
-            if (tokenMapManager == null)
+            if (pendingRelocationCandidate == null || tokenMapManager == null)
             {
-                relocationSource = default(Vector2Int);
-                return false;
+                ClearPendingRelocation();
+                RefreshActiveCandidateHighlight();
+                return;
             }
 
-            List<Vector2Int> ownedCells = tokenMapManager.GetOwnedCells(player);
-            if (ownedCells.Count <= 0)
+            if (tokenMapManager.GetOwner(cell) != pendingRelocationCandidate.Owner)
             {
-                relocationSource = default(Vector2Int);
-                return false;
+                if (logSelections)
+                {
+                    Debug.Log("[PlacementSelect] Invalid relocation source " + cell + ". Choose an owned cell.", this);
+                }
+
+                SetSelectionMessage(invalidRelocationText);
+                return;
             }
 
-            relocationSource = ownedCells[0];
-            return true;
+            bool placed = gameModeManager.TryApplyCandidatePlacement(
+                pendingRelocationCandidate,
+                pendingRelocationDestination,
+                cell,
+                out TokenPlacementResult result);
+
+            if (!placed || !result.IsSuccess)
+            {
+                if (logSelections)
+                {
+                    Debug.Log("[PlacementSelect] Failed to relocate from " + cell + ": " + result.Status, this);
+                }
+
+                SetSelectionMessage(invalidRelocationText);
+                return;
+            }
+
+            PiecePlacementCandidate completedCandidate = pendingRelocationCandidate;
+            ClearPendingRelocation();
+            CompleteCandidatePlacement(completedCandidate, relocationCompleteText);
         }
 
         private PiecePlacementCandidate FindCandidateForCell(Vector2Int cell)
@@ -220,15 +287,18 @@ namespace FlickDom.Gameplay
             if (!showOnlyCurrentCandidate)
             {
                 ShowAllUnresolvedCandidateHighlights();
+                SetSelectionMessage(claimPromptText);
                 return;
             }
 
             if (activeCandidate == null)
             {
+                SetSelectionMessage(string.Empty);
                 return;
             }
 
             tokenMapGridView.ShowCandidateCells(activeCandidate);
+            SetSelectionMessage(claimPromptText);
 
             if (logSelections)
             {
@@ -274,6 +344,41 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void BeginRelocationSourceSelection(PiecePlacementCandidate candidate, Vector2Int destination)
+        {
+            pendingRelocationCandidate = candidate;
+            pendingRelocationDestination = destination;
+            waitingForRelocationSource = true;
+
+            tokenMapGridView.ClearCandidateHighlights();
+            if (tokenMapManager != null)
+            {
+                tokenMapGridView.ShowCandidateCells(candidate.Owner, tokenMapManager.GetOwnedCells(candidate.Owner));
+            }
+
+            SetSelectionMessage(relocationPromptText);
+
+            if (logSelections)
+            {
+                Debug.Log("[PlacementSelect] " + candidate.Owner + " must choose an owned cell to remove before claiming " + destination + ".", this);
+            }
+        }
+
+        private void CompleteCandidatePlacement(PiecePlacementCandidate candidate, string message)
+        {
+            resolvedCandidates.Add(candidate);
+            SetSelectionMessage(message);
+            RefreshActiveCandidateHighlight();
+            CompleteSelectionIfReady();
+        }
+
+        private void ClearPendingRelocation()
+        {
+            pendingRelocationCandidate = null;
+            pendingRelocationDestination = default(Vector2Int);
+            waitingForRelocationSource = false;
+        }
+
         private void CompleteSelectionIfReady()
         {
             if (!autoCompleteWhenAllCandidatesPlaced)
@@ -303,6 +408,140 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.FinishRoundAndStartNext();
             }
+        }
+
+        private void BuildSelectionMessageUi()
+        {
+            if (!showSelectionMessages || messageCanvas != null)
+            {
+                return;
+            }
+
+            GameObject canvasObject = new GameObject("Generated Placement Selection Message");
+            canvasObject.transform.SetParent(transform, false);
+
+            messageCanvas = canvasObject.AddComponent<Canvas>();
+            messageCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            messageCanvas.sortingOrder = 115;
+
+            CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1280f, 720f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            GameObject panelObject = new GameObject("Message Panel");
+            panelObject.transform.SetParent(messageCanvas.transform, false);
+            RectTransform panelRect = panelObject.AddComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 1f);
+            panelRect.anchorMax = new Vector2(0.5f, 1f);
+            panelRect.pivot = new Vector2(0.5f, 1f);
+            panelRect.sizeDelta = messagePanelSize;
+            panelRect.anchoredPosition = messagePanelOffset;
+
+            Image panelImage = panelObject.AddComponent<Image>();
+            panelImage.color = messagePanelColor;
+            panelImage.raycastTarget = false;
+
+            GameObject textObject = new GameObject("Message Text");
+            textObject.transform.SetParent(panelObject.transform, false);
+            RectTransform textRect = textObject.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(16f, 6f);
+            textRect.offsetMax = new Vector2(-16f, -6f);
+
+            messageText = textObject.AddComponent<Text>();
+            messageText.font = ResolveMessageFont(claimPromptText);
+            messageText.fontSize = messageFontSize;
+            messageText.alignment = TextAnchor.MiddleCenter;
+            messageText.color = messageTextColor;
+            messageText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            messageText.verticalOverflow = VerticalWrapMode.Truncate;
+            messageText.raycastTarget = false;
+            messageText.text = string.Empty;
+
+            canvasObject.SetActive(false);
+        }
+
+        private void SetSelectionMessage(string message)
+        {
+            if (!showSelectionMessages)
+            {
+                return;
+            }
+
+            BuildSelectionMessageUi();
+            if (messageCanvas == null || messageText == null)
+            {
+                return;
+            }
+
+            bool hasMessage = !string.IsNullOrEmpty(message);
+            messageCanvas.gameObject.SetActive(hasMessage);
+            messageText.text = message;
+        }
+
+        private void HideSelectionMessage()
+        {
+            if (messageCanvas != null)
+            {
+                messageCanvas.gameObject.SetActive(false);
+            }
+        }
+
+        private Font ResolveMessageFont(string sampleText)
+        {
+            if (CanRenderText(resolvedMessageFont, sampleText))
+            {
+                return resolvedMessageFont;
+            }
+
+            if (CanRenderText(messageFont, sampleText))
+            {
+                resolvedMessageFont = messageFont;
+                return messageFont;
+            }
+
+            Font dynamicFont = Font.CreateDynamicFontFromOSFont("Malgun Gothic", messageFontSize);
+            if (CanRenderText(dynamicFont, sampleText))
+            {
+                resolvedMessageFont = dynamicFont;
+                return dynamicFont;
+            }
+
+            dynamicFont = Font.CreateDynamicFontFromOSFont("Arial", messageFontSize);
+            if (dynamicFont != null)
+            {
+                resolvedMessageFont = dynamicFont;
+                return dynamicFont;
+            }
+
+            return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private bool CanRenderText(Font candidate, string sampleText)
+        {
+            if (candidate == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(sampleText))
+            {
+                return true;
+            }
+
+            candidate.RequestCharactersInTexture(sampleText, messageFontSize, FontStyle.Normal);
+            for (int i = 0; i < sampleText.Length; i++)
+            {
+                char character = sampleText[i];
+                if (!char.IsWhiteSpace(character) && !candidate.HasCharacter(character))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
