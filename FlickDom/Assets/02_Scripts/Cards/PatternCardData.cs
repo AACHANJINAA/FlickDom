@@ -29,7 +29,7 @@ namespace FlickDom.Gameplay
 
         public int ScoreValue
         {
-            get { return scoreValue; }
+            get { return GetScoreValueForDifficulty(difficulty); }
         }
 
         public int Width
@@ -56,7 +56,7 @@ namespace FlickDom.Gameplay
         {
             width = Mathf.Max(1, width);
             height = Mathf.Max(1, height);
-            scoreValue = Mathf.Max(0, scoreValue);
+            scoreValue = GetScoreValueForDifficulty(difficulty);
 
             if (filledCells == null)
             {
@@ -82,7 +82,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "EasyCard_1";
             card.difficulty = PatternCardDifficulty.Easy;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 5;
             card.resourcesImagePath = "Cards/EasyCard_1";
@@ -99,7 +99,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "EasyCard_2";
             card.difficulty = PatternCardDifficulty.Easy;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 5;
             card.resourcesImagePath = "Cards/EasyCard_2";
@@ -125,7 +125,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "NormalCard_1";
             card.difficulty = PatternCardDifficulty.Normal;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 5;
             card.resourcesImagePath = "Cards/NormalCard_1";
@@ -143,7 +143,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "NormalCard_2";
             card.difficulty = PatternCardDifficulty.Normal;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 5;
             card.resourcesImagePath = "Cards/NormalCard_2";
@@ -161,7 +161,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "NormalCard_3";
             card.difficulty = PatternCardDifficulty.Normal;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 5;
             card.resourcesImagePath = "Cards/NormalCard_3";
@@ -189,7 +189,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "HardCard_1";
             card.difficulty = PatternCardDifficulty.Hard;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 4;
             card.resourcesImagePath = "Cards/HardCard_1";
@@ -208,7 +208,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "HardCard_2";
             card.difficulty = PatternCardDifficulty.Hard;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 4;
             card.resourcesImagePath = "Cards/HardCard_2";
@@ -227,7 +227,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "HardCard_3";
             card.difficulty = PatternCardDifficulty.Hard;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 4;
             card.resourcesImagePath = "Cards/HardCard_3";
@@ -246,7 +246,7 @@ namespace FlickDom.Gameplay
             PatternCardData card = CreateInstance<PatternCardData>();
             card.cardId = "HardCard_4";
             card.difficulty = PatternCardDifficulty.Hard;
-            card.scoreValue = 1;
+            card.scoreValue = GetScoreValueForDifficulty(card.difficulty);
             card.width = 4;
             card.height = 4;
             card.resourcesImagePath = "Cards/HardCard_4";
@@ -279,6 +279,21 @@ namespace FlickDom.Gameplay
                 CreateRuntimeNormalDeck(),
                 CreateRuntimeHardDeck()
             };
+        }
+
+        private static int GetScoreValueForDifficulty(PatternCardDifficulty difficulty)
+        {
+            if (difficulty == PatternCardDifficulty.Hard)
+            {
+                return 3;
+            }
+
+            if (difficulty == PatternCardDifficulty.Normal)
+            {
+                return 2;
+            }
+
+            return 1;
         }
     }
 }

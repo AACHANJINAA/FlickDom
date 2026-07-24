@@ -1006,6 +1006,14 @@ MonoBehaviour:
   - {fileID: 1305843886}
   player2Pieces:
   - {fileID: 789277670}
+  player1TokenDataSequence:
+  - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
+  - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
+  player2TokenDataSequence:
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
+  - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
+  - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
   startGameOnPlay: 1
   autoCreateMissingPieces: 1
   targetPiecesPerPlayer: 3
