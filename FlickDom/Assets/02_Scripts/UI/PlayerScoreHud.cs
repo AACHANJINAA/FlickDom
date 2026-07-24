@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 namespace FlickDom.Gameplay
 {
@@ -14,24 +15,36 @@ namespace FlickDom.Gameplay
         [SerializeField] private int fontSize = 34;
         [SerializeField] private Vector2 labelSize = new Vector2(260f, 72f);
         [SerializeField] private Vector2 turnLabelSize = new Vector2(260f, 42f);
+        [SerializeField] private Vector2 winLabelSize = new Vector2(520f, 120f);
+        [SerializeField] private Vector2 restartButtonSize = new Vector2(220f, 56f);
         [SerializeField] private Vector2 player1Offset = new Vector2(28f, -24f);
         [SerializeField] private Vector2 player2Offset = new Vector2(-28f, -24f);
         [SerializeField] private Vector2 turnOffset = new Vector2(0f, -34f);
+        [SerializeField] private Vector2 restartButtonOffset = new Vector2(0f, -88f);
 
         [Header("Text")]
         [SerializeField] private string player1Prefix = "P1";
         [SerializeField] private string player2Prefix = "P2";
         [SerializeField] private string yourTurnText = "Your Turn";
+        [SerializeField] private string player1WinText = "P1 WIN!!";
+        [SerializeField] private string player2WinText = "P2 WIN!!";
+        [SerializeField] private string restartButtonText = "RESTART";
         [SerializeField] private Color player1Color = new Color(0.18f, 0.42f, 1f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.22f, 0.18f, 1f);
         [SerializeField] private Color outlineColor = new Color(0f, 0f, 0f, 0.8f);
         [SerializeField] private Vector2 outlineDistance = new Vector2(2f, -2f);
+        [SerializeField] private Color restartButtonColor = new Color(0.93f, 0.95f, 0.96f, 0.96f);
+        [SerializeField] private Color restartButtonHighlightedColor = new Color(1f, 1f, 1f, 1f);
+        [SerializeField] private Color restartButtonPressedColor = new Color(0.78f, 0.84f, 0.9f, 1f);
+        [SerializeField] private Color restartButtonTextColor = new Color(0.08f, 0.1f, 0.12f, 1f);
 
         private Canvas canvas;
         private Text player1Text;
         private Text player2Text;
         private Text player1TurnText;
         private Text player2TurnText;
+        private Text winText;
+        private Button restartButton;
 
         private void Awake()
         {
@@ -53,6 +66,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged += HandleScoreChanged;
+                cardManager.MatchWon += HandleMatchWon;
             }
 
             if (gameModeManager != null)
@@ -72,6 +86,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged -= HandleScoreChanged;
+                cardManager.MatchWon -= HandleMatchWon;
             }
 
             if (gameModeManager != null)
@@ -87,6 +102,7 @@ namespace FlickDom.Gameplay
                 Destroy(canvas.gameObject);
                 canvas = null;
             }
+
         }
 
         private void OnValidate()
@@ -96,6 +112,10 @@ namespace FlickDom.Gameplay
             labelSize.y = Mathf.Max(24f, labelSize.y);
             turnLabelSize.x = Mathf.Max(80f, turnLabelSize.x);
             turnLabelSize.y = Mathf.Max(20f, turnLabelSize.y);
+            winLabelSize.x = Mathf.Max(180f, winLabelSize.x);
+            winLabelSize.y = Mathf.Max(48f, winLabelSize.y);
+            restartButtonSize.x = Mathf.Max(120f, restartButtonSize.x);
+            restartButtonSize.y = Mathf.Max(36f, restartButtonSize.y);
         }
 
         private void HandleScoreChanged(
@@ -114,6 +134,15 @@ namespace FlickDom.Gameplay
             int p2 = cardManager != null ? cardManager.Player2Score : 0;
             SetScoreText(player1Text, player1Prefix, p1);
             SetScoreText(player2Text, player2Prefix, p2);
+        }
+
+        private void HandleMatchWon(FlickDomPlayerId winner, int player1Score, int player2Score)
+        {
+            SetScoreText(player1Text, player1Prefix, player1Score);
+            SetScoreText(player2Text, player2Prefix, player2Score);
+            RefreshTurnIndicator();
+            ShowWinText(winner);
+            SetRestartButtonVisible(true);
         }
 
         private void HandleActivePlayerChanged(FlickDomPlayerId activePlayer)
@@ -145,6 +174,9 @@ namespace FlickDom.Gameplay
             player2Text = CreateScoreText("Player 2 Score", TextAnchor.UpperRight, player2Color, player2Offset);
             player1TurnText = CreateTurnText("Player 1 Turn", TextAnchor.UpperLeft, player1Color, player1Offset + turnOffset);
             player2TurnText = CreateTurnText("Player 2 Turn", TextAnchor.UpperRight, player2Color, player2Offset + turnOffset);
+            winText = CreateWinText("Winner Text");
+            restartButton = CreateRestartButton("Restart Button");
+            SetRestartButtonVisible(false);
         }
 
         private Text CreateScoreText(
@@ -246,6 +278,121 @@ namespace FlickDom.Gameplay
             }
 
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private Text CreateWinText(string objectName)
+        {
+            GameObject textObject = new GameObject(objectName);
+            textObject.transform.SetParent(canvas.transform, false);
+
+            RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.anchoredPosition = Vector2.zero;
+            rectTransform.sizeDelta = winLabelSize;
+
+            Text text = textObject.AddComponent<Text>();
+            text.font = ResolveFont();
+            text.fontSize = fontSize + 18;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.text = string.Empty;
+
+            Outline outline = textObject.AddComponent<Outline>();
+            outline.effectColor = outlineColor;
+            outline.effectDistance = new Vector2(3f, -3f);
+
+            return text;
+        }
+
+        private void ShowWinText(FlickDomPlayerId winner)
+        {
+            if (winText == null)
+            {
+                return;
+            }
+
+            if (winner == FlickDomPlayerId.Player2)
+            {
+                winText.text = player2WinText;
+                winText.color = player2Color;
+                return;
+            }
+
+            winText.text = player1WinText;
+            winText.color = player1Color;
+        }
+
+        private Button CreateRestartButton(string objectName)
+        {
+            GameObject buttonObject = new GameObject(objectName);
+            buttonObject.transform.SetParent(canvas.transform, false);
+
+            RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.anchoredPosition = restartButtonOffset;
+            rectTransform.sizeDelta = restartButtonSize;
+
+            Image image = buttonObject.AddComponent<Image>();
+            image.color = restartButtonColor;
+
+            Button button = buttonObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(RestartCurrentScene);
+
+            ColorBlock colors = button.colors;
+            colors.normalColor = restartButtonColor;
+            colors.highlightedColor = restartButtonHighlightedColor;
+            colors.pressedColor = restartButtonPressedColor;
+            colors.selectedColor = restartButtonHighlightedColor;
+            button.colors = colors;
+
+            GameObject textObject = new GameObject("Text");
+            textObject.transform.SetParent(buttonObject.transform, false);
+
+            RectTransform textRect = textObject.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(8f, 2f);
+            textRect.offsetMax = new Vector2(-8f, -2f);
+
+            Text buttonText = textObject.AddComponent<Text>();
+            buttonText.font = ResolveFont();
+            buttonText.fontSize = Mathf.Max(18, fontSize - 4);
+            buttonText.alignment = TextAnchor.MiddleCenter;
+            buttonText.color = restartButtonTextColor;
+            buttonText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            buttonText.verticalOverflow = VerticalWrapMode.Overflow;
+            buttonText.raycastTarget = false;
+            buttonText.text = restartButtonText;
+
+            Outline outline = textObject.AddComponent<Outline>();
+            outline.effectColor = outlineColor;
+            outline.effectDistance = outlineDistance;
+
+            return button;
+        }
+
+        private void RestartCurrentScene()
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(activeScene.name);
+        }
+
+        private void SetRestartButtonVisible(bool visible)
+        {
+            if (restartButton == null)
+            {
+                return;
+            }
+
+            restartButton.gameObject.SetActive(visible);
         }
 
         private static void SetScoreText(Text text, string prefix, int score)

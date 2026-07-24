@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace FlickDom.Gameplay
 {
@@ -178,6 +179,20 @@ namespace FlickDom.Gameplay
             }
 
             return 0;
+        }
+
+        private void Update()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
+
+            if (keyboard.f10Key.wasPressedThisFrame)
+            {
+                ForceDebugWinForPlayer1();
+            }
         }
 
         private void HandleCellOwnerChanged(Vector2Int cell, FlickDomPlayerId previousOwner, FlickDomPlayerId nextOwner)
@@ -553,6 +568,23 @@ namespace FlickDom.Gameplay
                 && index < claimedCards.Length
                 && runtimeCards[index] != null
                 && !claimedCards[index];
+        }
+
+        private void ForceDebugWinForPlayer1()
+        {
+            if (winner != FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            int delta = Mathf.Max(0, winningScore - player1Score);
+            if (delta <= 0)
+            {
+                delta = winningScore;
+                player1Score = 0;
+            }
+
+            AddScore(FlickDomPlayerId.Player1, delta);
         }
     }
 }
