@@ -13,6 +13,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private Camera inputCamera;
         [SerializeField] private TurnBasedFlickPiece[] player1Pieces;
         [SerializeField] private TurnBasedFlickPiece[] player2Pieces;
+        [SerializeField] private TokenData[] player1TokenDataSequence;
+        [SerializeField] private TokenData[] player2TokenDataSequence;
         [SerializeField] private bool startGameOnPlay = true;
         [SerializeField] private bool autoCreateMissingPieces = true;
         [SerializeField] private int targetPiecesPerPlayer = 3;
@@ -50,6 +52,9 @@ namespace FlickDom.Gameplay
                 player1Pieces = EnsurePieceCount(player1Pieces, "Player1");
                 player2Pieces = EnsurePieceCount(player2Pieces, "Player2");
             }
+
+            ApplyTokenDataSequence(player1Pieces, player1TokenDataSequence);
+            ApplyTokenDataSequence(player2Pieces, player2TokenDataSequence);
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
             ConfigurePieces(player2Pieces, FlickDomPlayerId.Player2, "P2");
@@ -303,6 +308,33 @@ namespace FlickDom.Gameplay
 
                 Vector3 position = centerPosition + (Vector3.forward * ((i - centerIndex) * generatedPieceSpacing));
                 piece.SetRoundStartPose(position, rotation);
+            }
+        }
+
+        private static void ApplyTokenDataSequence(TurnBasedFlickPiece[] pieces, TokenData[] tokenDataSequence)
+        {
+            if (pieces == null || tokenDataSequence == null || tokenDataSequence.Length == 0)
+            {
+                return;
+            }
+
+            int sequenceLength = tokenDataSequence.Length;
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                TokenData tokenData = tokenDataSequence[i % sequenceLength];
+                if (tokenData == null || !piece.TryGetComponent<TokenSetup>(out TokenSetup tokenSetup))
+                {
+                    continue;
+                }
+
+                tokenSetup.tokenData = tokenData;
+                tokenSetup.ApplyTokenData();
             }
         }
 

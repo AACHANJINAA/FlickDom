@@ -2,7 +2,6 @@ using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Collider))]
-[RequireComponent(typeof(MeshRenderer))]
 public class TokenSetup : MonoBehaviour
 {
     [Tooltip("여기에 생성한 TokenData (Wood, Iron, Rubber) 중 하나를 넣어주세요.")]
@@ -37,8 +36,17 @@ public class TokenSetup : MonoBehaviour
         // 3. 시각적 재질 (색상, 질감) 적용
         if (tokenData.renderMaterial != null)
         {
-            MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
-            meshRenderer.material = tokenData.renderMaterial;
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer currentRenderer = renderers[i];
+                if (currentRenderer == null)
+                {
+                    continue;
+                }
+
+                currentRenderer.sharedMaterial = tokenData.renderMaterial;
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: TD_WoodData
   m_EditorClassIdentifier: Assembly-CSharp::TokenData
   materialType: 0
-  renderMaterial: {fileID: 0}
+  renderMaterial: {fileID: 2100000, guid: 9d0244e1fd4fd9443b21c92246269a2c, type: 2}
   mass: 1
   drag: 1
   physicMaterial: {fileID: 13400000, guid: 44d99ac33ff920743b54d59e628b2ee1, type: 2}

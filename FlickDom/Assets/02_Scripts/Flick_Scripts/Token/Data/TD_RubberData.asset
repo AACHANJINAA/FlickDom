@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a76a842f268a69c4e9a697f3a5612709, type: 3}
   m_Name: TD_RubberData
   m_EditorClassIdentifier: Assembly-CSharp::TokenData
-  materialType: 0
-  renderMaterial: {fileID: 0}
+  materialType: 2
+  renderMaterial: {fileID: 2100000, guid: 6af2486f4b27ff0418fd364f3650b3f4, type: 2}
   mass: 1
   drag: 1
   physicMaterial: {fileID: 13400000, guid: 52273a5cda2ca5e4cab0198d09efb002, type: 2}
