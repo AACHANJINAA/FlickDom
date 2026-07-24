@@ -20,6 +20,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool matchAnywhereOnBoard = true;
         [SerializeField] private bool resetScoresWhenMapCleared = true;
         [SerializeField] private bool logCardClaims = true;
+        [SerializeField] private int winningScore = 10;
 
         private PatternCardData[][] runtimeFallbackDecks = new PatternCardData[0][];
         private int currentFallbackDeckIndex;
@@ -29,11 +30,13 @@ namespace FlickDom.Gameplay
         private int player1Score;
         private int player2Score;
         private bool isClearingMapForCardRoundChange;
+        private FlickDomPlayerId winner = FlickDomPlayerId.None;
 
         public event Action<PatternCardData> ActiveCardChanged;
         public event Action<FlickDomPlayerId, int, int, int> ScoreChanged;
         public event Action<PatternCardData, FlickDomPlayerId, int, Vector2Int> CardCompleted;
         public event Action CardsExhausted;
+        public event Action<FlickDomPlayerId, int, int> MatchWon;
 
         public PatternCardData ActiveCard
         {
@@ -60,6 +63,16 @@ namespace FlickDom.Gameplay
             get { return player2Score; }
         }
 
+        public int WinningScore
+        {
+            get { return winningScore; }
+        }
+
+        public FlickDomPlayerId Winner
+        {
+            get { return winner; }
+        }
+
         private void Awake()
         {
             if (gameModeManager == null)
@@ -74,6 +87,11 @@ namespace FlickDom.Gameplay
 
             EnsureRuntimeFallbackDecks();
             RefreshRuntimeCards();
+        }
+
+        private void OnValidate()
+        {
+            winningScore = Mathf.Max(1, winningScore);
         }
 
         private void OnEnable()
@@ -177,6 +195,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (winner != FlickDomPlayerId.None)
+            {
+                return;
+            }
+
             if (!CanScoreNow())
             {
                 return;
@@ -206,6 +229,7 @@ namespace FlickDom.Gameplay
                 ResetCardProgress();
                 player1Score = 0;
                 player2Score = 0;
+                winner = FlickDomPlayerId.None;
                 ScoreChanged?.Invoke(FlickDomPlayerId.None, 0, player1Score, player2Score);
             }
             else
@@ -232,6 +256,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (winner != FlickDomPlayerId.None)
+            {
+                return;
+            }
+
             if (lastChangedOwner != FlickDomPlayerId.None && TryClaimMatchingCards(lastChangedOwner))
             {
                 lastChangedOwner = FlickDomPlayerId.None;
@@ -248,7 +277,7 @@ namespace FlickDom.Gameplay
 
         private bool TryClaimMatchingCards(FlickDomPlayerId player)
         {
-            if (player == FlickDomPlayerId.None)
+            if (player == FlickDomPlayerId.None || winner != FlickDomPlayerId.None)
             {
                 return false;
             }
@@ -324,6 +353,21 @@ namespace FlickDom.Gameplay
             }
 
             ScoreChanged?.Invoke(player, score, player1Score, player2Score);
+
+            if (winner == FlickDomPlayerId.None)
+            {
+                int currentScore = GetScore(player);
+                if (currentScore >= winningScore)
+                {
+                    winner = player;
+                    MatchWon?.Invoke(winner, player1Score, player2Score);
+
+                    if (logCardClaims)
+                    {
+                        Debug.Log("[PatternCard] " + winner + " won the match by reaching " + currentScore + " points.", this);
+                    }
+                }
+            }
         }
 
         private bool CanScoreNow()
