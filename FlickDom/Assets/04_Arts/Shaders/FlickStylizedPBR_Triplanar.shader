@@ -61,6 +61,8 @@ Shader "FlickDom/StylizedPBR_Triplanar"
                 float3 tangentWS    : TEXCOORD2;
                 float3 bitangentWS  : TEXCOORD3;
                 float2 uv           : TEXCOORD4;
+                float3 positionOS   : TEXCOORD5;
+                float3 normalOS     : TEXCOORD6;
             };
 
             TEXTURE2D(_MainTex);          SAMPLER(sampler_MainTex);
@@ -81,19 +83,22 @@ Shader "FlickDom/StylizedPBR_Triplanar"
                 float _TriplanarSharpness;
             CBUFFER_END
 
-            // 삼면(X/Y/Z) 투영 가중치 - 월드 노멀이 각 축에 얼마나 정렬돼 있는지로 블렌드 비율을 계산
-            float3 TriplanarWeights(float3 normalWS, float sharpness)
+            // 삼면(X/Y/Z) 투영 가중치 - 노멀이 각 축에 얼마나 정렬돼 있는지로 블렌드 비율을 계산
+            // 오브젝트 스페이스 노멀 기준 - 월드 스페이스로 하면 오브젝트가 회전할 때 무늬가 표면 위를 미끄러지듯 움직임
+            float3 TriplanarWeights(float3 normalOS, float sharpness)
             {
-                float3 blend = pow(abs(normalWS), sharpness);
+                float3 blend = pow(abs(normalOS), sharpness);
                 return blend / max(dot(blend, 1.0), 1e-5);
             }
 
-            // 텍스처 하나를 3방향(X/Y/Z)으로 샘플링해 가중 평균 - UV 이음매 없이 월드 좌표 기준으로 이어짐
-            half4 SampleTriplanar(TEXTURE2D_PARAM(tex, samp), float3 positionWS, float3 blend, float scale)
+            // 텍스처 하나를 3방향(X/Y/Z)으로 샘플링해 가중 평균
+            // 오브젝트 스페이스 좌표 사용 - 디스크가 보드 위를 움직이거나 굴러도(플릭 게임 특성상 항상 이동/회전함)
+            // 무늬가 표면에 고정된 채로 오브젝트와 같이 움직임 (월드 스페이스였다면 이동할 때마다 무늬가 미끄러짐)
+            half4 SampleTriplanar(TEXTURE2D_PARAM(tex, samp), float3 positionOS, float3 blend, float scale)
             {
-                half4 cx = SAMPLE_TEXTURE2D(tex, samp, positionWS.zy * scale);
-                half4 cy = SAMPLE_TEXTURE2D(tex, samp, positionWS.xz * scale);
-                half4 cz = SAMPLE_TEXTURE2D(tex, samp, positionWS.xy * scale);
+                half4 cx = SAMPLE_TEXTURE2D(tex, samp, positionOS.zy * scale);
+                half4 cy = SAMPLE_TEXTURE2D(tex, samp, positionOS.xz * scale);
+                half4 cz = SAMPLE_TEXTURE2D(tex, samp, positionOS.xy * scale);
                 return cx * blend.x + cy * blend.y + cz * blend.z;
             }
 
@@ -110,15 +115,19 @@ Shader "FlickDom/StylizedPBR_Triplanar"
                 output.bitangentWS = cross(output.normalWS, output.tangentWS) * sign;
 
                 output.uv = input.uv * _MainTex_ST.xy + _MainTex_ST.zw;
+
+                output.positionOS = input.positionOS.xyz;
+                output.normalOS = input.normalOS;
                 return output;
             }
 
             half4 frag(Varyings input) : SV_Target
             {
-                // Albedo/마스크맵은 UV 대신 월드 좌표 3방향 투영으로 샘플링 - 캡-옆면 이음매 없이 이어짐
-                float3 triBlend = TriplanarWeights(normalize(input.normalWS), _TriplanarSharpness);
-                half4 texColor = SampleTriplanar(TEXTURE2D_ARGS(_MainTex, sampler_MainTex), input.positionWS, triBlend, _TriplanarScale);
-                half4 mask = SampleTriplanar(TEXTURE2D_ARGS(_MetallicGlossMap, sampler_MetallicGlossMap), input.positionWS, triBlend, _TriplanarScale);
+                // Albedo/마스크맵은 UV 대신 오브젝트 스페이스 3방향 투영으로 샘플링
+                // - 캡-옆면 이음매 없이 이어지면서, 오브젝트 스페이스라 디스크가 움직여도 무늬가 표면에 고정됨
+                float3 triBlend = TriplanarWeights(normalize(input.normalOS), _TriplanarSharpness);
+                half4 texColor = SampleTriplanar(TEXTURE2D_ARGS(_MainTex, sampler_MainTex), input.positionOS, triBlend, _TriplanarScale);
+                half4 mask = SampleTriplanar(TEXTURE2D_ARGS(_MetallicGlossMap, sampler_MetallicGlossMap), input.positionOS, triBlend, _TriplanarScale);
 
                 float3 albedo = texColor.rgb * _BaseColor.rgb;
                 float alpha = texColor.a * _BaseColor.a;
