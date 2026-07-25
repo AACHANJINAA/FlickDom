@@ -20,6 +20,7 @@ namespace FlickDom.Networking
         [Header("Local Test Controls")]
         [SerializeField] private bool enableKeyboardShortcuts = true;
         [SerializeField] private bool showRuntimeStatus = true;
+        [SerializeField] private bool enableCommandLineAutoStart = true;
         [SerializeField] private Key startHostKey = Key.S;
         [SerializeField] private Key startClientKey = Key.C;
         [SerializeField] private Key shutdownKey = Key.X;
@@ -59,6 +60,14 @@ namespace FlickDom.Networking
             {
                 DontDestroyOnLoad(gameObject);
                 DontDestroyOnLoad(networkManager.gameObject);
+            }
+        }
+
+        private void Start()
+        {
+            if (enableCommandLineAutoStart)
+            {
+                TryAutoStartFromCommandLine();
             }
         }
 
@@ -354,6 +363,69 @@ namespace FlickDom.Networking
         private static bool WasPressedThisFrame(Key key)
         {
             return Keyboard.current[key].wasPressedThisFrame;
+        }
+
+        private void TryAutoStartFromCommandLine()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            bool startHost = HasArgument(args, "-host");
+            bool startClient = HasArgument(args, "-client");
+
+            if (TryGetArgumentValue(args, "-address", out string address))
+            {
+                connectAddress = address;
+            }
+
+            if (TryGetArgumentValue(args, "-port", out string portValue)
+                && ushort.TryParse(portValue, out ushort parsedPort))
+            {
+                port = parsedPort;
+            }
+
+            if (startHost && startClient)
+            {
+                Debug.LogWarning("[Network] Both -host and -client were provided. Ignoring command line auto start.", this);
+                return;
+            }
+
+            if (startHost)
+            {
+                Debug.Log("[Network] Command line requested Host start.", this);
+                StartHost();
+            }
+            else if (startClient)
+            {
+                Debug.Log("[Network] Command line requested Client start.", this);
+                StartClient();
+            }
+        }
+
+        private static bool HasArgument(string[] args, string argument)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (string.Equals(args[i], argument, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryGetArgumentValue(string[] args, string argument, out string value)
+        {
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (string.Equals(args[i], argument, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = args[i + 1];
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
         }
     }
 }
