@@ -1482,7 +1482,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2364667107279771129, guid: ad7b69a47a8c96d408cef12e671f183e, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 3.57229
+      value: 3.084
       objectReference: {fileID: 0}
     - target: {fileID: 2364667107279771129, guid: ad7b69a47a8c96d408cef12e671f183e, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1861,6 +1861,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 8110139988629948696, guid: d2d3d08afa80216409ebf3bd241ea899, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 1.63
+      objectReference: {fileID: 0}
+    - target: {fileID: 8110139988629948696, guid: d2d3d08afa80216409ebf3bd241ea899, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.309
+      objectReference: {fileID: 0}
+    - target: {fileID: 8110139988629948696, guid: d2d3d08afa80216409ebf3bd241ea899, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 11
+      objectReference: {fileID: 0}
     - target: {fileID: 8603064644883837947, guid: d2d3d08afa80216409ebf3bd241ea899, type: 3}
       propertyPath: m_Name
       value: Chibi_Monkey_00 (1)
@@ -6020,7 +6032,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5562737407974889140, guid: fb6acc34fa0f9de479315d71ca3958eb, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -3.088555
+      value: -2.414
       objectReference: {fileID: 0}
     - target: {fileID: 5562737407974889140, guid: fb6acc34fa0f9de479315d71ca3958eb, type: 3}
       propertyPath: m_LocalPosition.y
@@ -6028,7 +6040,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5562737407974889140, guid: fb6acc34fa0f9de479315d71ca3958eb, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 4.315201
+      value: 2.014
       objectReference: {fileID: 0}
     - target: {fileID: 5562737407974889140, guid: fb6acc34fa0f9de479315d71ca3958eb, type: 3}
       propertyPath: m_LocalRotation.w
