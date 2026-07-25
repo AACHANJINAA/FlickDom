@@ -264,7 +264,6 @@ GameObject:
   - component: {fileID: 789277672}
   - component: {fileID: 789277671}
   - component: {fileID: 789277670}
-  - component: {fileID: 789277669}
   m_Layer: 0
   m_Name: Player2
   m_TagString: Untagged
@@ -272,44 +271,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &789277669
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 789277668}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e6761b66c996475fb82f81b5439c7df3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TurnBasedFlickPiece
-  gameModeManager: {fileID: 0}
-  owner: 1
-  pieceId: Piece
-  inputCamera: {fileID: 0}
-  forceMultiplier: 10
-  maxDragDistance: 3
-  tokenRadius: 0.5
-  stopSpeed: 0.05
-  stopConfirmSeconds: 0.4
-  fallYThreshold: -1
-  hideDeadPiece: 1
-  deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
-  player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
-  player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
-  inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
-  currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
-  selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
-  firstOrderBadgeColor: {r: 1, g: 0.68, b: 0.05, a: 1}
-  secondOrderBadgeColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
-  thirdOrderBadgeColor: {r: 0.15, g: 0.68, b: 1, a: 1}
-  showStateIndicator: 0
-  stateIndicatorYOffset: 0.72
-  stateIndicatorHeight: 0.035
-  currentTargetIndicatorDiameterMultiplier: 1.5
-  activeIndicatorDiameterMultiplier: 1.1
-  inactiveIndicatorDiameterMultiplier: 0.75
 --- !u!114 &789277670
 MonoBehaviour:
   m_ObjectHideFlags: 0

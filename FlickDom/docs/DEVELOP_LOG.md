@@ -48,3 +48,29 @@
 - [2026-07-25 21시]
   - 원숭이 캐릭터 이동 애니메이션이 에셋의 `animation` int 파라미터를 사용하도록 변경하고, `IdleA`/`Walk`/`Run` 값 매핑을 적용했다.
   - 원숭이 자동 세팅 메뉴가 더 이상 캐릭터 앞 타격판을 만들지 않도록 수정하고, 선택한 원숭이의 기존 타격판을 제거하는 에디터 메뉴를 추가했다.
+
+- [2026-07-25 22시]
+  - `docs/SERVER_PLAN.md`에 Host-Client(Listen Server), NGO, Unity Relay 기반 2인 멀티플레이 구현 계획을 정리했다.
+  - Unity 6000.5.1f1에서 `com.unity.netcode.gameobjects` 2.7.0과 `com.unity.multiplayer.playmode` 패키지가 내부 obsolete API 에러를 일으키는 것을 확인하고, NGO는 2.13.0으로 올리고 Multiplayer Play Mode는 제거했다.
+  - `FlickDomNetworkBootstrap`을 추가해 `good_Scene`에서만 네트워크 부트스트랩이 자동 생성되도록 제한했다.
+  - 런타임 `NetworkManager`와 `UnityTransport`를 생성하고, Host/Client 시작, Shutdown, 2명 초과 접속 차단, P1/P2 로컬 역할 배정을 구현했다.
+  - 빌드 실행 파일에서 `-host`, `-client`, `-address`, `-port` 커맨드라인 인자를 받아 자동 접속할 수 있게 했다.
+  - `good_Scene` 전용 중앙 로비 UI를 추가해 Host 방 생성, Client IP 접속, 접속 인원 표시, 2명 접속 후 Host의 `Start Game` 시작 흐름을 구현했다.
+  - Host가 로비 인원과 게임 시작 상태를 `CustomMessagingManager`로 브로드캐스트해 Client도 `Players: 2 / 2`와 게임 시작 상태를 따라가도록 수정했다.
+  - 빌드 시작 씬이 `good_Scene`이 되도록 `EditorBuildSettings`의 씬 순서를 조정하고, 다른 테스트 씬 개발 흐름에는 네트워크 로비가 개입하지 않도록 했다.
+  - 네트워크 세션 중에는 각 인스턴스가 자신의 `LocalPlayerId`와 일치하는 플레이어의 말만 선택/플릭할 수 있도록 입력 권한 게이트를 추가했다.
+  - Client가 로컬 디버그 단축키로 배치/카드/라운드 상태를 임의 진행하지 못하게 하고, Host만 로컬 게임 상태 진행 단축키를 사용할 수 있도록 제한했다.
+  - 네트워크 모드에서는 말 선택 순서를 기본 순서로 스킵하고, Host가 `GameState`, `ActivePlayer`, `RoundNumber`를 Client에 브로드캐스트하도록 했다.
+  - Client가 받은 Host 게임 상태 스냅샷을 `GameModeManager`에 적용해 양쪽 턴 표시와 입력 허용 기준이 Host 상태를 따라가도록 했다.
+  - Client의 플릭 입력은 로컬 Rigidbody에 직접 힘을 주지 않고 `FlickRequest` 메시지로 Host에 전송되며, Host가 해당 말을 찾아 권위적으로 플릭을 큐잉하도록 1차 경로를 추가했다.
+  - 네트워크 게임에서 말 선택 순서를 스킵하던 처리를 되돌리고, Client의 P2 말 선택을 `PieceOrderSelection` 메시지로 Host에 보내 Host가 같은 선택 순서를 적용하도록 수정했다.
+  - Host가 확정한 말 선택 순서를 Client에 다시 브로드캐스트해 P1/P2 양쪽의 선택 순서 표시가 같은 리스트를 기준으로 보이도록 수정했다.
+  - Host가 게임 시작 후 모든 말의 위치/회전을 주기적으로 Client에 전송하고, Client가 해당 Transform을 적용해 Host 물리 움직임을 따라가도록 1차 위치 동기화를 추가했다.
+  - `StartGame`과 로비 시작 상태 메시지가 동시에 들어와 Client에서 로컬 게임이 중복 시작될 수 있는 문제를 막기 위해 네트워크 시작 guard를 추가했다.
+  - Client가 자기 턴에 선택/드래그 가능한 말을 Host Transform 스냅샷으로 계속 덮어써서 말이 겹치거나 선택이 어려워지는 문제를 줄이도록 로컬 입력 가능 말의 포즈 적용을 제한했다.
+  - Host가 Client 플릭 요청을 승인하면 `FlickAccepted` 메시지를 보내고, Client가 같은 말의 로컬 순서 인덱스와 launched 상태를 갱신해 다음 P2 턴에 이미 던진 말을 다시 요청하지 않도록 수정했다.
+  - Client의 Host Transform 스냅샷 무시 범위를 드래그 중으로만 줄여 라운드 시작/대기 중 위치 보정이 막히지 않도록 수정했다.
+  - `good_Scene`의 P2 말 오브젝트에 `TurnBasedFlickPiece`가 중복 부착되어 클라이언트 쪽 말 배치/동기화가 꼬일 수 있던 문제를 정리했다.
+  - 런타임 자동 복제 말에서 중복 `TurnBasedFlickPiece` 컴포넌트를 제거하는 안전장치를 추가하고, Host의 Transform 동기화가 같은 `Owner/PieceId`를 중복 송신하지 않도록 보강했다.
+  - Host가 직접 플릭한 말도 `FlickAccepted`로 Client에 알려 양쪽의 말 순서 인덱스가 어긋나지 않도록 보완했다.
+  - Client가 `FlickAccepted`를 받은 말을 동적 물리로 다시 켜지 않고 Host Transform을 따라가는 시각 동기화 대상으로만 유지하도록 수정했다.

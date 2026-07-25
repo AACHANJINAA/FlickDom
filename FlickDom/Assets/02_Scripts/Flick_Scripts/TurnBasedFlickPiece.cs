@@ -1,4 +1,5 @@
 using System;
+using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -508,6 +509,11 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
+            if (!CanProvideLocalNetworkInput())
+            {
+                return false;
+            }
+
             if (gameModeManager == null)
             {
                 return true;
@@ -515,6 +521,12 @@ namespace FlickDom.Gameplay
 
             return gameModeManager.CurrentState == FlickDomGameState.PlayerFlicking
                 && gameModeManager.ActivePlayer == owner;
+        }
+
+        private bool CanProvideLocalNetworkInput()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalInputFor(owner);
         }
 
         private void BeginDrag()
@@ -556,7 +568,79 @@ namespace FlickDom.Gameplay
             }
 
             queuedImpulse = forceVector * forceMultiplier;
+            if (TrySubmitNetworkFlickRequest(queuedImpulse))
+            {
+                return;
+            }
+
             launchQueued = true;
+        }
+
+        public bool TryQueueAuthoritativeFlick(Vector3 impulse)
+        {
+            if (isDead || launchedThisTurn || launchQueued)
+            {
+                return false;
+            }
+
+            queuedImpulse = impulse;
+            launchQueued = true;
+            return true;
+        }
+
+        public void ApplyNetworkPose(Vector3 position, Quaternion rotation)
+        {
+            EnsureCachedComponents();
+            if (ShouldIgnoreNetworkPoseWhileLocallyInteractive())
+            {
+                return;
+            }
+
+            transform.SetPositionAndRotation(position, rotation);
+            if (cachedRigidbody != null)
+            {
+                cachedRigidbody.position = position;
+                cachedRigidbody.rotation = rotation;
+                if (!cachedRigidbody.isKinematic)
+                {
+                    cachedRigidbody.linearVelocity = Vector3.zero;
+                    cachedRigidbody.angularVelocity = Vector3.zero;
+                }
+            }
+        }
+
+        public void MarkNetworkFlickAccepted()
+        {
+            launchedThisTurn = true;
+            launchQueued = false;
+            waitingForStop = false;
+            isDragging = false;
+            HideFlickPreview();
+            ParkWithoutCollision();
+        }
+
+        private bool ShouldIgnoreNetworkPoseWhileLocallyInteractive()
+        {
+            if (isDragging)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TrySubmitNetworkFlickRequest(Vector3 impulse)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsRunning || bootstrap.IsHost)
+            {
+                return false;
+            }
+
+            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse);
+            cachedRigidbody.position = initialPiecePosition;
+            transform.position = initialPiecePosition;
+            return true;
         }
 
         private void TickStopDetection()

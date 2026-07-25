@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -66,6 +67,9 @@ namespace FlickDom.Gameplay
                 player1Pieces = EnsurePieceCount(player1Pieces, "Player1");
                 player2Pieces = EnsurePieceCount(player2Pieces, "Player2");
             }
+
+            RemoveDuplicatePieceComponents(player1Pieces);
+            RemoveDuplicatePieceComponents(player2Pieces);
 
             ApplyTokenDataSequence(player1Pieces, player1TokenDataSequence);
             ApplyTokenDataSequence(player2Pieces, player2TokenDataSequence);
@@ -153,6 +157,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanControlLocalGameState())
+            {
+                return;
+            }
+
             if (keyboard.cKey.wasPressedThisFrame)
             {
                 gameModeManager.CompletePlacementSelection();
@@ -202,10 +211,96 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanProvideInputFor(activePlayer))
+            {
+                return;
+            }
+
             if (TryFindSelectablePieceUnderPointer(activePlayer, out TurnBasedFlickPiece piece))
             {
+                if (TrySubmitNetworkPieceOrderSelection(activePlayer, piece))
+                {
+                    return;
+                }
+
                 SelectPieceForCurrentOrder(activePlayer, piece);
             }
+        }
+
+        public bool TrySelectPieceForNetwork(FlickDomPlayerId player, string pieceId)
+        {
+            if (gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.PieceOrderSelection
+                || gameModeManager.ActivePlayer != player
+                || string.IsNullOrEmpty(pieceId))
+            {
+                return false;
+            }
+
+            TurnBasedFlickPiece piece = FindPieceById(player, pieceId);
+            if (piece == null || IsPieceAlreadyOrdered(player, piece))
+            {
+                return false;
+            }
+
+            SelectPieceForCurrentOrder(player, piece);
+            return true;
+        }
+
+        public bool TryMarkFlickAcceptedFromNetwork(FlickDomPlayerId player, string pieceId)
+        {
+            if (gameModeManager == null
+                || string.IsNullOrEmpty(pieceId))
+            {
+                return false;
+            }
+
+            TurnBasedFlickPiece currentTarget = GetCurrentFlickTarget(player);
+            if (currentTarget == null || !string.Equals(currentTarget.PieceId, pieceId, System.StringComparison.Ordinal))
+            {
+                Debug.LogWarning("[TurnTest] Ignored network flick acceptance for out-of-order piece " + pieceId + ". Current target is " + (currentTarget != null ? currentTarget.PieceId : "none") + ".", this);
+                return false;
+            }
+
+            AdvancePieceOrderIndex(player);
+            RefreshPieceHighlights();
+            RefreshOrderLabels();
+            return true;
+        }
+
+        private static bool CanControlLocalGameState()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalStateControl();
+        }
+
+        private static bool CanProvideInputFor(FlickDomPlayerId player)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalInputFor(player);
+        }
+
+        private static bool TrySubmitNetworkPieceOrderSelection(FlickDomPlayerId player, TurnBasedFlickPiece piece)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsClientOnly || piece == null)
+            {
+                return false;
+            }
+
+            bootstrap.SubmitPieceOrderSelectionToHost(player, piece.PieceId);
+            return true;
+        }
+
+        private static void NotifyNetworkPieceOrderSelected(FlickDomPlayerId player, TurnBasedFlickPiece piece)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsHost || piece == null)
+            {
+                return;
+            }
+
+            bootstrap.NotifyHostPieceOrderSelected(player, piece.PieceId);
         }
 
         private bool TryFindSelectablePieceUnderPointer(FlickDomPlayerId player, out TurnBasedFlickPiece selectedPiece)
@@ -256,6 +351,7 @@ namespace FlickDom.Gameplay
 
             RefreshPieceHighlights();
             NotifyPieceOrderChanged(player);
+            NotifyNetworkPieceOrderSelected(player, piece);
 
             if (order.Count >= CountPieces(GetPiecesForPlayer(player)))
             {
@@ -316,6 +412,41 @@ namespace FlickDom.Gameplay
 
             ArrangePieceStarts(result);
             return result;
+        }
+
+        private static void RemoveDuplicatePieceComponents(TurnBasedFlickPiece[] pieces)
+        {
+            if (pieces == null)
+            {
+                return;
+            }
+
+            HashSet<GameObject> scannedObjects = new HashSet<GameObject>();
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null || !scannedObjects.Add(piece.gameObject))
+                {
+                    continue;
+                }
+
+                TurnBasedFlickPiece[] components = piece.GetComponents<TurnBasedFlickPiece>();
+                if (components.Length <= 1)
+                {
+                    continue;
+                }
+
+                for (int componentIndex = 0; componentIndex < components.Length; componentIndex++)
+                {
+                    TurnBasedFlickPiece component = components[componentIndex];
+                    if (component != null && component != piece)
+                    {
+                        Destroy(component);
+                    }
+                }
+
+                Debug.LogWarning("[TurnTest] Removed duplicate TurnBasedFlickPiece components from " + piece.name + ".", piece);
+            }
         }
 
         private void ArrangePieceStarts(TurnBasedFlickPiece[] pieces)
@@ -444,8 +575,23 @@ namespace FlickDom.Gameplay
             }
 
             AdvancePieceOrderIndex(piece.Owner);
+            NotifyNetworkFlickAcceptedIfHostLocalPiece(piece);
             gameModeManager.CompleteCurrentPlayerFlicking();
             RefreshPieceHighlights();
+        }
+
+        private static void NotifyNetworkFlickAcceptedIfHostLocalPiece(TurnBasedFlickPiece piece)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null
+                || !bootstrap.IsHost
+                || piece == null
+                || bootstrap.LocalPlayerId != piece.Owner)
+            {
+                return;
+            }
+
+            bootstrap.NotifyHostFlickAccepted(piece.Owner, piece.PieceId);
         }
 
         private void HandlePieceInvalidated(TurnBasedFlickPiece piece)
@@ -934,6 +1080,26 @@ namespace FlickDom.Gameplay
         {
             List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
             return order != null && piece != null && order.Contains(piece);
+        }
+
+        private TurnBasedFlickPiece FindPieceById(FlickDomPlayerId player, string pieceId)
+        {
+            TurnBasedFlickPiece[] pieces = GetPiecesForPlayer(player);
+            if (pieces == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece != null && string.Equals(piece.PieceId, pieceId, System.StringComparison.Ordinal))
+                {
+                    return piece;
+                }
+            }
+
+            return null;
         }
 
         private int GetSelectionOrderNumber(FlickDomPlayerId player, TurnBasedFlickPiece piece)

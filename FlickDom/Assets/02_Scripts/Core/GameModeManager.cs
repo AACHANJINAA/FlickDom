@@ -52,6 +52,26 @@ namespace FlickDom.Gameplay
             get { return pendingPlacementCandidates; }
         }
 
+        public void SetStartLocalGameOnStart(bool enabled)
+        {
+            startLocalGameOnStart = enabled;
+        }
+
+        public void SetSelectPieceOrderBeforeFlicking(bool enabled)
+        {
+            selectPieceOrderBeforeFlicking = enabled;
+        }
+
+        public void ApplyNetworkStateSnapshot(
+            FlickDomGameState state,
+            FlickDomPlayerId activePlayer,
+            int roundNumber)
+        {
+            RoundNumber = Mathf.Max(0, roundNumber);
+            SetActivePlayer(activePlayer);
+            SetState(state);
+        }
+
         private void Awake()
         {
             if (tokenMapManager == null)
