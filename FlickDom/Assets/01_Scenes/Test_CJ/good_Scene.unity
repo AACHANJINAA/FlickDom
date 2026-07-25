@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: e2e604c3cfc536d4ea7568e93872be3c, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -301,6 +301,9 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  firstOrderBadgeColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  secondOrderBadgeColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
+  thirdOrderBadgeColor: {r: 0.15, g: 0.68, b: 1, a: 1}
   showStateIndicator: 0
   stateIndicatorYOffset: 0.72
   stateIndicatorHeight: 0.035
@@ -336,6 +339,9 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  firstOrderBadgeColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  secondOrderBadgeColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
+  thirdOrderBadgeColor: {r: 0.15, g: 0.68, b: 1, a: 1}
   showStateIndicator: 0
   stateIndicatorYOffset: 0.72
   stateIndicatorHeight: 0.035
@@ -704,6 +710,9 @@ MonoBehaviour:
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
   currentFlickTargetColor: {r: 1, g: 0.86, b: 0.05, a: 1}
   selectedOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  firstOrderBadgeColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  secondOrderBadgeColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
+  thirdOrderBadgeColor: {r: 0.15, g: 0.68, b: 1, a: 1}
   showStateIndicator: 0
   stateIndicatorYOffset: 0.72
   stateIndicatorHeight: 0.035
@@ -1020,6 +1029,14 @@ MonoBehaviour:
   generatedPieceSpacing: 1.1
   pieceSelectionRaycastDistance: 1000
   logStateChanges: 1
+  orderLabelFont: {fileID: 0}
+  orderLabelSize: {x: 72, y: 72}
+  orderLabelWorldOffset: {x: 0, y: 0.8, z: 0}
+  orderLabelFontSize: 42
+  player1OrderColor: {r: 0.18, g: 0.42, b: 1, a: 1}
+  player2OrderColor: {r: 1, g: 0.22, b: 0.18, a: 1}
+  orderOutlineColor: {r: 0, g: 0, b: 0, a: 0.8}
+  orderOutlineDistance: {x: 2, y: -2}
 --- !u!114 &1371976857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1093,9 +1110,22 @@ MonoBehaviour:
   raycastDistance: 100
   autoCompleteWhenAllCandidatesPlaced: 1
   autoStartNextRoundAfterPlacement: 1
-  autoRelocateOldestTokenForLocalTest: 1
   showOnlyCurrentCandidate: 1
   logSelections: 1
+  showSelectionMessages: 1
+  messageFont: {fileID: 0}
+  messageFontSize: 28
+  messagePanelSize: {x: 560, y: 72}
+  messagePanelOffset: {x: 0, y: -92}
+  messagePanelColor: {r: 0.05, g: 0.06, b: 0.07, a: 0.82}
+  messageTextColor: {r: 1, g: 1, b: 1, a: 1}
+  claimPromptText: "\uC810\uB839\uD560 \uCE78\uC744 \uC120\uD0DD\uD558\uC138\uC694"
+  relocationPromptText: "\uC810\uB839\uCE78\uC774 5\uAC1C\uC785\uB2C8\uB2E4. \uC9C0\uC6B8
+    \uB0B4 \uC810\uB839\uCE78\uC744 \uC120\uD0DD\uD558\uC138\uC694"
+  invalidClaimText: "\uC120\uD0DD\uD560 \uC218 \uC5C6\uB294 \uC810\uB839\uCE78\uC785\uB2C8\uB2E4"
+  invalidRelocationText: "\uB0B4 \uC810\uB839\uCE78\uB9CC \uC9C0\uC6B8 \uC218 \uC788\uC2B5\uB2C8\uB2E4"
+  claimCompleteText: "\uC810\uB839 \uC644\uB8CC"
+  relocationCompleteText: "\uC810\uB839\uCE78 \uAD50\uCCB4 \uC644\uB8CC"
 --- !u!114 &1371976860
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1120,6 +1150,7 @@ MonoBehaviour:
   matchAnywhereOnBoard: 1
   resetScoresWhenMapCleared: 1
   logCardClaims: 1
+  winningScore: 10
 --- !u!114 &1371976861
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1183,17 +1214,37 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlayerScoreHud
   cardManager: {fileID: 1371976860}
+  gameModeManager: {fileID: 0}
   font: {fileID: 0}
   fontSize: 34
   labelSize: {x: 260, y: 72}
+  turnLabelSize: {x: 260, y: 42}
+  orderLabelSize: {x: 260, y: 42}
+  winLabelSize: {x: 520, y: 120}
+  restartButtonSize: {x: 220, y: 56}
   player1Offset: {x: 28, y: -24}
   player2Offset: {x: -28, y: -24}
+  turnOffset: {x: 0, y: -34}
+  orderOffset: {x: 0, y: -72}
+  restartButtonOffset: {x: 0, y: -88}
   player1Prefix: P1
   player2Prefix: P2
+  yourTurnText: Your Turn
+  orderSeparatorText: '  '
+  player1WinText: P1 WIN!!
+  player2WinText: P2 WIN!!
+  restartButtonText: RESTART
   player1Color: {r: 0.18, g: 0.42, b: 1, a: 1}
   player2Color: {r: 1, g: 0.22, b: 0.18, a: 1}
+  firstOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  secondOrderColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
+  thirdOrderColor: {r: 0.15, g: 0.68, b: 1, a: 1}
   outlineColor: {r: 0, g: 0, b: 0, a: 0.8}
   outlineDistance: {x: 2, y: -2}
+  restartButtonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.96}
+  restartButtonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
+  restartButtonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
+  restartButtonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
 --- !u!114 &1371976863
 MonoBehaviour:
   m_ObjectHideFlags: 0
