@@ -32,6 +32,9 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color inactiveTint = new Color(0.45f, 0.45f, 0.45f);
         [SerializeField] private Color currentFlickTargetColor = new Color(1f, 0.86f, 0.05f);
         [SerializeField] private Color selectedOrderColor = new Color(1f, 0.68f, 0.05f);
+        [SerializeField] private Color firstOrderBadgeColor = new Color(1f, 0.68f, 0.05f);
+        [SerializeField] private Color secondOrderBadgeColor = new Color(0.18f, 0.82f, 0.48f);
+        [SerializeField] private Color thirdOrderBadgeColor = new Color(0.15f, 0.68f, 1f);
         [SerializeField] private bool showStateIndicator;
         [SerializeField] private float stateIndicatorYOffset = 0.72f;
         [SerializeField] private float stateIndicatorHeight = 0.035f;
@@ -46,6 +49,9 @@ namespace FlickDom.Gameplay
         private GameObject stateIndicatorObject;
         private Renderer stateIndicatorRenderer;
         private Material stateIndicatorMaterial;
+        private TextMesh stateIndicatorText;
+        private MeshRenderer stateIndicatorTextRenderer;
+        private Material stateIndicatorTextMaterial;
         private MaterialPropertyBlock rendererPropertyBlock;
 
         private Vector3 mouseStartPosition;
@@ -72,7 +78,9 @@ namespace FlickDom.Gameplay
         private bool originalColliderIsTrigger;
         private bool originalRendererEnabled;
         private RigidbodyConstraints originalConstraints;
+        private CollisionDetectionMode originalCollisionDetectionMode;
         private float activeIndicatorDiameterMultiplierRuntime;
+        private int selectionOrderNumber;
 
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
@@ -121,6 +129,7 @@ namespace FlickDom.Gameplay
             originalColliderIsTrigger = cachedCollider.isTrigger;
             originalRendererEnabled = cachedRenderer == null || cachedRenderer.enabled;
             originalConstraints = cachedRigidbody.constraints;
+            originalCollisionDetectionMode = cachedRigidbody.collisionDetectionMode;
             activeIndicatorDiameterMultiplierRuntime = activeIndicatorDiameterMultiplier;
 
             if (inputCamera == null)
@@ -175,6 +184,12 @@ namespace FlickDom.Gameplay
             {
                 Destroy(stateIndicatorMaterial);
                 stateIndicatorMaterial = null;
+            }
+
+            if (stateIndicatorTextMaterial != null)
+            {
+                Destroy(stateIndicatorTextMaterial);
+                stateIndicatorTextMaterial = null;
             }
         }
 
@@ -290,20 +305,20 @@ namespace FlickDom.Gameplay
 
             if (isDead)
             {
-                ApplyPieceColor(deadTint);
-                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier, 0);
                 return;
             }
 
             if (!IsInsidePlayableBoard())
             {
-                ApplyPieceColor(inactiveTint);
-                SetStateIndicator(false, inactiveTint, inactiveIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(false, inactiveTint, inactiveIndicatorDiameterMultiplier, 0);
                 return;
             }
 
-            ApplyPieceColor(isActiveTurn ? GetOwnerColor() : inactiveTint);
-            SetStateIndicator(isActiveTurn, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier);
+            RestorePieceVisual();
+            SetStateIndicator(isActiveTurn, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier, 0);
         }
 
         public void SetFlickTurnHighlight(bool isActivePlayerPiece, bool isCurrentFlickTarget)
@@ -319,15 +334,15 @@ namespace FlickDom.Gameplay
 
             if (isDead)
             {
-                ApplyPieceColor(deadTint);
-                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier, 0);
                 return;
             }
 
             if (isCurrentFlickTarget)
             {
-                ApplyPieceColor(currentFlickTargetColor);
-                SetStateIndicator(true, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(true, currentFlickTargetColor, currentTargetIndicatorDiameterMultiplier, 0);
                 return;
             }
 
@@ -336,24 +351,22 @@ namespace FlickDom.Gameplay
                 ? activeIndicatorDiameterMultiplier
                 : inactiveIndicatorDiameterMultiplier;
 
-            ApplyPieceColor(color);
-            SetStateIndicator(true, color, indicatorMultiplier);
+            RestorePieceVisual();
+            SetStateIndicator(true, color, indicatorMultiplier, 0);
         }
 
-        public void SetOrderSelectionHighlight(bool isSelectingPlayerPiece, bool isAlreadySelected)
+        public void SetOrderSelectionHighlight(bool isSelectingPlayerPiece, int orderNumber)
         {
             EnsureCachedComponents();
             canInteractThisTurn = false;
+            selectionOrderNumber = Mathf.Max(0, orderNumber);
+            bool isAlreadySelected = selectionOrderNumber > 0;
 
             if (isDead)
             {
                 StopDeadPieceSimulation();
-                if (cachedRenderer != null)
-                {
-                    ApplyPieceColor(deadTint);
-                }
-
-                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier, 0);
                 return;
             }
 
@@ -373,8 +386,12 @@ namespace FlickDom.Gameplay
 
             if (isSelectingPlayerPiece && isAlreadySelected)
             {
-                ApplyPieceColor(selectedOrderColor);
-                SetStateIndicator(true, selectedOrderColor, activeIndicatorDiameterMultiplier);
+                RestorePieceVisual();
+                SetStateIndicator(
+                    true,
+                    GetOwnerColor(),
+                    activeIndicatorDiameterMultiplier,
+                    0);
                 return;
             }
 
@@ -383,8 +400,8 @@ namespace FlickDom.Gameplay
                 ? activeIndicatorDiameterMultiplier
                 : inactiveIndicatorDiameterMultiplier;
 
-            ApplyPieceColor(color);
-            SetStateIndicator(true, color, indicatorMultiplier);
+            RestorePieceVisual();
+            SetStateIndicator(true, color, indicatorMultiplier, 0);
         }
 
         public void ResetRoundUse()
@@ -401,7 +418,7 @@ namespace FlickDom.Gameplay
             waitForPointerReleaseBeforeInput = false;
             stoppedTimer = 0f;
             HideFlickPreview();
-            ApplyBaseColor();
+            RestorePieceVisual();
             UpdateCollisionForTurnState(false);
         }
 
@@ -619,13 +636,9 @@ namespace FlickDom.Gameplay
                 {
                     cachedRenderer.enabled = false;
                 }
-                else
-                {
-                    ApplyPieceColor(deadTint);
-                }
             }
 
-            SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier);
+            SetStateIndicator(false, deadTint, inactiveIndicatorDiameterMultiplier, 0);
         }
 
         private void StopDeadPieceSimulation()
@@ -652,6 +665,7 @@ namespace FlickDom.Gameplay
         {
             cachedRigidbody.useGravity = false;
             cachedRigidbody.isKinematic = true;
+            cachedRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             cachedRigidbody.position = flickStartPosition;
             cachedRigidbody.rotation = flickStartRotation;
             transform.SetPositionAndRotation(flickStartPosition, flickStartRotation);
@@ -659,6 +673,7 @@ namespace FlickDom.Gameplay
             cachedRigidbody.constraints = originalConstraints;
             cachedRigidbody.useGravity = originalUseGravity;
             cachedRigidbody.isKinematic = originalIsKinematic;
+            cachedRigidbody.collisionDetectionMode = originalCollisionDetectionMode;
             if (!cachedRigidbody.isKinematic)
             {
                 cachedRigidbody.linearVelocity = Vector3.zero;
@@ -720,6 +735,7 @@ namespace FlickDom.Gameplay
         {
             cachedRigidbody.useGravity = false;
             cachedRigidbody.isKinematic = true;
+            cachedRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             cachedCollider.enabled = true;
             cachedCollider.isTrigger = true;
         }
@@ -730,6 +746,7 @@ namespace FlickDom.Gameplay
             cachedCollider.isTrigger = originalColliderIsTrigger;
             cachedRigidbody.useGravity = originalUseGravity;
             cachedRigidbody.isKinematic = false;
+            cachedRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         }
 
         private void ParkWithoutCollision()
@@ -742,6 +759,7 @@ namespace FlickDom.Gameplay
 
             cachedRigidbody.useGravity = false;
             cachedRigidbody.isKinematic = true;
+            cachedRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             cachedCollider.isTrigger = originalColliderIsTrigger;
             cachedCollider.enabled = false;
         }
@@ -789,8 +807,8 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            ApplyPieceColor(GetOwnerColor());
-            SetStateIndicator(false, GetOwnerColor(), activeIndicatorDiameterMultiplier);
+            RestorePieceVisual();
+            SetStateIndicator(false, GetOwnerColor(), activeIndicatorDiameterMultiplier, 0);
         }
 
         private void EnsureCachedComponents()
@@ -851,7 +869,7 @@ namespace FlickDom.Gameplay
             return owner == FlickDomPlayerId.Player2 ? player2Color : player1Color;
         }
 
-        private void ApplyPieceColor(Color color)
+        private void RestorePieceVisual()
         {
             EnsureCachedComponents();
 
@@ -865,35 +883,11 @@ namespace FlickDom.Gameplay
                 rendererPropertyBlock = new MaterialPropertyBlock();
             }
 
-            cachedRenderer.GetPropertyBlock(rendererPropertyBlock);
-            Material sharedMaterial = cachedRenderer.sharedMaterial;
-            bool setAnyColor = false;
-
-            if (sharedMaterial == null || sharedMaterial.HasProperty(BaseColorPropertyId))
-            {
-                rendererPropertyBlock.SetColor(BaseColorPropertyId, color);
-                setAnyColor = true;
-            }
-
-            if (sharedMaterial == null || sharedMaterial.HasProperty(ColorPropertyId))
-            {
-                rendererPropertyBlock.SetColor(ColorPropertyId, color);
-                setAnyColor = true;
-            }
-
-            if (sharedMaterial != null && sharedMaterial.HasProperty(EmissionColorPropertyId))
-            {
-                rendererPropertyBlock.SetColor(EmissionColorPropertyId, color * 0.35f);
-                setAnyColor = true;
-            }
-
-            if (setAnyColor)
-            {
-                cachedRenderer.SetPropertyBlock(rendererPropertyBlock);
-            }
+            rendererPropertyBlock.Clear();
+            cachedRenderer.SetPropertyBlock(rendererPropertyBlock);
         }
 
-        private void SetStateIndicator(bool visible, Color color, float diameterMultiplier)
+        private void SetStateIndicator(bool visible, Color color, float diameterMultiplier, int orderNumber)
         {
             if (!showStateIndicator)
             {
@@ -925,6 +919,7 @@ namespace FlickDom.Gameplay
             activeIndicatorDiameterMultiplierRuntime = diameterMultiplier;
             UpdateStateIndicatorTransform();
             SetMaterialColor(stateIndicatorMaterial, color);
+            UpdateStateIndicatorLabel(orderNumber);
         }
 
         private void EnsureStateIndicator()
@@ -967,6 +962,34 @@ namespace FlickDom.Gameplay
                 Destroy(indicatorCollider);
             }
 
+            GameObject textObject = new GameObject("Label");
+            textObject.transform.SetParent(stateIndicatorObject.transform, false);
+            textObject.transform.localPosition = new Vector3(0f, 0.65f, 0f);
+            textObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            stateIndicatorText = textObject.AddComponent<TextMesh>();
+            stateIndicatorText.alignment = TextAlignment.Center;
+            stateIndicatorText.anchor = TextAnchor.MiddleCenter;
+            stateIndicatorText.characterSize = 0.18f;
+            stateIndicatorText.fontSize = 64;
+            stateIndicatorText.color = Color.white;
+            stateIndicatorText.text = string.Empty;
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font != null)
+            {
+                stateIndicatorText.font = font;
+            }
+
+            stateIndicatorTextRenderer = textObject.GetComponent<MeshRenderer>();
+            if (stateIndicatorTextRenderer != null)
+            {
+                stateIndicatorTextMaterial = new Material(shader);
+                stateIndicatorTextMaterial.name = name + " State Indicator Text";
+                SetMaterialColor(stateIndicatorTextMaterial, Color.white);
+                stateIndicatorTextRenderer.sharedMaterial = stateIndicatorTextMaterial;
+            }
+
             stateIndicatorObject.SetActive(false);
         }
 
@@ -984,6 +1007,46 @@ namespace FlickDom.Gameplay
                 diameter,
                 stateIndicatorHeight * 0.5f,
                 diameter);
+        }
+
+        private void UpdateStateIndicatorLabel(int orderNumber)
+        {
+            if (stateIndicatorText == null)
+            {
+                return;
+            }
+
+            if (orderNumber > 0)
+            {
+                stateIndicatorText.text = orderNumber.ToString();
+                if (stateIndicatorTextRenderer != null)
+                {
+                    stateIndicatorTextRenderer.enabled = true;
+                }
+            }
+            else
+            {
+                stateIndicatorText.text = string.Empty;
+                if (stateIndicatorTextRenderer != null)
+                {
+                    stateIndicatorTextRenderer.enabled = false;
+                }
+            }
+        }
+
+        private Color GetSelectionOrderColor(int orderNumber)
+        {
+            switch (orderNumber)
+            {
+                case 1:
+                    return firstOrderBadgeColor;
+                case 2:
+                    return secondOrderBadgeColor;
+                case 3:
+                    return thirdOrderBadgeColor;
+                default:
+                    return selectedOrderColor;
+            }
         }
 
         private static void SetMaterialColor(Material material, Color color)

@@ -1,4 +1,4 @@
-# FlickDom Gameplay Rules
+﻿# FlickDom Gameplay Rules
 
 Last updated: July 24, 2026
 

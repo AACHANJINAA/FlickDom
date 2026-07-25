@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace FlickDom.Gameplay
 {
     public sealed class LocalFlickTurnTestRig : MonoBehaviour
     {
+        public event System.Action<FlickDomPlayerId> PieceOrderChanged;
+
         [SerializeField] private GameModeManager gameModeManager;
         [SerializeField] private TokenMapGridView tokenMapGridView;
         [SerializeField] private Camera inputCamera;
@@ -21,6 +24,15 @@ namespace FlickDom.Gameplay
         [SerializeField] private float generatedPieceSpacing = 1.1f;
         [SerializeField] private float pieceSelectionRaycastDistance = 1000f;
         [SerializeField] private bool logStateChanges = true;
+        [Header("Order UI")]
+        [SerializeField] private Font orderLabelFont;
+        [SerializeField] private Vector2 orderLabelSize = new Vector2(72f, 72f);
+        [SerializeField] private Vector3 orderLabelWorldOffset = new Vector3(0f, 0.8f, 0f);
+        [SerializeField] private int orderLabelFontSize = 42;
+        [SerializeField] private Color player1OrderColor = new Color(0.18f, 0.42f, 1f, 1f);
+        [SerializeField] private Color player2OrderColor = new Color(1f, 0.22f, 0.18f, 1f);
+        [SerializeField] private Color orderOutlineColor = new Color(0f, 0f, 0f, 0.8f);
+        [SerializeField] private Vector2 orderOutlineDistance = new Vector2(2f, -2f);
 
         private readonly StringBuilder logBuilder = new StringBuilder(256);
         private readonly List<TurnBasedFlickPiece> player1PieceOrder = new List<TurnBasedFlickPiece>(3);
@@ -29,6 +41,8 @@ namespace FlickDom.Gameplay
         private int player1NextOrderIndex;
         private int player2NextOrderIndex;
         private Coroutine physicsCompletionRoutine;
+        private Canvas orderLabelCanvas;
+        private readonly List<Text> orderLabels = new List<Text>(3);
 
         private void Awake()
         {
@@ -58,6 +72,8 @@ namespace FlickDom.Gameplay
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
             ConfigurePieces(player2Pieces, FlickDomPlayerId.Player2, "P2");
+            EnsureOrderLabelUi();
+            HideAllOrderLabels();
         }
 
         private void OnValidate()
@@ -94,6 +110,21 @@ namespace FlickDom.Gameplay
             StopPendingPhysicsCompletion();
             SubscribePieces(player1Pieces, false);
             SubscribePieces(player2Pieces, false);
+            HideAllOrderLabels();
+        }
+
+        private void LateUpdate()
+        {
+            RefreshOrderLabels();
+        }
+
+        private void OnDestroy()
+        {
+            if (orderLabelCanvas != null)
+            {
+                Destroy(orderLabelCanvas.gameObject);
+                orderLabelCanvas = null;
+            }
         }
 
         private void Start()
@@ -224,6 +255,7 @@ namespace FlickDom.Gameplay
             }
 
             RefreshPieceHighlights();
+            NotifyPieceOrderChanged(player);
 
             if (order.Count >= CountPieces(GetPiecesForPlayer(player)))
             {
@@ -566,6 +598,7 @@ namespace FlickDom.Gameplay
             }
 
             RefreshPieceHighlights();
+            RefreshOrderLabels();
         }
 
         private void HandleBeforePlacementSelectionStarted()
@@ -586,6 +619,7 @@ namespace FlickDom.Gameplay
             }
 
             RefreshPieceHighlights();
+            RefreshOrderLabels();
         }
 
         private void HandleRoundStarted(int roundNumber, IReadOnlyList<FlickDomPlayerId> turnOrder)
@@ -600,6 +634,7 @@ namespace FlickDom.Gameplay
             ResetPiecesForRound(player1Pieces);
             ResetPiecesForRound(player2Pieces);
             ResetPieceOrderRuntimeData();
+            RefreshOrderLabels();
 
             if (!logStateChanges)
             {
@@ -734,7 +769,7 @@ namespace FlickDom.Gameplay
                 if (piece != null)
                 {
                     bool isSelectingPlayerPiece = activePlayer != FlickDomPlayerId.None && piece.Owner == activePlayer;
-                    piece.SetOrderSelectionHighlight(isSelectingPlayerPiece, IsPieceAlreadyOrdered(activePlayer, piece));
+                    piece.SetOrderSelectionHighlight(isSelectingPlayerPiece, GetSelectionOrderNumber(activePlayer, piece));
                 }
             }
         }
@@ -782,6 +817,8 @@ namespace FlickDom.Gameplay
             player2PieceOrder.Clear();
             player1NextOrderIndex = 0;
             player2NextOrderIndex = 0;
+            NotifyPieceOrderChanged(FlickDomPlayerId.Player1);
+            NotifyPieceOrderChanged(FlickDomPlayerId.Player2);
         }
 
         private void EnsureDefaultOrderForPlayer(FlickDomPlayerId player)
@@ -897,6 +934,200 @@ namespace FlickDom.Gameplay
         {
             List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
             return order != null && piece != null && order.Contains(piece);
+        }
+
+        private int GetSelectionOrderNumber(FlickDomPlayerId player, TurnBasedFlickPiece piece)
+        {
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
+            if (order == null || piece == null)
+            {
+                return 0;
+            }
+
+            int index = order.IndexOf(piece);
+            return index >= 0 ? index + 1 : 0;
+        }
+
+        public int GetSelectedOrderCount(FlickDomPlayerId player)
+        {
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
+            return order != null ? order.Count : 0;
+        }
+
+        private void NotifyPieceOrderChanged(FlickDomPlayerId player)
+        {
+            PieceOrderChanged?.Invoke(player);
+            RefreshOrderLabels();
+        }
+
+        private void EnsureOrderLabelUi()
+        {
+            if (orderLabelCanvas != null)
+            {
+                return;
+            }
+
+            GameObject canvasObject = new GameObject("Generated Piece Order Labels");
+            canvasObject.transform.SetParent(transform, false);
+
+            orderLabelCanvas = canvasObject.AddComponent<Canvas>();
+            orderLabelCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            orderLabelCanvas.sortingOrder = 110;
+
+            CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1280f, 720f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            canvasObject.AddComponent<GraphicRaycaster>().enabled = false;
+
+            for (int i = 0; i < 3; i++)
+            {
+                orderLabels.Add(CreateOrderLabel("Order Label " + (i + 1)));
+            }
+        }
+
+        private Text CreateOrderLabel(string objectName)
+        {
+            GameObject textObject = new GameObject(objectName);
+            textObject.transform.SetParent(orderLabelCanvas.transform, false);
+
+            RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.sizeDelta = orderLabelSize;
+
+            Text text = textObject.AddComponent<Text>();
+            text.font = ResolveOrderLabelFont();
+            text.fontSize = orderLabelFontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.text = string.Empty;
+
+            Outline outline = textObject.AddComponent<Outline>();
+            outline.effectColor = orderOutlineColor;
+            outline.effectDistance = orderOutlineDistance;
+
+            textObject.SetActive(false);
+            return text;
+        }
+
+        private Font ResolveOrderLabelFont()
+        {
+            if (orderLabelFont != null)
+            {
+                return orderLabelFont;
+            }
+
+            Font dynamicFont = Font.CreateDynamicFontFromOSFont(new[]
+            {
+                "Malgun Gothic",
+                "Segoe UI",
+                "Arial Unicode MS",
+                "Arial"
+            }, orderLabelFontSize);
+
+            return dynamicFont != null
+                ? dynamicFont
+                : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private void RefreshOrderLabels()
+        {
+            if (orderLabelCanvas == null || inputCamera == null)
+            {
+                return;
+            }
+
+            List<TurnBasedFlickPiece> activeOrder = GetVisibleOrderForCurrentTurn();
+            if (activeOrder == null || activeOrder.Count <= 0)
+            {
+                HideAllOrderLabels();
+                return;
+            }
+
+            Color labelColor = gameModeManager != null && gameModeManager.ActivePlayer == FlickDomPlayerId.Player2
+                ? player2OrderColor
+                : player1OrderColor;
+
+            int visibleCount = Mathf.Min(activeOrder.Count, orderLabels.Count);
+            for (int i = 0; i < visibleCount; i++)
+            {
+                TurnBasedFlickPiece piece = activeOrder[i];
+                Text label = orderLabels[i];
+                if (piece == null || label == null)
+                {
+                    if (label != null)
+                    {
+                        label.gameObject.SetActive(false);
+                    }
+
+                    continue;
+                }
+
+                if (piece.IsDead || piece.ShouldBeRemovedAfterLeavingPlayableBoard())
+                {
+                    label.gameObject.SetActive(false);
+                    continue;
+                }
+
+                Vector3 screenPoint = inputCamera.WorldToScreenPoint(piece.transform.position + orderLabelWorldOffset);
+                if (screenPoint.z <= 0f)
+                {
+                    label.gameObject.SetActive(false);
+                    continue;
+                }
+
+                label.gameObject.SetActive(true);
+                label.text = (i + 1).ToString();
+                label.color = labelColor;
+                label.rectTransform.position = screenPoint;
+            }
+
+            for (int i = visibleCount; i < orderLabels.Count; i++)
+            {
+                if (orderLabels[i] != null)
+                {
+                    orderLabels[i].gameObject.SetActive(false);
+                }
+            }
+        }
+
+        private List<TurnBasedFlickPiece> GetVisibleOrderForCurrentTurn()
+        {
+            if (gameModeManager == null)
+            {
+                return null;
+            }
+
+            FlickDomPlayerId activePlayer = gameModeManager.ActivePlayer;
+            if (activePlayer == FlickDomPlayerId.None)
+            {
+                return null;
+            }
+
+            if (gameModeManager.CurrentState != FlickDomGameState.PieceOrderSelection
+                && gameModeManager.CurrentState != FlickDomGameState.PlayerFlicking
+                && gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing)
+            {
+                return null;
+            }
+
+            return GetOrderForPlayer(activePlayer);
+        }
+
+        private void HideAllOrderLabels()
+        {
+            for (int i = 0; i < orderLabels.Count; i++)
+            {
+                if (orderLabels[i] != null)
+                {
+                    orderLabels[i].gameObject.SetActive(false);
+                }
+            }
         }
 
         private static int CountPieces(TurnBasedFlickPiece[] pieces)

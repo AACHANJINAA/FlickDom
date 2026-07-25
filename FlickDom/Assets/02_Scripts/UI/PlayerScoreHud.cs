@@ -15,22 +15,28 @@ namespace FlickDom.Gameplay
         [SerializeField] private int fontSize = 34;
         [SerializeField] private Vector2 labelSize = new Vector2(260f, 72f);
         [SerializeField] private Vector2 turnLabelSize = new Vector2(260f, 42f);
+        [SerializeField] private Vector2 orderLabelSize = new Vector2(260f, 42f);
         [SerializeField] private Vector2 winLabelSize = new Vector2(520f, 120f);
         [SerializeField] private Vector2 restartButtonSize = new Vector2(220f, 56f);
         [SerializeField] private Vector2 player1Offset = new Vector2(28f, -24f);
         [SerializeField] private Vector2 player2Offset = new Vector2(-28f, -24f);
         [SerializeField] private Vector2 turnOffset = new Vector2(0f, -34f);
+        [SerializeField] private Vector2 orderOffset = new Vector2(0f, -72f);
         [SerializeField] private Vector2 restartButtonOffset = new Vector2(0f, -88f);
 
         [Header("Text")]
         [SerializeField] private string player1Prefix = "P1";
         [SerializeField] private string player2Prefix = "P2";
         [SerializeField] private string yourTurnText = "Your Turn";
+        [SerializeField] private string orderSeparatorText = "  ";
         [SerializeField] private string player1WinText = "P1 WIN!!";
         [SerializeField] private string player2WinText = "P2 WIN!!";
         [SerializeField] private string restartButtonText = "RESTART";
         [SerializeField] private Color player1Color = new Color(0.18f, 0.42f, 1f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.22f, 0.18f, 1f);
+        [SerializeField] private Color firstOrderColor = new Color(1f, 0.68f, 0.05f, 1f);
+        [SerializeField] private Color secondOrderColor = new Color(0.18f, 0.82f, 0.48f, 1f);
+        [SerializeField] private Color thirdOrderColor = new Color(0.15f, 0.68f, 1f, 1f);
         [SerializeField] private Color outlineColor = new Color(0f, 0f, 0f, 0.8f);
         [SerializeField] private Vector2 outlineDistance = new Vector2(2f, -2f);
         [SerializeField] private Color restartButtonColor = new Color(0.93f, 0.95f, 0.96f, 0.96f);
@@ -38,13 +44,19 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color restartButtonPressedColor = new Color(0.78f, 0.84f, 0.9f, 1f);
         [SerializeField] private Color restartButtonTextColor = new Color(0.08f, 0.1f, 0.12f, 1f);
 
+        private const string DefaultOrderMarkup =
+            "<color=#FFAD0D>1</color>  <color=#2ED17A>2</color>  <color=#26ADFF>3</color>";
+
         private Canvas canvas;
         private Text player1Text;
         private Text player2Text;
         private Text player1TurnText;
         private Text player2TurnText;
+        private Text player1OrderText;
+        private Text player2OrderText;
         private Text winText;
         private Button restartButton;
+        private LocalFlickTurnTestRig turnTestRig;
 
         private void Awake()
         {
@@ -58,6 +70,7 @@ namespace FlickDom.Gameplay
                 gameModeManager = GetComponent<GameModeManager>();
             }
 
+            turnTestRig = GetComponent<LocalFlickTurnTestRig>();
             BuildHud();
         }
 
@@ -72,6 +85,12 @@ namespace FlickDom.Gameplay
             if (gameModeManager != null)
             {
                 gameModeManager.ActivePlayerChanged += HandleActivePlayerChanged;
+                gameModeManager.StateChanged += HandleStateChanged;
+            }
+
+            if (turnTestRig != null)
+            {
+                turnTestRig.PieceOrderChanged += HandlePieceOrderChanged;
             }
         }
 
@@ -92,6 +111,12 @@ namespace FlickDom.Gameplay
             if (gameModeManager != null)
             {
                 gameModeManager.ActivePlayerChanged -= HandleActivePlayerChanged;
+                gameModeManager.StateChanged -= HandleStateChanged;
+            }
+
+            if (turnTestRig != null)
+            {
+                turnTestRig.PieceOrderChanged -= HandlePieceOrderChanged;
             }
         }
 
@@ -112,6 +137,8 @@ namespace FlickDom.Gameplay
             labelSize.y = Mathf.Max(24f, labelSize.y);
             turnLabelSize.x = Mathf.Max(80f, turnLabelSize.x);
             turnLabelSize.y = Mathf.Max(20f, turnLabelSize.y);
+            orderLabelSize.x = Mathf.Max(80f, orderLabelSize.x);
+            orderLabelSize.y = Mathf.Max(20f, orderLabelSize.y);
             winLabelSize.x = Mathf.Max(180f, winLabelSize.x);
             winLabelSize.y = Mathf.Max(48f, winLabelSize.y);
             restartButtonSize.x = Mathf.Max(120f, restartButtonSize.x);
@@ -150,10 +177,21 @@ namespace FlickDom.Gameplay
             RefreshTurnIndicator();
         }
 
+        private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
+        {
+            RefreshTurnIndicator();
+        }
+
+        private void HandlePieceOrderChanged(FlickDomPlayerId player)
+        {
+            RefreshTurnIndicator();
+        }
+
         private void RefreshTurnIndicator()
         {
             SetTurnText(player1TurnText, gameModeManager != null && gameModeManager.ActivePlayer == FlickDomPlayerId.Player1, yourTurnText);
             SetTurnText(player2TurnText, gameModeManager != null && gameModeManager.ActivePlayer == FlickDomPlayerId.Player2, yourTurnText);
+            RefreshOrderIndicator();
         }
 
         private void BuildHud()
@@ -174,6 +212,8 @@ namespace FlickDom.Gameplay
             player2Text = CreateScoreText("Player 2 Score", TextAnchor.UpperRight, player2Color, player2Offset);
             player1TurnText = CreateTurnText("Player 1 Turn", TextAnchor.UpperLeft, player1Color, player1Offset + turnOffset);
             player2TurnText = CreateTurnText("Player 2 Turn", TextAnchor.UpperRight, player2Color, player2Offset + turnOffset);
+            player1OrderText = CreateOrderText("Player 1 Order", TextAnchor.UpperLeft, player1Color, player1Offset + orderOffset);
+            player2OrderText = CreateOrderText("Player 2 Order", TextAnchor.UpperRight, player2Color, player2Offset + orderOffset);
             winText = CreateWinText("Winner Text");
             restartButton = CreateRestartButton("Restart Button");
             SetRestartButtonVisible(false);
@@ -261,6 +301,50 @@ namespace FlickDom.Gameplay
             outline.effectDistance = outlineDistance;
 
             text.text = string.Empty;
+            return text;
+        }
+
+        private Text CreateOrderText(
+            string objectName,
+            TextAnchor alignment,
+            Color textColor,
+            Vector2 anchoredPosition)
+        {
+            GameObject textObject = new GameObject(objectName);
+            textObject.transform.SetParent(canvas.transform, false);
+
+            RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+            rectTransform.sizeDelta = orderLabelSize;
+            rectTransform.anchoredPosition = anchoredPosition;
+
+            if (alignment == TextAnchor.UpperLeft)
+            {
+                rectTransform.anchorMin = new Vector2(0f, 1f);
+                rectTransform.anchorMax = new Vector2(0f, 1f);
+                rectTransform.pivot = new Vector2(0f, 1f);
+            }
+            else
+            {
+                rectTransform.anchorMin = new Vector2(1f, 1f);
+                rectTransform.anchorMax = new Vector2(1f, 1f);
+                rectTransform.pivot = new Vector2(1f, 1f);
+            }
+
+            Text text = textObject.AddComponent<Text>();
+            text.font = ResolveFont();
+            text.fontSize = Mathf.Max(18, fontSize - 6);
+            text.alignment = alignment;
+            text.color = textColor;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.supportRichText = true;
+            text.text = string.Empty;
+
+            Outline outline = textObject.AddComponent<Outline>();
+            outline.effectColor = outlineColor;
+            outline.effectDistance = outlineDistance;
+
             return text;
         }
 
@@ -413,6 +497,85 @@ namespace FlickDom.Gameplay
             }
 
             text.text = isActive ? turnText : string.Empty;
+        }
+
+        private void RefreshOrderIndicator()
+        {
+            SetOrderText(player1OrderText, string.Empty);
+            SetOrderText(player2OrderText, string.Empty);
+        }
+
+        private bool ShouldShowOrderForPlayer(FlickDomPlayerId player)
+        {
+            if (gameModeManager == null || turnTestRig == null)
+            {
+                return false;
+            }
+
+            if (gameModeManager.ActivePlayer != player)
+            {
+                return false;
+            }
+
+            if (gameModeManager.CurrentState != FlickDomGameState.PieceOrderSelection
+                && gameModeManager.CurrentState != FlickDomGameState.PlayerFlicking
+                && gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing)
+            {
+                return false;
+            }
+
+            return turnTestRig.GetSelectedOrderCount(player) > 0;
+        }
+
+        private string BuildOrderMarkup(FlickDomPlayerId player)
+        {
+            int selectedCount = turnTestRig != null ? turnTestRig.GetSelectedOrderCount(player) : 0;
+            if (selectedCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder(DefaultOrderMarkup.Length);
+            for (int i = 1; i <= selectedCount; i++)
+            {
+                if (builder.Length > 0)
+                {
+                    builder.Append(orderSeparatorText);
+                }
+
+                builder.Append("<color=");
+                builder.Append(ColorUtility.ToHtmlStringRGB(GetOrderColor(i)));
+                builder.Append(">");
+                builder.Append(i);
+                builder.Append("</color>");
+            }
+
+            return builder.ToString();
+        }
+
+        private Color GetOrderColor(int orderNumber)
+        {
+            switch (orderNumber)
+            {
+                case 1:
+                    return firstOrderColor;
+                case 2:
+                    return secondOrderColor;
+                case 3:
+                    return thirdOrderColor;
+                default:
+                    return Color.white;
+            }
+        }
+
+        private static void SetOrderText(Text text, string value)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            text.text = value ?? string.Empty;
         }
     }
 }
