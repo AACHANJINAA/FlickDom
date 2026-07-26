@@ -23,7 +23,7 @@
 - [O] 게임 시작 후 로비 UI 숨김
 - [O] StartGame 중복 수신으로 로컬 게임이 두 번 시작되지 않도록 guard 추가
 - [ ] 준비 완료 상태와 게임 시작 상태 분리
-- [ ] 한쪽 이탈 시 로비/게임 상태 복구 정책 정의
+- [O] 한쪽 이탈 시 로비/게임 상태 복구 정책 정의
 
 ## Turn And Input Authority
 
@@ -32,7 +32,7 @@
 - [O] Host만 경기 상태 전이를 수행하도록 입력 게이트 추가
 - [O] Host가 `GameState`, `ActivePlayer`, `RoundNumber`를 Client에 브로드캐스트
 - [O] Client가 Host 상태 스냅샷을 적용해 턴 표시와 입력 허용 기준을 따라가도록 처리
-- [ ] `CurrentTurnIndex`까지 포함한 완전한 턴 상태 동기화
+- [O] `CurrentTurnIndex`까지 포함한 완전한 턴 상태 동기화
 - [ ] 라운드 종료/다음 라운드 시작 흐름 네트워크 검증
 
 ## Piece Order Selection
@@ -56,7 +56,7 @@
 - [O] Host가 직접 플릭한 P1 말도 Client에 `FlickAccepted` 전송
 - [O] Client에서 승인된 말은 자체 물리를 켜지 않고 Host Transform follower로 유지
 - [O] Host의 말 사망/삭제 상태를 Transform 동기화에 포함
-- [ ] 플릭 힘/방향 범위 검증 강화
+- [O] 플릭 힘/방향 범위 검증 강화
 - [ ] 패킷 지연 시 위치 보간 처리
 
 ## Piece Sync Stability
@@ -81,7 +81,7 @@
 
 - [O] Host만 카드 매칭과 점수 계산 수행
 - [O] `PatternCardManager`의 P1/P2 점수 상태를 Client에 동기화
-- [ ] 활성 카드, 완료 카드, 카드 라운드 변경 상태 동기화
+- [O] 활성 카드, 완료 카드, 카드 라운드 변경 상태 동기화
 - [O] 승리자와 최종 점수 동기화
 - [O] `PlayerScoreHud`가 Host 점수 스냅샷으로 갱신되도록 변경
 - [O] 승리 후 재시작/메뉴 복귀 네트워크 흐름 정의
@@ -89,9 +89,9 @@
 
 ## Session Lifecycle
 
-- [ ] Client 중도 이탈 처리
-- [ ] Host 종료 시 Client 안내 및 로비 복귀
-- [ ] 게임 중 새 Client 접속 거부 또는 관전 처리 결정
+- [O] Client 중도 이탈 처리
+- [O] Host 종료 시 Client 로비 복귀
+- [O] 게임 중 새 Client 접속 거부 정책 적용
 - [O] 승리 후 `RESTART` 시 양쪽 점수/보드/턴 상태 초기화 흐름 추가
 - [O] 승리 후 `MENU` 시 방 연결은 유지하고 양쪽을 로비 UI 상태로 복귀하는 흐름 추가
 - [ ] 세션 종료 후 NetworkManager 정리 확인

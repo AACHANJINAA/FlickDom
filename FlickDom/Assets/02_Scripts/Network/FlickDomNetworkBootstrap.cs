@@ -20,6 +20,7 @@ namespace FlickDom.Networking
         [SerializeField] private ushort port = 7777;
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
+        [SerializeField] private float maxNetworkFlickImpulseMagnitude = 30f;
 
         [Header("Local Test Controls")]
         [SerializeField] private bool enableKeyboardShortcuts = true;
@@ -44,6 +45,7 @@ namespace FlickDom.Networking
         private const string PlacementCandidatesMessageName = "FlickDom.PlacementCandidates";
         private const string BoardStateMessageName = "FlickDom.BoardState";
         private const string ScoreStateMessageName = "FlickDom.ScoreState";
+        private const string CardStateMessageName = "FlickDom.CardState";
         private const string RestartRequestMessageName = "FlickDom.RestartRequest";
         private const string RestartMatchMessageName = "FlickDom.RestartMatch";
         private const string ReturnToLobbyRequestMessageName = "FlickDom.ReturnToLobbyRequest";
@@ -71,6 +73,7 @@ namespace FlickDom.Networking
         private bool placementCandidatesMessageHandlerRegistered;
         private bool boardStateMessageHandlerRegistered;
         private bool scoreStateMessageHandlerRegistered;
+        private bool cardStateMessageHandlerRegistered;
         private bool restartRequestMessageHandlerRegistered;
         private bool restartMatchMessageHandlerRegistered;
         private bool returnToLobbyRequestMessageHandlerRegistered;
@@ -415,15 +418,16 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
+            Vector3 safeImpulse = ClampNetworkFlickImpulse(impulse);
             using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 3, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
-                writer.WriteValueSafe(impulse);
+                writer.WriteValueSafe(safeImpulse);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickRequestMessageName, NetworkManager.ServerClientId, writer);
             }
 
-            Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + impulse + ".", this);
+            Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ".", this);
         }
 
         public void SubmitPieceOrderSelectionToHost(FlickDomPlayerId owner, string pieceId)
@@ -720,12 +724,14 @@ namespace FlickDom.Networking
             NetworkManager.ConnectionApprovalResponse response)
         {
             int connectedClients = networkManager != null ? networkManager.ConnectedClientsIds.Count : 0;
-            bool canJoin = connectedClients < maxPlayers;
+            bool canJoin = connectedClients < maxPlayers && !networkGameStarted;
 
             response.Approved = canJoin;
             response.CreatePlayerObject = false;
             response.Pending = false;
-            response.Reason = canJoin ? string.Empty : "Room is full.";
+            response.Reason = canJoin
+                ? string.Empty
+                : networkGameStarted ? "Game already started." : "Room is full.";
         }
 
         private void HandleClientConnected(ulong clientId)
@@ -755,6 +761,7 @@ namespace FlickDom.Networking
                 BroadcastPlacementCandidates();
                 BroadcastBoardState();
                 BroadcastScoreState();
+                BroadcastCardState();
                 SendAllPieceTransformsToClient(clientId);
             }
         }
@@ -766,6 +773,17 @@ namespace FlickDom.Networking
             if (networkManager != null && clientId == networkManager.LocalClientId)
             {
                 SetLocalPlayerRole(FlickDomPlayerId.None);
+                ReturnLocalGameToMenu();
+                lobbyPlayerCount = 0;
+                Debug.Log("[Network] Local client returned to lobby/menu state after disconnect.", this);
+                return;
+            }
+
+            if (networkManager != null && networkManager.IsHost && networkGameStarted)
+            {
+                ReturnNetworkMatchToLobbyAsHost();
+                Debug.Log("[Network] Match returned to lobby because a remote client disconnected.", this);
+                return;
             }
 
             BroadcastLobbyState();
@@ -862,6 +880,7 @@ namespace FlickDom.Networking
             BroadcastPlacementCandidates();
             BroadcastBoardState();
             BroadcastScoreState();
+            BroadcastCardState();
             SendAllPieceTransformsToClients();
             Debug.Log("[Network] Host started network game for " + GetHostConnectedPlayerCount() + " players.", this);
         }
@@ -895,6 +914,7 @@ namespace FlickDom.Networking
             BroadcastPlacementCandidates();
             BroadcastBoardState();
             BroadcastScoreState();
+            BroadcastCardState();
             Debug.Log("[Network] Local GameModeManager started.", this);
         }
 
@@ -913,6 +933,7 @@ namespace FlickDom.Networking
             BroadcastPlacementCandidates();
             BroadcastBoardState();
             BroadcastScoreState();
+            BroadcastCardState();
             SendAllPieceTransformsToClients();
             Debug.Log("[Network] Host restarted network match.", this);
         }
@@ -930,6 +951,7 @@ namespace FlickDom.Networking
             BroadcastGameState();
             BroadcastBoardState();
             BroadcastScoreState();
+            BroadcastCardState();
             SendAllPieceTransformsToClients();
             Debug.Log("[Network] Host returned network match to lobby.", this);
         }
@@ -1143,6 +1165,13 @@ namespace FlickDom.Networking
                 Debug.Log("[Network] Score state message handler registered.", this);
             }
 
+            if (!cardStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CardStateMessageName, HandleCardStateMessage);
+                cardStateMessageHandlerRegistered = true;
+                Debug.Log("[Network] Card state message handler registered.", this);
+            }
+
             if (!restartRequestMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RestartRequestMessageName, HandleRestartRequestMessage);
@@ -1249,6 +1278,12 @@ namespace FlickDom.Networking
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ScoreStateMessageName);
                 scoreStateMessageHandlerRegistered = false;
+            }
+
+            if (cardStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CardStateMessageName);
+                cardStateMessageHandlerRegistered = false;
             }
 
             if (restartRequestMessageHandlerRegistered)
@@ -1359,15 +1394,16 @@ namespace FlickDom.Networking
                 return;
             }
 
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 3, Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 4, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)gameModeManager.CurrentState);
                 writer.WriteValueSafe((int)gameModeManager.ActivePlayer);
                 writer.WriteValueSafe(gameModeManager.RoundNumber);
+                writer.WriteValueSafe(gameModeManager.CurrentTurnIndex);
                 networkManager.CustomMessagingManager.SendNamedMessageToAll(GameStateMessageName, writer);
             }
 
-            Debug.Log("[Network] Game state broadcast. State: " + gameModeManager.CurrentState + ", Active: " + gameModeManager.ActivePlayer + ", Round: " + gameModeManager.RoundNumber + ".", this);
+            Debug.Log("[Network] Game state broadcast. State: " + gameModeManager.CurrentState + ", Active: " + gameModeManager.ActivePlayer + ", Round: " + gameModeManager.RoundNumber + ", TurnIndex: " + gameModeManager.CurrentTurnIndex + ".", this);
         }
 
         private void HandleGameStateMessage(ulong senderClientId, FastBufferReader reader)
@@ -1380,6 +1416,7 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out int stateValue);
             reader.ReadValueSafe(out int activePlayerValue);
             reader.ReadValueSafe(out int roundNumber);
+            reader.ReadValueSafe(out int turnIndex);
 
             ResolveGameModeManager();
             if (gameModeManager == null)
@@ -1389,8 +1426,8 @@ namespace FlickDom.Networking
 
             FlickDomGameState state = (FlickDomGameState)stateValue;
             FlickDomPlayerId activePlayer = (FlickDomPlayerId)activePlayerValue;
-            gameModeManager.ApplyNetworkStateSnapshot(state, activePlayer, roundNumber);
-            Debug.Log("[Network] Game state received from client " + senderClientId + ". State: " + state + ", Active: " + activePlayer + ", Round: " + roundNumber + ".", this);
+            gameModeManager.ApplyNetworkStateSnapshot(state, activePlayer, roundNumber, turnIndex);
+            Debug.Log("[Network] Game state received from client " + senderClientId + ". State: " + state + ", Active: " + activePlayer + ", Round: " + roundNumber + ", TurnIndex: " + turnIndex + ".", this);
         }
 
         private void HandleFlickRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -1406,6 +1443,7 @@ namespace FlickDom.Networking
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
+            impulse = ClampNetworkFlickImpulse(impulse);
 
             ResolveGameModeManager();
             if (gameModeManager == null
@@ -1892,15 +1930,23 @@ namespace FlickDom.Networking
                 return;
             }
 
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 3, Allocator.Temp))
+            bool[] claimedCards = patternCardManager.GetClaimedCardSnapshot();
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (5 + claimedCards.Length), Allocator.Temp))
             {
                 writer.WriteValueSafe(patternCardManager.Player1Score);
                 writer.WriteValueSafe(patternCardManager.Player2Score);
                 writer.WriteValueSafe((int)patternCardManager.Winner);
+                writer.WriteValueSafe(patternCardManager.CurrentFallbackDeckIndex);
+                writer.WriteValueSafe(claimedCards.Length);
+                for (int i = 0; i < claimedCards.Length; i++)
+                {
+                    writer.WriteValueSafe(claimedCards[i]);
+                }
+
                 networkManager.CustomMessagingManager.SendNamedMessage(ScoreStateMessageName, clients, writer);
             }
 
-            Debug.Log("[Network] Score state broadcast. P1: " + patternCardManager.Player1Score + ", P2: " + patternCardManager.Player2Score + ", Winner: " + patternCardManager.Winner + ".", this);
+            Debug.Log("[Network] Score state broadcast. P1: " + patternCardManager.Player1Score + ", P2: " + patternCardManager.Player2Score + ", Winner: " + patternCardManager.Winner + ", DeckIndex: " + patternCardManager.CurrentFallbackDeckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
         private void HandleScoreStateMessage(ulong senderClientId, FastBufferReader reader)
@@ -1913,14 +1959,107 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out int player1Score);
             reader.ReadValueSafe(out int player2Score);
             reader.ReadValueSafe(out int winnerValue);
+            reader.ReadValueSafe(out int deckIndex);
+            reader.ReadValueSafe(out int claimedCount);
+            List<bool> claimedCards = new List<bool>(Mathf.Max(0, claimedCount));
+            for (int i = 0; i < claimedCount; i++)
+            {
+                reader.ReadValueSafe(out bool isClaimed);
+                claimedCards.Add(isClaimed);
+            }
 
             ResolvePatternCardManager();
             if (patternCardManager != null)
             {
                 patternCardManager.ApplyNetworkScoreSnapshot(player1Score, player2Score, (FlickDomPlayerId)winnerValue);
+                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, claimedCards);
             }
 
-            Debug.Log("[Network] Score state received from Host. P1: " + player1Score + ", P2: " + player2Score + ", Winner: " + (FlickDomPlayerId)winnerValue + ".", this);
+            Debug.Log("[Network] Score state received from Host. P1: " + player1Score + ", P2: " + player2Score + ", Winner: " + (FlickDomPlayerId)winnerValue + ", DeckIndex: " + deckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+        }
+
+        private void BroadcastCardState()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            ResolvePatternCardManager();
+            if (patternCardManager == null)
+            {
+                return;
+            }
+
+            bool[] claimedCards = patternCardManager.GetClaimedCardSnapshot();
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (2 + claimedCards.Length), Allocator.Temp))
+            {
+                writer.WriteValueSafe(patternCardManager.CurrentFallbackDeckIndex);
+                writer.WriteValueSafe(claimedCards.Length);
+                for (int i = 0; i < claimedCards.Length; i++)
+                {
+                    writer.WriteValueSafe(claimedCards[i]);
+                }
+
+                networkManager.CustomMessagingManager.SendNamedMessage(CardStateMessageName, clients, writer);
+            }
+
+            Debug.Log("[Network] Card state broadcast. DeckIndex: " + patternCardManager.CurrentFallbackDeckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+        }
+
+        private void HandleCardStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int deckIndex);
+            reader.ReadValueSafe(out int claimedCount);
+            List<bool> claimedCards = new List<bool>(Mathf.Max(0, claimedCount));
+            for (int i = 0; i < claimedCount; i++)
+            {
+                reader.ReadValueSafe(out bool isClaimed);
+                claimedCards.Add(isClaimed);
+            }
+
+            ResolvePatternCardManager();
+            if (patternCardManager != null)
+            {
+                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, claimedCards);
+            }
+
+            Debug.Log("[Network] Card state received from Host. DeckIndex: " + deckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+        }
+
+        private static string BuildClaimedCardsLog(IReadOnlyList<bool> claimedCards)
+        {
+            if (claimedCards == null || claimedCards.Count <= 0)
+            {
+                return "[]";
+            }
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder("[");
+            for (int i = 0; i < claimedCards.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(",");
+                }
+
+                builder.Append(claimedCards[i] ? "1" : "0");
+            }
+
+            builder.Append("]");
+            return builder.ToString();
         }
 
         private static void WriteOwnedCells(ref FastBufferWriter writer, IReadOnlyList<Vector2Int> cells)
@@ -2130,6 +2269,9 @@ namespace FlickDom.Networking
 
                 patternCardManager.ScoreChanged += HandlePatternScoreChanged;
                 patternCardManager.MatchWon += HandlePatternMatchWon;
+                patternCardManager.ActiveCardChanged += HandlePatternActiveCardChanged;
+                patternCardManager.CardCompleted += HandlePatternCardCompleted;
+                patternCardManager.CardsExhausted += HandlePatternCardsExhausted;
                 patternCardEventsSubscribed = true;
                 return;
             }
@@ -2141,17 +2283,37 @@ namespace FlickDom.Networking
 
             patternCardManager.ScoreChanged -= HandlePatternScoreChanged;
             patternCardManager.MatchWon -= HandlePatternMatchWon;
+            patternCardManager.ActiveCardChanged -= HandlePatternActiveCardChanged;
+            patternCardManager.CardCompleted -= HandlePatternCardCompleted;
+            patternCardManager.CardsExhausted -= HandlePatternCardsExhausted;
             patternCardEventsSubscribed = false;
         }
 
         private void HandlePatternScoreChanged(FlickDomPlayerId player, int gainedScore, int player1Score, int player2Score)
         {
             BroadcastScoreState();
+            BroadcastCardState();
         }
 
         private void HandlePatternMatchWon(FlickDomPlayerId winner, int player1Score, int player2Score)
         {
             BroadcastScoreState();
+            BroadcastCardState();
+        }
+
+        private void HandlePatternActiveCardChanged(PatternCardData card)
+        {
+            BroadcastCardState();
+        }
+
+        private void HandlePatternCardCompleted(PatternCardData card, FlickDomPlayerId player, int score, Vector2Int matchOrigin)
+        {
+            BroadcastCardState();
+        }
+
+        private void HandlePatternCardsExhausted()
+        {
+            BroadcastCardState();
         }
 
         private void HandleGameModeStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
@@ -2176,6 +2338,27 @@ namespace FlickDom.Networking
         private static bool WasPressedThisFrame(Key key)
         {
             return Keyboard.current[key].wasPressedThisFrame;
+        }
+
+        private Vector3 ClampNetworkFlickImpulse(Vector3 impulse)
+        {
+            float maxMagnitude = Mathf.Max(0f, maxNetworkFlickImpulseMagnitude);
+            if (maxMagnitude <= 0f)
+            {
+                return Vector3.zero;
+            }
+
+            if (float.IsNaN(impulse.x)
+                || float.IsNaN(impulse.y)
+                || float.IsNaN(impulse.z)
+                || float.IsInfinity(impulse.x)
+                || float.IsInfinity(impulse.y)
+                || float.IsInfinity(impulse.z))
+            {
+                return Vector3.zero;
+            }
+
+            return Vector3.ClampMagnitude(impulse, maxMagnitude);
         }
 
         private bool IsNetworkEnabledForActiveScene()

@@ -154,7 +154,7 @@ namespace FlickDom.Gameplay
                 ClearPendingRelocation();
                 RefreshActiveCandidateHighlight();
             }
-            else if (previousState == FlickDomGameState.PlacementSelection)
+            else
             {
                 activeCandidate = null;
                 ClearPendingRelocation();

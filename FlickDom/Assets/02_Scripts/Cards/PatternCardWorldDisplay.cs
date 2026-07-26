@@ -114,13 +114,13 @@ namespace FlickDom.Gameplay
         {
             DestroyGeneratedRoot();
 
-            if (hideWhenClaimed && cardManager != null && cardManager.IsActiveCardClaimed)
+            PatternCardData card = ResolveCard();
+            if (card == null)
             {
                 return;
             }
 
-            PatternCardData card = ResolveCard();
-            if (card == null)
+            if (hideWhenClaimed && cardManager != null && cardManager.IsCardClaimed(card))
             {
                 return;
             }

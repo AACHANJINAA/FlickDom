@@ -41,6 +41,10 @@ namespace FlickDom.Gameplay
         public FlickDomGameState CurrentState { get; private set; } = FlickDomGameState.NotStarted;
         public FlickDomPlayerId ActivePlayer { get; private set; } = FlickDomPlayerId.None;
         public int RoundNumber { get; private set; }
+        public int CurrentTurnIndex
+        {
+            get { return activeTurnIndex; }
+        }
 
         public IReadOnlyList<FlickDomPlayerId> RoundTurnOrder
         {
@@ -65,9 +69,21 @@ namespace FlickDom.Gameplay
         public void ApplyNetworkStateSnapshot(
             FlickDomGameState state,
             FlickDomPlayerId activePlayer,
-            int roundNumber)
+            int roundNumber,
+            int turnIndex)
         {
-            RoundNumber = Mathf.Max(0, roundNumber);
+            int normalizedRoundNumber = Mathf.Max(0, roundNumber);
+            bool roundChanged = RoundNumber != normalizedRoundNumber;
+            RoundNumber = normalizedRoundNumber;
+            if (roundChanged && RoundNumber > 0)
+            {
+                ClearRoundRuntimeData();
+                currentFirstPlayer = NormalizePlayer(firstPlayer);
+                BuildRoundTurnOrder(currentFirstPlayer);
+                RoundStarted?.Invoke(RoundNumber, roundTurnOrder.AsReadOnly());
+            }
+
+            activeTurnIndex = Mathf.Max(0, turnIndex);
             SetActivePlayer(activePlayer);
             SetState(state);
         }

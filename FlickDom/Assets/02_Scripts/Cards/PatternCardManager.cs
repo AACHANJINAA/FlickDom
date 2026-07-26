@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -73,6 +74,11 @@ namespace FlickDom.Gameplay
         public FlickDomPlayerId Winner
         {
             get { return winner; }
+        }
+
+        public int CurrentFallbackDeckIndex
+        {
+            get { return currentFallbackDeckIndex; }
         }
 
         private void Awake()
@@ -165,6 +171,32 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        public bool IsCardClaimed(PatternCardData card)
+        {
+            if (card == null || runtimeCards == null || claimedCards == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < runtimeCards.Length && i < claimedCards.Length; i++)
+            {
+                PatternCardData runtimeCard = runtimeCards[i];
+                if (runtimeCard == null)
+                {
+                    continue;
+                }
+
+                bool sameCard = ReferenceEquals(runtimeCard, card)
+                    || string.Equals(runtimeCard.CardId, card.CardId, StringComparison.Ordinal);
+                if (sameCard)
+                {
+                    return claimedCards[i];
+                }
+            }
+
+            return false;
         }
 
         public int GetScore(FlickDomPlayerId player)
@@ -413,6 +445,45 @@ namespace FlickDom.Gameplay
             {
                 MatchWon?.Invoke(winner, player1Score, player2Score);
             }
+        }
+
+        public bool[] GetClaimedCardSnapshot()
+        {
+            bool[] snapshot = new bool[claimedCards != null ? claimedCards.Length : 0];
+            for (int i = 0; i < snapshot.Length; i++)
+            {
+                snapshot[i] = claimedCards[i];
+            }
+
+            return snapshot;
+        }
+
+        public void ApplyNetworkCardStateSnapshot(int nextFallbackDeckIndex, IReadOnlyList<bool> nextClaimedCards)
+        {
+            int clampedDeckIndex = Mathf.Max(0, nextFallbackDeckIndex);
+            if (clampedDeckIndex != currentFallbackDeckIndex)
+            {
+                EnsureRuntimeFallbackDecks();
+                if (runtimeFallbackDecks != null && clampedDeckIndex < runtimeFallbackDecks.Length)
+                {
+                    currentFallbackDeckIndex = clampedDeckIndex;
+                    RefreshRuntimeCards();
+                }
+            }
+
+            if (claimedCards == null || claimedCards.Length != runtimeCards.Length)
+            {
+                RefreshRuntimeCards();
+            }
+
+            int count = Mathf.Min(claimedCards.Length, nextClaimedCards != null ? nextClaimedCards.Count : 0);
+            for (int i = 0; i < claimedCards.Length; i++)
+            {
+                claimedCards[i] = i < count && nextClaimedCards[i];
+            }
+
+            ActiveCardChanged?.Invoke(ActiveCard);
+            Debug.Log("[PatternCard] Network card snapshot applied. DeckIndex: " + currentFallbackDeckIndex + ", Remaining: " + RemainingCardCount + ".", this);
         }
 
         private static bool CanControlScoreState()

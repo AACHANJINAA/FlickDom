@@ -85,4 +85,12 @@
   - Host의 배치 후보 셀 목록을 `PlacementCandidates` 메시지로 Client에 동기화해 P2가 자신의 배치 후보 타일을 선택할 수 있도록 수정했다.
   - Host의 말 사망 상태를 Transform 동기화에 포함해 보드 밖으로 나간 말이 Client 화면에서도 제거되도록 수정했다.
   - 승리 후 `RESTART`/`MENU` 버튼을 네트워크 명령으로 연결해 Host가 양쪽 경기 재시작 또는 로비 복귀를 동기화하도록 추가했다.
+  - `GameState`에 `CurrentTurnIndex`를 포함해 Client가 Host의 현재 턴 순번까지 따라가도록 확장했다.
+  - `CardState` 메시지를 추가해 활성 카드, 완료 카드, 카드 라운드 변경 상태를 Client에 동기화하도록 구현했다.
+  - 게임 중 Client 이탈 시 Host를 로비 상태로 복귀시키고, 진행 중 새 Client 접속은 거부하도록 세션 정책을 추가했다.
+  - 네트워크 플릭 요청의 impulse를 Host/Client 양쪽에서 제한해 비정상적인 힘 값이 서버 물리에 적용되지 않도록 보강했다.
+  - Client가 다음 라운드 `GameState`를 받을 때 `RoundStarted`를 실행하지 않아 P2 말 사용 상태가 리셋되지 않던 문제를 수정했다.
+  - 배치 선택 상태를 벗어나면 `점령 완료` 메시지와 후보 하이라이트가 무조건 사라지도록 정리했다.
+  - 카드 완료 상태를 점수 브로드캐스트와 함께 항상 전송하고, explicit 월드 카드도 카드별 완료 여부를 기준으로 숨기도록 보강했다.
+  - P2 카드 라운드가 Easy에 남는 문제를 막기 위해 `ScoreState`에도 카드 deck index와 완료 카드 배열을 포함하도록 확장했다.
   - `docs/SERVER_TODO.md`를 현재 구현 상태 기준으로 갱신했다.
