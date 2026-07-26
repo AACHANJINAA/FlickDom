@@ -110,6 +110,21 @@ namespace FlickDom.Gameplay
             BeginNextRound();
         }
 
+        public void ResetToNotStarted()
+        {
+            RoundNumber = 0;
+            currentFirstPlayer = NormalizePlayer(firstPlayer);
+            roundTurnOrder.Clear();
+            ClearRoundRuntimeData();
+            SetActivePlayer(FlickDomPlayerId.None);
+            SetState(FlickDomGameState.NotStarted);
+
+            if (tokenMapManager != null)
+            {
+                tokenMapManager.ClearMap();
+            }
+        }
+
         public void BeginNextRound()
         {
             RoundNumber++;

@@ -84,4 +84,5 @@
   - Client의 로컬 카드 매칭/점수 계산을 막고, Host가 `ScoreState`로 P1/P2 점수와 승리자를 브로드캐스트하도록 추가했다.
   - Host의 배치 후보 셀 목록을 `PlacementCandidates` 메시지로 Client에 동기화해 P2가 자신의 배치 후보 타일을 선택할 수 있도록 수정했다.
   - Host의 말 사망 상태를 Transform 동기화에 포함해 보드 밖으로 나간 말이 Client 화면에서도 제거되도록 수정했다.
+  - 승리 후 `RESTART`/`MENU` 버튼을 네트워크 명령으로 연결해 Host가 양쪽 경기 재시작 또는 로비 복귀를 동기화하도록 추가했다.
   - `docs/SERVER_TODO.md`를 현재 구현 상태 기준으로 갱신했다.

@@ -404,13 +404,12 @@ namespace FlickDom.Gameplay
 
         public void ApplyNetworkScoreSnapshot(int nextPlayer1Score, int nextPlayer2Score, FlickDomPlayerId nextWinner)
         {
-            FlickDomPlayerId previousWinner = winner;
             player1Score = Mathf.Max(0, nextPlayer1Score);
             player2Score = Mathf.Max(0, nextPlayer2Score);
             winner = nextWinner;
             ScoreChanged?.Invoke(FlickDomPlayerId.None, 0, player1Score, player2Score);
 
-            if (winner != FlickDomPlayerId.None && previousWinner != winner)
+            if (winner != FlickDomPlayerId.None)
             {
                 MatchWon?.Invoke(winner, player1Score, player2Score);
             }
@@ -611,6 +610,7 @@ namespace FlickDom.Gameplay
             }
 
             AddScore(FlickDomPlayerId.Player1, delta);
+            FlickDomNetworkBootstrap.Active?.NotifyHostScoreStateChanged("F10 debug win");
         }
     }
 }

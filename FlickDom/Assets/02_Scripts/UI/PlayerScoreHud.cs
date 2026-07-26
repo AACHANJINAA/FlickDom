@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using FlickDom.Networking;
 
 namespace FlickDom.Gameplay
 {
@@ -18,11 +19,13 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector2 orderLabelSize = new Vector2(260f, 42f);
         [SerializeField] private Vector2 winLabelSize = new Vector2(520f, 120f);
         [SerializeField] private Vector2 restartButtonSize = new Vector2(220f, 56f);
+        [SerializeField] private Vector2 returnToMenuButtonSize = new Vector2(220f, 56f);
         [SerializeField] private Vector2 player1Offset = new Vector2(28f, -24f);
         [SerializeField] private Vector2 player2Offset = new Vector2(-28f, -24f);
         [SerializeField] private Vector2 turnOffset = new Vector2(0f, -34f);
         [SerializeField] private Vector2 orderOffset = new Vector2(0f, -72f);
-        [SerializeField] private Vector2 restartButtonOffset = new Vector2(0f, -88f);
+        [SerializeField] private Vector2 restartButtonOffset = new Vector2(0f, -78f);
+        [SerializeField] private Vector2 returnToMenuButtonOffset = new Vector2(0f, -142f);
 
         [Header("Text")]
         [SerializeField] private string player1Prefix = "P1";
@@ -32,6 +35,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private string player1WinText = "P1 WIN!!";
         [SerializeField] private string player2WinText = "P2 WIN!!";
         [SerializeField] private string restartButtonText = "RESTART";
+        [SerializeField] private string returnToMenuButtonText = "MENU";
         [SerializeField] private Color player1Color = new Color(0.18f, 0.42f, 1f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.22f, 0.18f, 1f);
         [SerializeField] private Color firstOrderColor = new Color(1f, 0.68f, 0.05f, 1f);
@@ -46,6 +50,8 @@ namespace FlickDom.Gameplay
 
         private const string DefaultOrderMarkup =
             "<color=#FFAD0D>1</color>  <color=#2ED17A>2</color>  <color=#26ADFF>3</color>";
+        private static readonly Vector2 RuntimeRestartButtonOffset = new Vector2(0f, -78f);
+        private static readonly Vector2 RuntimeReturnToMenuButtonOffset = new Vector2(0f, -142f);
 
         private Canvas canvas;
         private Text player1Text;
@@ -56,6 +62,7 @@ namespace FlickDom.Gameplay
         private Text player2OrderText;
         private Text winText;
         private Button restartButton;
+        private Button returnToMenuButton;
         private LocalFlickTurnTestRig turnTestRig;
 
         private void Awake()
@@ -143,6 +150,8 @@ namespace FlickDom.Gameplay
             winLabelSize.y = Mathf.Max(48f, winLabelSize.y);
             restartButtonSize.x = Mathf.Max(120f, restartButtonSize.x);
             restartButtonSize.y = Mathf.Max(36f, restartButtonSize.y);
+            returnToMenuButtonSize.x = Mathf.Max(120f, returnToMenuButtonSize.x);
+            returnToMenuButtonSize.y = Mathf.Max(36f, returnToMenuButtonSize.y);
         }
 
         private void HandleScoreChanged(
@@ -153,6 +162,11 @@ namespace FlickDom.Gameplay
         {
             SetScoreText(player1Text, player1Prefix, player1Score);
             SetScoreText(player2Text, player2Prefix, player2Score);
+
+            if (cardManager == null || cardManager.Winner == FlickDomPlayerId.None)
+            {
+                HideVictoryControls();
+            }
         }
 
         private void RefreshScores()
@@ -180,6 +194,12 @@ namespace FlickDom.Gameplay
         private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
         {
             RefreshTurnIndicator();
+            if ((cardManager == null || cardManager.Winner == FlickDomPlayerId.None)
+                && nextState != FlickDomGameState.CardMatch
+                && nextState != FlickDomGameState.PlacementSelection)
+            {
+                HideVictoryControls();
+            }
         }
 
         private void HandlePieceOrderChanged(FlickDomPlayerId player)
@@ -215,8 +235,9 @@ namespace FlickDom.Gameplay
             player1OrderText = CreateOrderText("Player 1 Order", TextAnchor.UpperLeft, player1Color, player1Offset + orderOffset);
             player2OrderText = CreateOrderText("Player 2 Order", TextAnchor.UpperRight, player2Color, player2Offset + orderOffset);
             winText = CreateWinText("Winner Text");
-            restartButton = CreateRestartButton("Restart Button");
-            SetRestartButtonVisible(false);
+            restartButton = CreateVictoryButton("Restart Button", restartButtonText, RuntimeRestartButtonOffset, restartButtonSize, RestartCurrentScene);
+            returnToMenuButton = CreateVictoryButton("Return To Menu Button", returnToMenuButtonText, RuntimeReturnToMenuButtonOffset, returnToMenuButtonSize, ReturnToMenu);
+            SetVictoryButtonsVisible(false);
         }
 
         private Text CreateScoreText(
@@ -411,7 +432,12 @@ namespace FlickDom.Gameplay
             winText.color = player1Color;
         }
 
-        private Button CreateRestartButton(string objectName)
+        private Button CreateVictoryButton(
+            string objectName,
+            string buttonLabel,
+            Vector2 anchoredPosition,
+            Vector2 size,
+            UnityEngine.Events.UnityAction onClick)
         {
             GameObject buttonObject = new GameObject(objectName);
             buttonObject.transform.SetParent(canvas.transform, false);
@@ -420,15 +446,15 @@ namespace FlickDom.Gameplay
             rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            rectTransform.anchoredPosition = restartButtonOffset;
-            rectTransform.sizeDelta = restartButtonSize;
+            rectTransform.anchoredPosition = anchoredPosition;
+            rectTransform.sizeDelta = size;
 
             Image image = buttonObject.AddComponent<Image>();
             image.color = restartButtonColor;
 
             Button button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
-            button.onClick.AddListener(RestartCurrentScene);
+            button.onClick.AddListener(onClick);
 
             ColorBlock colors = button.colors;
             colors.normalColor = restartButtonColor;
@@ -454,7 +480,7 @@ namespace FlickDom.Gameplay
             buttonText.horizontalOverflow = HorizontalWrapMode.Overflow;
             buttonText.verticalOverflow = VerticalWrapMode.Overflow;
             buttonText.raycastTarget = false;
-            buttonText.text = restartButtonText;
+            buttonText.text = buttonLabel;
 
             Outline outline = textObject.AddComponent<Outline>();
             outline.effectColor = outlineColor;
@@ -465,11 +491,36 @@ namespace FlickDom.Gameplay
 
         private void RestartCurrentScene()
         {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null && bootstrap.IsRunning)
+            {
+                bootstrap.RestartMatchFromUi();
+                return;
+            }
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(activeScene.name);
+        }
+
+        private void ReturnToMenu()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null && bootstrap.IsRunning)
+            {
+                bootstrap.ReturnToLobbyFromUi();
+                return;
+            }
+
             Scene activeScene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(activeScene.name);
         }
 
         private void SetRestartButtonVisible(bool visible)
+        {
+            SetVictoryButtonsVisible(visible);
+        }
+
+        private void SetVictoryButtonsVisible(bool visible)
         {
             if (restartButton == null)
             {
@@ -477,6 +528,20 @@ namespace FlickDom.Gameplay
             }
 
             restartButton.gameObject.SetActive(visible);
+            if (returnToMenuButton != null)
+            {
+                returnToMenuButton.gameObject.SetActive(visible);
+            }
+        }
+
+        private void HideVictoryControls()
+        {
+            if (winText != null)
+            {
+                winText.text = string.Empty;
+            }
+
+            SetVictoryButtonsVisible(false);
         }
 
         private static void SetScoreText(Text text, string prefix, int score)

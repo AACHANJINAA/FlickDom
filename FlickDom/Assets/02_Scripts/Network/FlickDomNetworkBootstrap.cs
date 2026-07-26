@@ -44,6 +44,10 @@ namespace FlickDom.Networking
         private const string PlacementCandidatesMessageName = "FlickDom.PlacementCandidates";
         private const string BoardStateMessageName = "FlickDom.BoardState";
         private const string ScoreStateMessageName = "FlickDom.ScoreState";
+        private const string RestartRequestMessageName = "FlickDom.RestartRequest";
+        private const string RestartMatchMessageName = "FlickDom.RestartMatch";
+        private const string ReturnToLobbyRequestMessageName = "FlickDom.ReturnToLobbyRequest";
+        private const string ReturnToLobbyMessageName = "FlickDom.ReturnToLobby";
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
@@ -67,6 +71,10 @@ namespace FlickDom.Networking
         private bool placementCandidatesMessageHandlerRegistered;
         private bool boardStateMessageHandlerRegistered;
         private bool scoreStateMessageHandlerRegistered;
+        private bool restartRequestMessageHandlerRegistered;
+        private bool restartMatchMessageHandlerRegistered;
+        private bool returnToLobbyRequestMessageHandlerRegistered;
+        private bool returnToLobbyMessageHandlerRegistered;
         private bool gameModeEventsSubscribed;
         private bool patternCardEventsSubscribed;
         private bool networkGameStarted;
@@ -510,6 +518,54 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Placement accepted broadcast. Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
         }
 
+        public void RestartMatchFromUi()
+        {
+            if (!IsRunning)
+            {
+                RestartLocalGameOnly();
+                return;
+            }
+
+            if (IsHost)
+            {
+                RestartNetworkMatchAsHost();
+                return;
+            }
+
+            SendEmptyMessageToHost(RestartRequestMessageName);
+            Debug.Log("[Network] Restart match requested from Client.", this);
+        }
+
+        public void ReturnToLobbyFromUi()
+        {
+            if (!IsRunning)
+            {
+                ReturnLocalGameToMenu();
+                return;
+            }
+
+            if (IsHost)
+            {
+                ReturnNetworkMatchToLobbyAsHost();
+                return;
+            }
+
+            SendEmptyMessageToHost(ReturnToLobbyRequestMessageName);
+            Debug.Log("[Network] Return to lobby requested from Client.", this);
+        }
+
+        public void NotifyHostScoreStateChanged(string reason)
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            BroadcastScoreState();
+            BroadcastGameState();
+            Debug.Log("[Network] Score state forced broadcast. Reason: " + reason + ".", this);
+        }
+
         private void ResolveNetworkManager()
         {
             if (networkManager == null)
@@ -842,6 +898,72 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Local GameModeManager started.", this);
         }
 
+        private void RestartNetworkMatchAsHost()
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            networkGameStarted = true;
+            RestartLocalGameOnly();
+            SendEmptyMessageToClients(RestartMatchMessageName);
+            BroadcastLobbyState();
+            BroadcastGameState();
+            BroadcastPlacementCandidates();
+            BroadcastBoardState();
+            BroadcastScoreState();
+            SendAllPieceTransformsToClients();
+            Debug.Log("[Network] Host restarted network match.", this);
+        }
+
+        private void ReturnNetworkMatchToLobbyAsHost()
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            ReturnLocalGameToMenu();
+            SendEmptyMessageToClients(ReturnToLobbyMessageName);
+            BroadcastLobbyState();
+            BroadcastGameState();
+            BroadcastBoardState();
+            BroadcastScoreState();
+            SendAllPieceTransformsToClients();
+            Debug.Log("[Network] Host returned network match to lobby.", this);
+        }
+
+        private void RestartLocalGameOnly()
+        {
+            ResolveGameModeManager();
+            if (gameModeManager == null)
+            {
+                Debug.LogWarning("[Network] Cannot restart match because GameModeManager was not found.", this);
+                return;
+            }
+
+            networkGameStarted = IsRunning ? networkGameStarted : false;
+            localGameStartedFromNetwork = true;
+            gameModeManager.StartLocalGame();
+            SubscribeGameModeEvents(true);
+            SubscribePatternCardEvents(true);
+            Debug.Log("[Network] Local match restarted.", this);
+        }
+
+        private void ReturnLocalGameToMenu()
+        {
+            ResolveGameModeManager();
+            if (gameModeManager != null)
+            {
+                gameModeManager.ResetToNotStarted();
+            }
+
+            networkGameStarted = false;
+            localGameStartedFromNetwork = false;
+            Debug.Log("[Network] Local match returned to lobby/menu state.", this);
+        }
+
         private void SendStartGameMessageToClients()
         {
             if (networkManager == null
@@ -869,6 +991,43 @@ namespace FlickDom.Networking
             using (FastBufferWriter writer = new FastBufferWriter(1, Allocator.Temp))
             {
                 networkManager.CustomMessagingManager.SendNamedMessage(StartGameMessageName, clientId, writer);
+            }
+        }
+
+        private void SendEmptyMessageToClients(string messageName)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            using (FastBufferWriter writer = new FastBufferWriter(1, Allocator.Temp))
+            {
+                networkManager.CustomMessagingManager.SendNamedMessage(messageName, clients, writer);
+            }
+        }
+
+        private void SendEmptyMessageToHost(string messageName)
+        {
+            if (networkManager == null
+                || !networkManager.IsClient
+                || networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            using (FastBufferWriter writer = new FastBufferWriter(1, Allocator.Temp))
+            {
+                networkManager.CustomMessagingManager.SendNamedMessage(messageName, NetworkManager.ServerClientId, writer);
             }
         }
 
@@ -983,6 +1142,34 @@ namespace FlickDom.Networking
                 scoreStateMessageHandlerRegistered = true;
                 Debug.Log("[Network] Score state message handler registered.", this);
             }
+
+            if (!restartRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RestartRequestMessageName, HandleRestartRequestMessage);
+                restartRequestMessageHandlerRegistered = true;
+                Debug.Log("[Network] Restart request message handler registered.", this);
+            }
+
+            if (!restartMatchMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RestartMatchMessageName, HandleRestartMatchMessage);
+                restartMatchMessageHandlerRegistered = true;
+                Debug.Log("[Network] Restart match message handler registered.", this);
+            }
+
+            if (!returnToLobbyRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ReturnToLobbyRequestMessageName, HandleReturnToLobbyRequestMessage);
+                returnToLobbyRequestMessageHandlerRegistered = true;
+                Debug.Log("[Network] Return to lobby request message handler registered.", this);
+            }
+
+            if (!returnToLobbyMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ReturnToLobbyMessageName, HandleReturnToLobbyMessage);
+                returnToLobbyMessageHandlerRegistered = true;
+                Debug.Log("[Network] Return to lobby message handler registered.", this);
+            }
         }
 
         private void UnregisterNetworkMessageHandlers()
@@ -1063,6 +1250,30 @@ namespace FlickDom.Networking
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ScoreStateMessageName);
                 scoreStateMessageHandlerRegistered = false;
             }
+
+            if (restartRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RestartRequestMessageName);
+                restartRequestMessageHandlerRegistered = false;
+            }
+
+            if (restartMatchMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RestartMatchMessageName);
+                restartMatchMessageHandlerRegistered = false;
+            }
+
+            if (returnToLobbyRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ReturnToLobbyRequestMessageName);
+                returnToLobbyRequestMessageHandlerRegistered = false;
+            }
+
+            if (returnToLobbyMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ReturnToLobbyMessageName);
+                returnToLobbyMessageHandlerRegistered = false;
+            }
         }
 
         private void HandleStartGameMessage(ulong senderClientId, FastBufferReader reader)
@@ -1086,6 +1297,51 @@ namespace FlickDom.Networking
             }
 
             Debug.Log("[Network] Lobby state received from client " + senderClientId + ". Players: " + lobbyPlayerCount + "/" + maxPlayers + ", Started: " + networkGameStarted + ".", this);
+        }
+
+        private void HandleRestartRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            Debug.Log("[Network] Restart request received from client " + senderClientId + ".", this);
+            RestartNetworkMatchAsHost();
+        }
+
+        private void HandleRestartMatchMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            networkGameStarted = true;
+            RestartLocalGameOnly();
+            Debug.Log("[Network] Restart match received from Host.", this);
+        }
+
+        private void HandleReturnToLobbyRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            Debug.Log("[Network] Return to lobby request received from client " + senderClientId + ".", this);
+            ReturnNetworkMatchToLobbyAsHost();
+        }
+
+        private void HandleReturnToLobbyMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            ReturnLocalGameToMenu();
+            Debug.Log("[Network] Return to lobby received from Host.", this);
         }
 
         private void BroadcastGameState()
