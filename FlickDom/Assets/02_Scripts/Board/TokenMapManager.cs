@@ -185,6 +185,69 @@ namespace FlickDom.Gameplay
             return copy;
         }
 
+        public void ApplyNetworkOwnerGrid(int sourceBoardSize, IReadOnlyList<Vector2Int> player1OwnedCells, IReadOnlyList<Vector2Int> player2OwnedCells)
+        {
+            EnsureGrid();
+            FlickDomPlayerId[,] previousOwners = owners;
+            boardSize = Mathf.Max(1, sourceBoardSize);
+            owners = new FlickDomPlayerId[boardSize, boardSize];
+            player1Cells.Clear();
+            player2Cells.Clear();
+
+            ApplyNetworkOwnedCells(FlickDomPlayerId.Player1, player1OwnedCells);
+            ApplyNetworkOwnedCells(FlickDomPlayerId.Player2, player2OwnedCells);
+
+            for (int x = 0; x < boardSize; x++)
+            {
+                for (int y = 0; y < boardSize; y++)
+                {
+                    FlickDomPlayerId previousOwner = GetPreviousNetworkOwner(previousOwners, x, y);
+                    FlickDomPlayerId nextOwner = owners[x, y];
+                    if (previousOwner != nextOwner)
+                    {
+                        CellOwnerChanged?.Invoke(new Vector2Int(x, y), previousOwner, nextOwner);
+                    }
+                }
+            }
+
+            MapChanged?.Invoke();
+        }
+
+        private void ApplyNetworkOwnedCells(FlickDomPlayerId owner, IReadOnlyList<Vector2Int> cells)
+        {
+            if (cells == null)
+            {
+                return;
+            }
+
+            List<Vector2Int> ownedCells = GetMutableCells(owner);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Vector2Int cell = cells[i];
+                if (!IsValidCell(cell) || owners[cell.x, cell.y] != FlickDomPlayerId.None)
+                {
+                    continue;
+                }
+
+                owners[cell.x, cell.y] = owner;
+                ownedCells.Add(cell);
+            }
+        }
+
+        private static FlickDomPlayerId GetPreviousNetworkOwner(FlickDomPlayerId[,] previousOwners, int x, int y)
+        {
+            if (previousOwners == null
+                || x < 0
+                || y < 0
+                || x >= previousOwners.GetLength(0)
+                || y >= previousOwners.GetLength(1))
+            {
+                return FlickDomPlayerId.None;
+            }
+
+            return previousOwners[x, y];
+        }
+
         private void EnsureGrid()
         {
             if (owners == null || owners.GetLength(0) != boardSize || owners.GetLength(1) != boardSize)

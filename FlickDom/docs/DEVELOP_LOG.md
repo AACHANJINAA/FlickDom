@@ -74,3 +74,14 @@
   - 런타임 자동 복제 말에서 중복 `TurnBasedFlickPiece` 컴포넌트를 제거하는 안전장치를 추가하고, Host의 Transform 동기화가 같은 `Owner/PieceId`를 중복 송신하지 않도록 보강했다.
   - Host가 직접 플릭한 말도 `FlickAccepted`로 Client에 알려 양쪽의 말 순서 인덱스가 어긋나지 않도록 보완했다.
   - Client가 `FlickAccepted`를 받은 말을 동적 물리로 다시 켜지 않고 Host Transform을 따라가는 시각 동기화 대상으로만 유지하도록 수정했다.
+
+## 2026-07-26
+
+- [2026-07-26 00시]
+  - Client의 타일 배치 클릭을 `PlacementRequest` 메시지로 Host에 보내고, Host가 `TokenMapManager.TryClaimCell`로 점유를 확정하도록 변경했다.
+  - Host가 확정한 배치 결과를 `PlacementAccepted`로 Client에 알리고, 전체 보드 점령 상태를 `BoardState` 스냅샷으로 동기화하도록 추가했다.
+  - Client의 `TokenMapGridView`가 Host 보드 스냅샷을 받아 점령 타일 표시를 갱신하도록 `TokenMapManager`에 네트워크 보드 적용 API를 추가했다.
+  - Client의 로컬 카드 매칭/점수 계산을 막고, Host가 `ScoreState`로 P1/P2 점수와 승리자를 브로드캐스트하도록 추가했다.
+  - Host의 배치 후보 셀 목록을 `PlacementCandidates` 메시지로 Client에 동기화해 P2가 자신의 배치 후보 타일을 선택할 수 있도록 수정했다.
+  - Host의 말 사망 상태를 Transform 동기화에 포함해 보드 밖으로 나간 말이 Client 화면에서도 제거되도록 수정했다.
+  - `docs/SERVER_TODO.md`를 현재 구현 상태 기준으로 갱신했다.

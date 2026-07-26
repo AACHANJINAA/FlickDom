@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -179,6 +180,22 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanProvidePlacementInput(candidate.Owner))
+            {
+                return;
+            }
+
+            if (NeedsRelocationSource(candidate.Owner, cell))
+            {
+                BeginRelocationSourceSelection(candidate, cell);
+                return;
+            }
+
+            if (TrySubmitNetworkPlacementRequest(candidate, cell, null))
+            {
+                return;
+            }
+
             bool placed = gameModeManager.TryApplyCandidatePlacement(
                 candidate,
                 cell,
@@ -202,6 +219,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            NotifyNetworkPlacementApplied(candidate, result);
             CompleteCandidatePlacement(candidate, result.RelocatedOwnToken ? relocationCompleteText : claimCompleteText);
 
             if (logSelections)
@@ -219,6 +237,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanProvidePlacementInput(pendingRelocationCandidate.Owner))
+            {
+                return;
+            }
+
             if (tokenMapManager.GetOwner(cell) != pendingRelocationCandidate.Owner)
             {
                 if (logSelections)
@@ -227,6 +250,11 @@ namespace FlickDom.Gameplay
                 }
 
                 SetSelectionMessage(invalidRelocationText);
+                return;
+            }
+
+            if (TrySubmitNetworkPlacementRequest(pendingRelocationCandidate, pendingRelocationDestination, cell))
+            {
                 return;
             }
 
@@ -248,8 +276,77 @@ namespace FlickDom.Gameplay
             }
 
             PiecePlacementCandidate completedCandidate = pendingRelocationCandidate;
+            NotifyNetworkPlacementApplied(completedCandidate, result);
             ClearPendingRelocation();
             CompleteCandidatePlacement(completedCandidate, relocationCompleteText);
+        }
+
+        public bool TryApplyNetworkPlacementRequest(
+            FlickDomPlayerId owner,
+            string pieceId,
+            Vector2Int destination,
+            Vector2Int? relocationSource,
+            out TokenPlacementResult result)
+        {
+            result = new TokenPlacementResult(TokenPlacementStatus.InvalidCell, owner, destination);
+
+            if (gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.PlacementSelection
+                || string.IsNullOrEmpty(pieceId))
+            {
+                return false;
+            }
+
+            PiecePlacementCandidate candidate = FindCandidateByPiece(owner, pieceId);
+            if (candidate == null || resolvedCandidates.Contains(candidate) || !candidate.ContainsCell(destination))
+            {
+                return false;
+            }
+
+            bool placed = gameModeManager.TryApplyCandidatePlacement(candidate, destination, relocationSource, out result);
+            if (!placed || !result.IsSuccess)
+            {
+                return false;
+            }
+
+            if (relocationSource.HasValue)
+            {
+                ClearPendingRelocation();
+            }
+
+            CompleteCandidatePlacement(candidate, result.RelocatedOwnToken ? relocationCompleteText : claimCompleteText);
+            return true;
+        }
+
+        public void ApplyNetworkPlacementAccepted(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
+        {
+            PiecePlacementCandidate candidate = FindCandidateByPiece(owner, pieceId);
+            if (candidate == null || resolvedCandidates.Contains(candidate))
+            {
+                return;
+            }
+
+            if (relocationSource.HasValue)
+            {
+                ClearPendingRelocation();
+            }
+
+            CompleteCandidatePlacement(candidate, relocationSource.HasValue ? relocationCompleteText : claimCompleteText);
+
+            if (logSelections)
+            {
+                Debug.Log("[PlacementSelect] Network accepted " + owner + " placement for " + pieceId + " at " + destination + ".", this);
+            }
+        }
+
+        public void RefreshNetworkPlacementCandidates()
+        {
+            if (!selectionActive)
+            {
+                return;
+            }
+
+            RefreshActiveCandidateHighlight();
         }
 
         private PiecePlacementCandidate FindCandidateForCell(Vector2Int cell)
@@ -266,6 +363,28 @@ namespace FlickDom.Gameplay
             {
                 PiecePlacementCandidate candidate = candidates[i];
                 if (candidate != null && !resolvedCandidates.Contains(candidate) && candidate.ContainsCell(cell))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private PiecePlacementCandidate FindCandidateByPiece(FlickDomPlayerId owner, string pieceId)
+        {
+            if (gameModeManager == null || string.IsNullOrEmpty(pieceId))
+            {
+                return null;
+            }
+
+            IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                PiecePlacementCandidate candidate = candidates[i];
+                if (candidate != null
+                    && candidate.Owner == owner
+                    && string.Equals(candidate.PieceId, pieceId, System.StringComparison.Ordinal))
                 {
                     return candidate;
                 }
@@ -386,6 +505,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanControlLocalGameState())
+            {
+                return;
+            }
+
             IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
             if (candidates.Count > 0 && resolvedCandidates.Count >= candidates.Count)
             {
@@ -399,6 +523,11 @@ namespace FlickDom.Gameplay
 
         private void AdvanceToNextRoundForLocalTest()
         {
+            if (!CanControlLocalGameState())
+            {
+                return;
+            }
+
             if (gameModeManager.CurrentState == FlickDomGameState.CardMatch)
             {
                 gameModeManager.CompleteCardMatch();
@@ -517,6 +646,54 @@ namespace FlickDom.Gameplay
             }
 
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private static bool CanControlLocalGameState()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalStateControl();
+        }
+
+        private bool NeedsRelocationSource(FlickDomPlayerId owner, Vector2Int destination)
+        {
+            if (tokenMapManager == null
+                || owner == FlickDomPlayerId.None
+                || tokenMapManager.GetOwner(destination) == owner
+                || !tokenMapManager.LimitOwnedCellsPerPlayer)
+            {
+                return false;
+            }
+
+            return tokenMapManager.GetOwnedTokenCount(owner) >= tokenMapManager.MaxTokensPerPlayer;
+        }
+
+        private static bool CanProvidePlacementInput(FlickDomPlayerId owner)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalInputFor(owner);
+        }
+
+        private static bool TrySubmitNetworkPlacementRequest(PiecePlacementCandidate candidate, Vector2Int destination, Vector2Int? relocationSource)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsClientOnly || candidate == null)
+            {
+                return false;
+            }
+
+            bootstrap.SubmitPlacementRequestToHost(candidate.Owner, candidate.PieceId, destination, relocationSource);
+            return true;
+        }
+
+        private static void NotifyNetworkPlacementApplied(PiecePlacementCandidate candidate, TokenPlacementResult result)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsHost || candidate == null || !result.IsSuccess)
+            {
+                return;
+            }
+
+            bootstrap.NotifyHostPlacementApplied(candidate.Owner, candidate.PieceId, result.Destination, result.RelocationSource);
         }
 
         private bool CanRenderText(Font candidate, string sampleText)

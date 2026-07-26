@@ -332,6 +332,23 @@ namespace FlickDom.Gameplay
             pendingPlacementCandidates.Clear();
         }
 
+        public void ApplyNetworkPlacementCandidates(IReadOnlyList<PiecePlacementCandidate> candidates)
+        {
+            pendingPlacementCandidates.Clear();
+            if (candidates == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i] != null)
+                {
+                    pendingPlacementCandidates.Add(candidates[i]);
+                }
+            }
+        }
+
         public bool RemoveStoppedPieceCandidate(FlickDomPlayerId player, string pieceId)
         {
             if (player == FlickDomPlayerId.None || string.IsNullOrEmpty(pieceId))

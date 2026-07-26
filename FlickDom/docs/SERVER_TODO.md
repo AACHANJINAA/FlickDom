@@ -55,6 +55,7 @@
 - [O] Client가 `FlickAccepted` 기준으로 순서 인덱스와 launched 상태 갱신
 - [O] Host가 직접 플릭한 P1 말도 Client에 `FlickAccepted` 전송
 - [O] Client에서 승인된 말은 자체 물리를 켜지 않고 Host Transform follower로 유지
+- [O] Host의 말 사망/삭제 상태를 Transform 동기화에 포함
 - [ ] 플릭 힘/방향 범위 검증 강화
 - [ ] 패킷 지연 시 위치 보간 처리
 
@@ -68,21 +69,21 @@
 
 ## Placement And Tile Sync
 
-- [ ] Host만 배치 후보 셀을 계산하도록 고정
-- [ ] Host가 후보 셀 목록을 Client에 브로드캐스트
-- [ ] Client의 타일 클릭을 Host에 배치 요청으로 전송
-- [ ] Host가 `TokenMapManager.TryClaimCell`로 점유 확정
-- [ ] 확정된 점령칸, 이전 소유자, 재배치 source를 Client에 브로드캐스트
-- [ ] Client `TokenMapGridView`가 Host 보드 상태만 표시하도록 변경
-- [ ] 재배치가 필요한 경우 Client 요청/Host 승인 흐름 추가
+- [O] Host만 배치 후보 셀을 계산하도록 고정
+- [O] Host가 후보 셀 목록을 Client에 브로드캐스트
+- [O] Client의 타일 클릭을 Host에 배치 요청으로 전송
+- [O] Host가 `TokenMapManager.TryClaimCell`로 점유 확정
+- [O] 확정된 점령칸, 이전 소유자, 재배치 source를 Client에 브로드캐스트
+- [O] Client `TokenMapGridView`가 Host 보드 상태를 스냅샷으로 적용하도록 변경
+- [O] 재배치가 필요한 경우 Client 요청/Host 승인 흐름 추가
 
 ## Score And Card Sync
 
-- [ ] Host만 카드 매칭과 점수 계산 수행
-- [ ] `PatternCardManager`의 P1/P2 점수 상태를 Client에 동기화
+- [O] Host만 카드 매칭과 점수 계산 수행
+- [O] `PatternCardManager`의 P1/P2 점수 상태를 Client에 동기화
 - [ ] 활성 카드, 완료 카드, 카드 라운드 변경 상태 동기화
-- [ ] 승리자와 최종 점수 동기화
-- [ ] `PlayerScoreHud`가 로컬 계산이 아니라 Host 동기화 값을 표시하도록 변경
+- [O] 승리자와 최종 점수 동기화
+- [O] `PlayerScoreHud`가 Host 점수 스냅샷으로 갱신되도록 변경
 - [ ] 승리 후 재시작/메뉴 복귀 네트워크 흐름 정의
 
 ## Session Lifecycle

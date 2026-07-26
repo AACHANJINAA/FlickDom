@@ -1,4 +1,5 @@
 using System;
+using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -184,7 +185,7 @@ namespace FlickDom.Gameplay
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
+            if (keyboard == null || !CanControlScoreState())
             {
                 return;
             }
@@ -387,6 +388,11 @@ namespace FlickDom.Gameplay
 
         private bool CanScoreNow()
         {
+            if (!CanControlScoreState())
+            {
+                return false;
+            }
+
             if (gameModeManager == null)
             {
                 return true;
@@ -394,6 +400,26 @@ namespace FlickDom.Gameplay
 
             return gameModeManager.CurrentState == FlickDomGameState.PlacementSelection
                 || gameModeManager.CurrentState == FlickDomGameState.CardMatch;
+        }
+
+        public void ApplyNetworkScoreSnapshot(int nextPlayer1Score, int nextPlayer2Score, FlickDomPlayerId nextWinner)
+        {
+            FlickDomPlayerId previousWinner = winner;
+            player1Score = Mathf.Max(0, nextPlayer1Score);
+            player2Score = Mathf.Max(0, nextPlayer2Score);
+            winner = nextWinner;
+            ScoreChanged?.Invoke(FlickDomPlayerId.None, 0, player1Score, player2Score);
+
+            if (winner != FlickDomPlayerId.None && previousWinner != winner)
+            {
+                MatchWon?.Invoke(winner, player1Score, player2Score);
+            }
+        }
+
+        private static bool CanControlScoreState()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap == null || bootstrap.AllowsLocalStateControl();
         }
 
         private void EnsureRuntimeFallbackDecks()

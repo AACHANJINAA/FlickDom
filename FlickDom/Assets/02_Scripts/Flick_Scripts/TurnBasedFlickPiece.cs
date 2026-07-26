@@ -609,6 +609,14 @@ namespace FlickDom.Gameplay
             }
         }
 
+        public void ApplyNetworkState(bool networkIsDead)
+        {
+            if (networkIsDead)
+            {
+                MarkDeadAfterExternalBoardExit();
+            }
+        }
+
         public void MarkNetworkFlickAccepted()
         {
             launchedThisTurn = true;

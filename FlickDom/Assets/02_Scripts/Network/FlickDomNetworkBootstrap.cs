@@ -39,12 +39,20 @@ namespace FlickDom.Networking
         private const string FlickAcceptedMessageName = "FlickDom.FlickAccepted";
         private const string PieceOrderSelectionMessageName = "FlickDom.PieceOrderSelection";
         private const string PieceTransformMessageName = "FlickDom.PieceTransform";
+        private const string PlacementRequestMessageName = "FlickDom.PlacementRequest";
+        private const string PlacementAcceptedMessageName = "FlickDom.PlacementAccepted";
+        private const string PlacementCandidatesMessageName = "FlickDom.PlacementCandidates";
+        private const string BoardStateMessageName = "FlickDom.BoardState";
+        private const string ScoreStateMessageName = "FlickDom.ScoreState";
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
         public static FlickDomNetworkBootstrap Active { get; private set; }
 
         private GameModeManager gameModeManager;
+        private TokenMapManager tokenMapManager;
+        private TokenMapPlacementSelector placementSelector;
+        private PatternCardManager patternCardManager;
         private string addressInput = "127.0.0.1";
         private string portInput = "7777";
         private bool startGameMessageHandlerRegistered;
@@ -54,7 +62,13 @@ namespace FlickDom.Networking
         private bool flickAcceptedMessageHandlerRegistered;
         private bool pieceOrderSelectionMessageHandlerRegistered;
         private bool pieceTransformMessageHandlerRegistered;
+        private bool placementRequestMessageHandlerRegistered;
+        private bool placementAcceptedMessageHandlerRegistered;
+        private bool placementCandidatesMessageHandlerRegistered;
+        private bool boardStateMessageHandlerRegistered;
+        private bool scoreStateMessageHandlerRegistered;
         private bool gameModeEventsSubscribed;
+        private bool patternCardEventsSubscribed;
         private bool networkGameStarted;
         private bool localGameStartedFromNetwork;
         private int lobbyPlayerCount;
@@ -113,6 +127,9 @@ namespace FlickDom.Networking
             ResolveNetworkManager();
             ConfigureNetworkManager();
             ResolveGameModeManager();
+            ResolveTokenMapManager();
+            ResolvePlacementSelector();
+            ResolvePatternCardManager();
             ConfigureGameModeAutoStart();
             addressInput = connectAddress;
             portInput = port.ToString();
@@ -146,6 +163,7 @@ namespace FlickDom.Networking
         {
             SubscribeNetworkEvents(false);
             SubscribeGameModeEvents(false);
+            SubscribePatternCardEvents(false);
         }
 
         private void OnDestroy()
@@ -421,6 +439,34 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Piece order selection sent to Host. Player: " + owner + ", Piece: " + pieceId + ".", this);
         }
 
+        public void SubmitPlacementRequestToHost(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
+        {
+            if (networkManager == null
+                || !networkManager.IsClient
+                || networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
+            bool hasRelocationSource = relocationSource.HasValue;
+            Vector2Int source = relocationSource.GetValueOrDefault();
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 6 + sizeof(bool) + 64, Allocator.Temp))
+            {
+                writer.WriteValueSafe((int)owner);
+                writer.WriteValueSafe(fixedPieceId);
+                writer.WriteValueSafe(destination.x);
+                writer.WriteValueSafe(destination.y);
+                writer.WriteValueSafe(hasRelocationSource);
+                writer.WriteValueSafe(source.x);
+                writer.WriteValueSafe(source.y);
+                networkManager.CustomMessagingManager.SendNamedMessage(PlacementRequestMessageName, NetworkManager.ServerClientId, writer);
+            }
+
+            Debug.Log("[Network] Placement request sent to Host. Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
+        }
+
         public void NotifyHostPieceOrderSelected(FlickDomPlayerId owner, string pieceId)
         {
             if (networkManager == null
@@ -446,6 +492,22 @@ namespace FlickDom.Networking
             SendFlickAcceptedToClients(owner, pieceId);
             SendAllPieceTransformsToClients();
             Debug.Log("[Network] Flick accepted broadcast. Player: " + owner + ", Piece: " + pieceId + ".", this);
+        }
+
+        public void NotifyHostPlacementApplied(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            SendPlacementAcceptedToClients(owner, pieceId, destination, relocationSource);
+            BroadcastBoardState();
+            BroadcastScoreState();
+            BroadcastGameState();
+            Debug.Log("[Network] Placement accepted broadcast. Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
         }
 
         private void ResolveNetworkManager()
@@ -498,6 +560,30 @@ namespace FlickDom.Networking
             if (gameModeManager == null)
             {
                 gameModeManager = FindAnyObjectByType<GameModeManager>();
+            }
+        }
+
+        private void ResolveTokenMapManager()
+        {
+            if (tokenMapManager == null)
+            {
+                tokenMapManager = FindAnyObjectByType<TokenMapManager>();
+            }
+        }
+
+        private void ResolvePlacementSelector()
+        {
+            if (placementSelector == null)
+            {
+                placementSelector = FindAnyObjectByType<TokenMapPlacementSelector>();
+            }
+        }
+
+        private void ResolvePatternCardManager()
+        {
+            if (patternCardManager == null)
+            {
+                patternCardManager = FindAnyObjectByType<PatternCardManager>();
             }
         }
 
@@ -610,6 +696,9 @@ namespace FlickDom.Networking
             {
                 SendStartGameMessageToClient(clientId);
                 BroadcastGameState();
+                BroadcastPlacementCandidates();
+                BroadcastBoardState();
+                BroadcastScoreState();
                 SendAllPieceTransformsToClient(clientId);
             }
         }
@@ -714,6 +803,9 @@ namespace FlickDom.Networking
             StartGameLocally();
             SendStartGameMessageToClients();
             BroadcastGameState();
+            BroadcastPlacementCandidates();
+            BroadcastBoardState();
+            BroadcastScoreState();
             SendAllPieceTransformsToClients();
             Debug.Log("[Network] Host started network game for " + GetHostConnectedPlayerCount() + " players.", this);
         }
@@ -742,7 +834,11 @@ namespace FlickDom.Networking
             gameModeManager.StartLocalGame();
             localGameStartedFromNetwork = true;
             SubscribeGameModeEvents(true);
+            SubscribePatternCardEvents(true);
             BroadcastGameState();
+            BroadcastPlacementCandidates();
+            BroadcastBoardState();
+            BroadcastScoreState();
             Debug.Log("[Network] Local GameModeManager started.", this);
         }
 
@@ -852,6 +948,41 @@ namespace FlickDom.Networking
                 pieceTransformMessageHandlerRegistered = true;
                 Debug.Log("[Network] Piece transform message handler registered.", this);
             }
+
+            if (!placementRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlacementRequestMessageName, HandlePlacementRequestMessage);
+                placementRequestMessageHandlerRegistered = true;
+                Debug.Log("[Network] Placement request message handler registered.", this);
+            }
+
+            if (!placementAcceptedMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlacementAcceptedMessageName, HandlePlacementAcceptedMessage);
+                placementAcceptedMessageHandlerRegistered = true;
+                Debug.Log("[Network] Placement accepted message handler registered.", this);
+            }
+
+            if (!placementCandidatesMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlacementCandidatesMessageName, HandlePlacementCandidatesMessage);
+                placementCandidatesMessageHandlerRegistered = true;
+                Debug.Log("[Network] Placement candidates message handler registered.", this);
+            }
+
+            if (!boardStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(BoardStateMessageName, HandleBoardStateMessage);
+                boardStateMessageHandlerRegistered = true;
+                Debug.Log("[Network] Board state message handler registered.", this);
+            }
+
+            if (!scoreStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ScoreStateMessageName, HandleScoreStateMessage);
+                scoreStateMessageHandlerRegistered = true;
+                Debug.Log("[Network] Score state message handler registered.", this);
+            }
         }
 
         private void UnregisterNetworkMessageHandlers()
@@ -901,6 +1032,36 @@ namespace FlickDom.Networking
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PieceTransformMessageName);
                 pieceTransformMessageHandlerRegistered = false;
+            }
+
+            if (placementRequestMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlacementRequestMessageName);
+                placementRequestMessageHandlerRegistered = false;
+            }
+
+            if (placementAcceptedMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlacementAcceptedMessageName);
+                placementAcceptedMessageHandlerRegistered = false;
+            }
+
+            if (placementCandidatesMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlacementCandidatesMessageName);
+                placementCandidatesMessageHandlerRegistered = false;
+            }
+
+            if (boardStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(BoardStateMessageName);
+                boardStateMessageHandlerRegistered = false;
+            }
+
+            if (scoreStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ScoreStateMessageName);
+                scoreStateMessageHandlerRegistered = false;
             }
         }
 
@@ -1181,12 +1342,13 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(piece.PieceId ?? string.Empty);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 7, Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 7 + sizeof(bool), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)piece.Owner);
                 writer.WriteValueSafe(fixedPieceId);
                 writer.WriteValueSafe(piece.transform.position);
                 writer.WriteValueSafe(piece.transform.rotation);
+                writer.WriteValueSafe(piece.IsDead);
                 networkManager.CustomMessagingManager.SendNamedMessage(PieceTransformMessageName, clients, writer);
             }
         }
@@ -1208,12 +1370,395 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
             reader.ReadValueSafe(out Vector3 position);
             reader.ReadValueSafe(out Quaternion rotation);
+            reader.ReadValueSafe(out bool isDead);
 
             TurnBasedFlickPiece piece = FindFlickPiece((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
             if (piece != null)
             {
                 piece.ApplyNetworkPose(position, rotation);
+                piece.ApplyNetworkState(isDead);
             }
+        }
+
+        private void HandlePlacementRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out int destinationX);
+            reader.ReadValueSafe(out int destinationY);
+            reader.ReadValueSafe(out bool hasRelocationSource);
+            reader.ReadValueSafe(out int sourceX);
+            reader.ReadValueSafe(out int sourceY);
+
+            FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
+            string pieceId = fixedPieceId.ToString();
+            Vector2Int destination = new Vector2Int(destinationX, destinationY);
+            Vector2Int? relocationSource = hasRelocationSource
+                ? new Vector2Int(sourceX, sourceY)
+                : (Vector2Int?)null;
+
+            if (senderClientId != networkManager.LocalClientId && owner != FlickDomPlayerId.Player2)
+            {
+                Debug.LogWarning("[Network] Rejected placement request from client " + senderClientId + ". Client may only request Player2 placement.", this);
+                return;
+            }
+
+            ResolvePlacementSelector();
+            if (placementSelector == null
+                || !placementSelector.TryApplyNetworkPlacementRequest(owner, pieceId, destination, relocationSource, out TokenPlacementResult result))
+            {
+                Debug.LogWarning("[Network] Rejected placement request from client " + senderClientId + ". Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
+                return;
+            }
+
+            SendPlacementAcceptedToClients(owner, pieceId, result.Destination, result.RelocationSource);
+            BroadcastBoardState();
+            BroadcastScoreState();
+            BroadcastGameState();
+            Debug.Log("[Network] Host accepted placement request from client " + senderClientId + ". Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
+        }
+
+        private void SendPlacementAcceptedToClients(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
+            bool hasRelocationSource = relocationSource.HasValue;
+            Vector2Int source = relocationSource.GetValueOrDefault();
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 6 + sizeof(bool) + 64, Allocator.Temp))
+            {
+                writer.WriteValueSafe((int)owner);
+                writer.WriteValueSafe(fixedPieceId);
+                writer.WriteValueSafe(destination.x);
+                writer.WriteValueSafe(destination.y);
+                writer.WriteValueSafe(hasRelocationSource);
+                writer.WriteValueSafe(source.x);
+                writer.WriteValueSafe(source.y);
+                networkManager.CustomMessagingManager.SendNamedMessage(PlacementAcceptedMessageName, clients, writer);
+            }
+        }
+
+        private void HandlePlacementAcceptedMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out int destinationX);
+            reader.ReadValueSafe(out int destinationY);
+            reader.ReadValueSafe(out bool hasRelocationSource);
+            reader.ReadValueSafe(out int sourceX);
+            reader.ReadValueSafe(out int sourceY);
+
+            FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
+            string pieceId = fixedPieceId.ToString();
+            Vector2Int destination = new Vector2Int(destinationX, destinationY);
+            Vector2Int? relocationSource = hasRelocationSource
+                ? new Vector2Int(sourceX, sourceY)
+                : (Vector2Int?)null;
+
+            ResolvePlacementSelector();
+            if (placementSelector != null)
+            {
+                placementSelector.ApplyNetworkPlacementAccepted(owner, pieceId, destination, relocationSource);
+            }
+
+            Debug.Log("[Network] Placement accepted received from Host. Player: " + owner + ", Piece: " + pieceId + ", Destination: " + destination + ".", this);
+        }
+
+        private void BroadcastPlacementCandidates()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            ResolveGameModeManager();
+            if (gameModeManager == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            FastBufferWriter writer = new FastBufferWriter(CalculatePlacementCandidatesCapacity(candidates), Allocator.Temp);
+            try
+            {
+                writer.WriteValueSafe(candidates.Count);
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    WritePlacementCandidate(ref writer, candidates[i]);
+                }
+
+                networkManager.CustomMessagingManager.SendNamedMessage(PlacementCandidatesMessageName, clients, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+
+            Debug.Log("[Network] Placement candidates broadcast. Count: " + candidates.Count + ".", this);
+        }
+
+        private void HandlePlacementCandidatesMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int candidateCount);
+            List<PiecePlacementCandidate> candidates = new List<PiecePlacementCandidate>(Mathf.Max(0, candidateCount));
+            for (int i = 0; i < candidateCount; i++)
+            {
+                candidates.Add(ReadPlacementCandidate(ref reader));
+            }
+
+            ResolveGameModeManager();
+            if (gameModeManager != null)
+            {
+                gameModeManager.ApplyNetworkPlacementCandidates(candidates);
+            }
+
+            ResolvePlacementSelector();
+            if (placementSelector != null && gameModeManager != null && gameModeManager.CurrentState == FlickDomGameState.PlacementSelection)
+            {
+                placementSelector.RefreshNetworkPlacementCandidates();
+            }
+
+            Debug.Log("[Network] Placement candidates received from Host. Count: " + candidates.Count + ".", this);
+        }
+
+        private void BroadcastBoardState()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            ResolveTokenMapManager();
+            if (tokenMapManager == null)
+            {
+                return;
+            }
+
+            List<Vector2Int> player1Cells = tokenMapManager.GetOwnedCells(FlickDomPlayerId.Player1);
+            List<Vector2Int> player2Cells = tokenMapManager.GetOwnedCells(FlickDomPlayerId.Player2);
+            int capacity = sizeof(int) * (3 + (player1Cells.Count + player2Cells.Count) * 2);
+            FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp);
+            try
+            {
+                writer.WriteValueSafe(tokenMapManager.BoardSize);
+                WriteOwnedCells(ref writer, player1Cells);
+                WriteOwnedCells(ref writer, player2Cells);
+                networkManager.CustomMessagingManager.SendNamedMessage(BoardStateMessageName, clients, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+
+            Debug.Log("[Network] Board state broadcast. P1 cells: " + player1Cells.Count + ", P2 cells: " + player2Cells.Count + ".", this);
+        }
+
+        private void HandleBoardStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int boardSize);
+            List<Vector2Int> player1Cells = ReadOwnedCells(ref reader);
+            List<Vector2Int> player2Cells = ReadOwnedCells(ref reader);
+
+            ResolveTokenMapManager();
+            if (tokenMapManager != null)
+            {
+                tokenMapManager.ApplyNetworkOwnerGrid(boardSize, player1Cells, player2Cells);
+            }
+
+            Debug.Log("[Network] Board state received from Host. P1 cells: " + player1Cells.Count + ", P2 cells: " + player2Cells.Count + ".", this);
+        }
+
+        private void BroadcastScoreState()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            ResolvePatternCardManager();
+            if (patternCardManager == null)
+            {
+                return;
+            }
+
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 3, Allocator.Temp))
+            {
+                writer.WriteValueSafe(patternCardManager.Player1Score);
+                writer.WriteValueSafe(patternCardManager.Player2Score);
+                writer.WriteValueSafe((int)patternCardManager.Winner);
+                networkManager.CustomMessagingManager.SendNamedMessage(ScoreStateMessageName, clients, writer);
+            }
+
+            Debug.Log("[Network] Score state broadcast. P1: " + patternCardManager.Player1Score + ", P2: " + patternCardManager.Player2Score + ", Winner: " + patternCardManager.Winner + ".", this);
+        }
+
+        private void HandleScoreStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int player1Score);
+            reader.ReadValueSafe(out int player2Score);
+            reader.ReadValueSafe(out int winnerValue);
+
+            ResolvePatternCardManager();
+            if (patternCardManager != null)
+            {
+                patternCardManager.ApplyNetworkScoreSnapshot(player1Score, player2Score, (FlickDomPlayerId)winnerValue);
+            }
+
+            Debug.Log("[Network] Score state received from Host. P1: " + player1Score + ", P2: " + player2Score + ", Winner: " + (FlickDomPlayerId)winnerValue + ".", this);
+        }
+
+        private static void WriteOwnedCells(ref FastBufferWriter writer, IReadOnlyList<Vector2Int> cells)
+        {
+            int count = cells != null ? cells.Count : 0;
+            writer.WriteValueSafe(count);
+            for (int i = 0; i < count; i++)
+            {
+                writer.WriteValueSafe(cells[i].x);
+                writer.WriteValueSafe(cells[i].y);
+            }
+        }
+
+        private static List<Vector2Int> ReadOwnedCells(ref FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int count);
+            List<Vector2Int> cells = new List<Vector2Int>(Mathf.Max(0, count));
+            for (int i = 0; i < count; i++)
+            {
+                reader.ReadValueSafe(out int x);
+                reader.ReadValueSafe(out int y);
+                cells.Add(new Vector2Int(x, y));
+            }
+
+            return cells;
+        }
+
+        private static int CalculatePlacementCandidatesCapacity(IReadOnlyList<PiecePlacementCandidate> candidates)
+        {
+            int capacity = sizeof(int);
+            if (candidates == null)
+            {
+                return capacity;
+            }
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                PiecePlacementCandidate candidate = candidates[i];
+                int cellCount = candidate != null ? candidate.CandidateCells.Count : 0;
+                capacity += sizeof(int) + 64 + (sizeof(float) * 4) + sizeof(int) + (cellCount * sizeof(int) * 2);
+            }
+
+            return capacity;
+        }
+
+        private static void WritePlacementCandidate(ref FastBufferWriter writer, PiecePlacementCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                writer.WriteValueSafe((int)FlickDomPlayerId.None);
+                writer.WriteValueSafe(new FixedString64Bytes(string.Empty));
+                writer.WriteValueSafe(Vector3.zero);
+                writer.WriteValueSafe(0f);
+                writer.WriteValueSafe(0);
+                return;
+            }
+
+            FixedString64Bytes fixedPieceId = new FixedString64Bytes(candidate.PieceId ?? string.Empty);
+            writer.WriteValueSafe((int)candidate.Owner);
+            writer.WriteValueSafe(fixedPieceId);
+            writer.WriteValueSafe(candidate.WorldPosition);
+            writer.WriteValueSafe(candidate.TokenRadius);
+
+            IReadOnlyList<Vector2Int> cells = candidate.CandidateCells;
+            writer.WriteValueSafe(cells.Count);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                writer.WriteValueSafe(cells[i].x);
+                writer.WriteValueSafe(cells[i].y);
+            }
+        }
+
+        private static PiecePlacementCandidate ReadPlacementCandidate(ref FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out Vector3 worldPosition);
+            reader.ReadValueSafe(out float tokenRadius);
+            reader.ReadValueSafe(out int cellCount);
+
+            List<Vector2Int> cells = new List<Vector2Int>(Mathf.Max(0, cellCount));
+            for (int i = 0; i < cellCount; i++)
+            {
+                reader.ReadValueSafe(out int x);
+                reader.ReadValueSafe(out int y);
+                cells.Add(new Vector2Int(x, y));
+            }
+
+            return new PiecePlacementCandidate(
+                fixedPieceId.ToString(),
+                (FlickDomPlayerId)ownerValue,
+                worldPosition,
+                tokenRadius,
+                cells);
         }
 
         private List<ulong> GetRemoteClientIds()
@@ -1312,9 +1857,54 @@ namespace FlickDom.Networking
             gameModeEventsSubscribed = false;
         }
 
+        private void SubscribePatternCardEvents(bool subscribe)
+        {
+            ResolvePatternCardManager();
+            if (patternCardManager == null)
+            {
+                return;
+            }
+
+            if (subscribe)
+            {
+                if (patternCardEventsSubscribed)
+                {
+                    return;
+                }
+
+                patternCardManager.ScoreChanged += HandlePatternScoreChanged;
+                patternCardManager.MatchWon += HandlePatternMatchWon;
+                patternCardEventsSubscribed = true;
+                return;
+            }
+
+            if (!patternCardEventsSubscribed)
+            {
+                return;
+            }
+
+            patternCardManager.ScoreChanged -= HandlePatternScoreChanged;
+            patternCardManager.MatchWon -= HandlePatternMatchWon;
+            patternCardEventsSubscribed = false;
+        }
+
+        private void HandlePatternScoreChanged(FlickDomPlayerId player, int gainedScore, int player1Score, int player2Score)
+        {
+            BroadcastScoreState();
+        }
+
+        private void HandlePatternMatchWon(FlickDomPlayerId winner, int player1Score, int player2Score)
+        {
+            BroadcastScoreState();
+        }
+
         private void HandleGameModeStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
         {
             BroadcastGameState();
+            if (nextState == FlickDomGameState.PlacementSelection)
+            {
+                BroadcastPlacementCandidates();
+            }
         }
 
         private void HandleGameModeActivePlayerChanged(FlickDomPlayerId activePlayer)
