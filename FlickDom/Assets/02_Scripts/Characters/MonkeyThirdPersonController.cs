@@ -22,6 +22,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool inputEnabled = true;
         [SerializeField] private bool requireActivePlayer;
         [SerializeField] private GameModeManager gameModeManager;
+        [SerializeField] private bool autoSetupSlingshotPresenter = true;
+        [SerializeField] private MonkeySlingshotFlickPresenter slingshotPresenter;
 
         [Header("Movement")]
         [SerializeField] private Transform cameraTransform;
@@ -97,6 +99,7 @@ namespace FlickDom.Gameplay
 
             ApplyLegacySuriyunAnimationDefaults();
             CacheAnimationStates();
+            SetupSlingshotPresenter();
         }
 
         private void OnValidate()
@@ -140,6 +143,11 @@ namespace FlickDom.Gameplay
         public void SetOwner(FlickDomPlayerId playerId)
         {
             owner = playerId;
+
+            if (slingshotPresenter != null)
+            {
+                slingshotPresenter.SetOwner(playerId);
+            }
         }
 
         public void SetInputEnabled(bool enabled)
@@ -158,6 +166,33 @@ namespace FlickDom.Gameplay
             walkAnimationValue = 21;
             runAnimationValue = 18;
             CacheAnimationStates();
+
+            if (slingshotPresenter != null)
+            {
+                slingshotPresenter.UseSuriyunAnimationPreset();
+            }
+        }
+
+        private void SetupSlingshotPresenter()
+        {
+            if (!autoSetupSlingshotPresenter)
+            {
+                return;
+            }
+
+            if (slingshotPresenter == null
+                && !TryGetComponent(out slingshotPresenter))
+            {
+                slingshotPresenter = gameObject.AddComponent<MonkeySlingshotFlickPresenter>();
+            }
+
+            slingshotPresenter.SetOwner(owner);
+            MonkeyThirdPersonController[] sceneMonkeys =
+                FindObjectsByType<MonkeyThirdPersonController>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+            slingshotPresenter.SetReactToAllPlayers(sceneMonkeys.Length <= 1);
+            slingshotPresenter.UseSuriyunAnimationPreset();
         }
 
         private void ApplyLegacySuriyunAnimationDefaults()

@@ -33,7 +33,12 @@ namespace FlickDom.EditorTools
 
             for (int i = 0; i < selectedObjects.Length; i++)
             {
-                SetupMonkeyObject(selectedObjects[i], sceneCamera, cameraFollow, i);
+                SetupMonkeyObject(
+                    selectedObjects[i],
+                    sceneCamera,
+                    cameraFollow,
+                    i,
+                    selectedObjects.Length);
             }
 
             Debug.Log("Selected monkey controller setup complete.");
@@ -43,7 +48,8 @@ namespace FlickDom.EditorTools
             GameObject monkeyObject,
             Camera sceneCamera,
             MonkeyThirdPersonCameraFollow cameraFollow,
-            int selectionIndex)
+            int selectionIndex,
+            int selectionCount)
         {
             if (!monkeyObject)
             {
@@ -70,6 +76,13 @@ namespace FlickDom.EditorTools
             controller.SetInputEnabled(selectionIndex == 0);
             controller.UseSuriyunStandingAnimationPreset();
 
+            MonkeySlingshotFlickPresenter slingshotPresenter =
+                GetOrAddComponent<MonkeySlingshotFlickPresenter>(monkeyObject);
+            Undo.RecordObject(slingshotPresenter, "Configure Monkey Slingshot Presenter");
+            slingshotPresenter.SetOwner(selectionIndex == 0 ? FlickDomPlayerId.Player1 : FlickDomPlayerId.Player2);
+            slingshotPresenter.SetReactToAllPlayers(selectionCount == 1);
+            slingshotPresenter.UseSuriyunAnimationPreset();
+
             if (sceneCamera)
             {
                 controller.SetCameraTransform(sceneCamera.transform);
@@ -87,6 +100,7 @@ namespace FlickDom.EditorTools
             EditorUtility.SetDirty(body);
             EditorUtility.SetDirty(capsuleCollider);
             EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(slingshotPresenter);
             EditorUtility.SetDirty(monkeyObject);
         }
 

@@ -59,11 +59,13 @@ namespace FlickDom.Gameplay
         private Vector3 mouseEndPosition;
         private Vector3 initialPiecePosition;
         private Vector3 dragTargetPosition;
+        private Vector3 characterAimVector;
         private Vector3 queuedImpulse;
         private Vector3 flickStartPosition;
         private Quaternion flickStartRotation;
 
         private bool isDragging;
+        private bool characterAimActive;
         private bool launchQueued;
         private bool waitingForStop;
         private bool launchedThisTurn;
@@ -90,6 +92,10 @@ namespace FlickDom.Gameplay
         public event Action<TurnBasedFlickPiece> FlickStarted;
         public event Action<TurnBasedFlickPiece> SettledAfterFlick;
         public event Action<TurnBasedFlickPiece> InvalidatedAfterFlick;
+        public event Action<TurnBasedFlickPiece> FlickDragStarted;
+        public event Action<TurnBasedFlickPiece, Vector3, float> FlickDragUpdated;
+        public event Action<TurnBasedFlickPiece> FlickDragCancelled;
+        public event Action<TurnBasedFlickPiece, Vector3> FlickReleased;
 
         public FlickDomPlayerId Owner
         {
@@ -114,6 +120,11 @@ namespace FlickDom.Gameplay
         public bool HasLaunchedThisRound
         {
             get { return launchedThisTurn; }
+        }
+
+        public bool IsDragging
+        {
+            get { return isDragging; }
         }
 
         private void Awake()
@@ -165,6 +176,7 @@ namespace FlickDom.Gameplay
 
         private void OnDisable()
         {
+            CancelDragPresentation();
             HideFlickPreview();
 
             if (stateIndicatorObject != null)
@@ -240,7 +252,8 @@ namespace FlickDom.Gameplay
                     cachedRigidbody.angularVelocity = Vector3.zero;
                 }
 
-                cachedRigidbody.MovePosition(dragTargetPosition);
+                cachedRigidbody.MovePosition(
+                    characterAimActive ? initialPiecePosition : dragTargetPosition);
             }
 
             if (launchQueued)
@@ -408,7 +421,7 @@ namespace FlickDom.Gameplay
         public void ResetRoundUse()
         {
             ResetToFlickStartPose();
-            isDragging = false;
+            CancelDragPresentation();
             launchQueued = false;
             waitingForStop = false;
             launchedThisTurn = false;
@@ -467,7 +480,7 @@ namespace FlickDom.Gameplay
         public void BlockInputUntilPointerReleased()
         {
             waitForPointerReleaseBeforeInput = true;
-            isDragging = false;
+            CancelDragPresentation();
             launchQueued = false;
             HideFlickPreview();
         }
@@ -534,12 +547,24 @@ namespace FlickDom.Gameplay
             mouseStartPosition = GetMousePositionOnBoard();
             initialPiecePosition = transform.position;
             dragTargetPosition = initialPiecePosition;
+            characterAimVector = Vector3.zero;
+            characterAimActive = false;
             isDragging = true;
             ShowFlickPreview(Vector3.zero);
+            FlickDragStarted?.Invoke(this);
+            if (!characterAimActive)
+            {
+                FlickDragUpdated?.Invoke(this, Vector3.zero, 0f);
+            }
         }
 
         private void UpdateDragTarget()
         {
+            if (characterAimActive)
+            {
+                return;
+            }
+
             Vector3 currentMousePosition = GetMousePositionOnBoard();
             Vector3 pullVector = currentMousePosition - mouseStartPosition;
             pullVector.y = 0f;
@@ -550,17 +575,56 @@ namespace FlickDom.Gameplay
             }
 
             dragTargetPosition = initialPiecePosition + pullVector;
-            ShowFlickPreview(-pullVector);
+            Vector3 launchVector = -pullVector;
+            ShowFlickPreview(launchVector);
+            FlickDragUpdated?.Invoke(
+                this,
+                launchVector,
+                Mathf.Clamp01(launchVector.magnitude / maxDragDistance));
+        }
+
+        public bool TrySetCharacterAim(Vector3 launchVector)
+        {
+            if (!isDragging)
+            {
+                return false;
+            }
+
+            launchVector.y = 0f;
+            if (launchVector.magnitude > maxDragDistance)
+            {
+                launchVector = launchVector.normalized * maxDragDistance;
+            }
+
+            characterAimActive = true;
+            characterAimVector = launchVector;
+            dragTargetPosition = initialPiecePosition;
+            ShowFlickPreview(characterAimVector);
+            FlickDragUpdated?.Invoke(
+                this,
+                characterAimVector,
+                Mathf.Clamp01(characterAimVector.magnitude / maxDragDistance));
+            return true;
         }
 
         private void EndDragAndQueueFlick()
         {
-            mouseEndPosition = GetMousePositionOnBoard();
-            isDragging = false;
-            HideFlickPreview();
+            Vector3 forceVector;
+            if (characterAimActive)
+            {
+                forceVector = characterAimVector;
+            }
+            else
+            {
+                mouseEndPosition = GetMousePositionOnBoard();
+                forceVector = mouseStartPosition - mouseEndPosition;
+                forceVector.y = 0f;
+            }
 
-            Vector3 forceVector = mouseStartPosition - mouseEndPosition;
-            forceVector.y = 0f;
+            isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
+            HideFlickPreview();
 
             if (forceVector.magnitude > maxDragDistance)
             {
@@ -568,12 +632,26 @@ namespace FlickDom.Gameplay
             }
 
             queuedImpulse = forceVector * forceMultiplier;
+            FlickReleased?.Invoke(this, queuedImpulse);
             if (TrySubmitNetworkFlickRequest(queuedImpulse))
             {
                 return;
             }
 
             launchQueued = true;
+        }
+
+        private void CancelDragPresentation()
+        {
+            if (!isDragging)
+            {
+                return;
+            }
+
+            isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
+            FlickDragCancelled?.Invoke(this);
         }
 
         public bool TryQueueAuthoritativeFlick(Vector3 impulse)
@@ -623,6 +701,8 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             waitingForStop = false;
             isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
             HideFlickPreview();
             ParkWithoutCollision();
         }
@@ -698,6 +778,8 @@ namespace FlickDom.Gameplay
             }
 
             isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
             launchQueued = false;
             waitingForStop = false;
             invalidatedThisTurn = true;
@@ -736,6 +818,8 @@ namespace FlickDom.Gameplay
         private void StopDeadPieceSimulation()
         {
             isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
             launchQueued = false;
             waitingForStop = false;
             stoppedTimer = 0f;
