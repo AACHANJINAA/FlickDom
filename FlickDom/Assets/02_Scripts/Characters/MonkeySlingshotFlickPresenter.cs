@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 namespace FlickDom.Gameplay
 {
@@ -64,12 +65,26 @@ namespace FlickDom.Gameplay
         [SerializeField] private float stoneBandHeight = 0.12f;
         [SerializeField] private bool disableCollidersDuringPresentation = true;
 
+        [Header("Slingshot Launcher Model")]
+        [SerializeField] private GameObject launcherPrefab;
+        [SerializeField] private Material launcherMaterial;
+        [SerializeField] private Vector3 launcherScale = new Vector3(0.4f, 0.4f, 0.4f);
+        [SerializeField] private Vector3 launcherEulerOffset = new Vector3(0f, 90f, 0f);
+        [SerializeField] private Vector3 launcherStoneCenterOffset = Vector3.zero;
+        [FormerlySerializedAs("pouchPullDistance")]
+        [SerializeField] private float launcherGripForwardOffset = 0.28f;
+
         private readonly List<TurnBasedFlickPiece> boundPieces = new List<TurnBasedFlickPiece>(6);
         private Collider[] cachedColliders;
         private bool[] colliderEnabledBeforePresentation;
         private LineRenderer leftBand;
         private LineRenderer rightBand;
         private Material bandMaterial;
+        private GameObject launcherInstance;
+        private Transform launcherTransform;
+        private SlingshotMeshVisualRig launcherRig;
+        private Vector3 launcherStoneAnchorWorld;
+        private bool hasLauncherStoneAnchor;
         private Transform cachedTransform;
         private TurnBasedFlickPiece activePiece;
         private PresentationState state;
@@ -80,6 +95,8 @@ namespace FlickDom.Gameplay
         private Vector3 launchDirection;
         private Vector3 releaseStartPosition;
         private float releaseTimer;
+        private float currentNormalizedPower;
+        private float releaseStartPower;
         private int animationParameterHash = DefaultAnimationParameterHash;
         private int currentAnimationValue = int.MinValue;
         private bool hasHomePose;
@@ -128,6 +145,10 @@ namespace FlickDom.Gameplay
             returnRotationSpeed = Mathf.Max(0f, returnRotationSpeed);
             bandWidth = Mathf.Max(0.001f, bandWidth);
             gripHalfWidth = Mathf.Max(0f, gripHalfWidth);
+            launcherScale.x = Mathf.Max(0.001f, launcherScale.x);
+            launcherScale.y = Mathf.Max(0.001f, launcherScale.y);
+            launcherScale.z = Mathf.Max(0.001f, launcherScale.z);
+            launcherGripForwardOffset = Mathf.Max(0f, launcherGripForwardOffset);
             RefreshAnimationParameterHash();
         }
 
@@ -155,6 +176,12 @@ namespace FlickDom.Gameplay
             {
                 Destroy(bandMaterial);
                 bandMaterial = null;
+            }
+
+            if (launcherInstance != null)
+            {
+                Destroy(launcherInstance);
+                launcherInstance = null;
             }
         }
 
@@ -226,6 +253,39 @@ namespace FlickDom.Gameplay
             pullAnimationValue = 4;
             releaseAnimationValue = 37;
             RefreshAnimationParameterHash();
+        }
+
+        public void ConfigureLauncher(GameObject prefab, Material material)
+        {
+            if (launcherPrefab == prefab && launcherMaterial == material)
+            {
+                return;
+            }
+
+            launcherPrefab = prefab;
+            launcherMaterial = material;
+            if (launcherInstance != null)
+            {
+                Destroy(launcherInstance);
+                launcherInstance = null;
+                launcherTransform = null;
+                launcherRig = null;
+            }
+        }
+
+        public void ConfigureLauncherTransform(
+            Vector3 scale,
+            Vector3 eulerOffset,
+            Vector3 stoneCenterOffset,
+            float gripForwardOffset)
+        {
+            launcherScale = new Vector3(
+                Mathf.Max(0.001f, scale.x),
+                Mathf.Max(0.001f, scale.y),
+                Mathf.Max(0.001f, scale.z));
+            launcherEulerOffset = eulerOffset;
+            launcherStoneCenterOffset = stoneCenterOffset;
+            launcherGripForwardOffset = Mathf.Max(0f, gripForwardOffset);
         }
 
         private void CacheComponents()
@@ -334,6 +394,8 @@ namespace FlickDom.Gameplay
             activePiece = piece;
             launchDirection = GetInitialFacingDirection(piece);
             releaseTimer = 0f;
+            currentNormalizedPower = 0f;
+            releaseStartPower = 0f;
             positionVelocity = Vector3.zero;
             OverrideCharacterPhysics();
 
@@ -351,6 +413,7 @@ namespace FlickDom.Gameplay
 
             SetAnimation(pullAnimationValue);
             SetState(PresentationState.Pulling);
+            BeginLauncherPresentation();
             piece.TrySetCharacterAim(GetCharacterLaunchVector());
             UpdatePullBands();
         }
@@ -368,7 +431,13 @@ namespace FlickDom.Gameplay
                 launchDirection = launchVector.normalized;
             }
 
-            SetBandsVisible(showPullBands && normalizedPower > 0.001f);
+            currentNormalizedPower = Mathf.Clamp01(normalizedPower);
+            bool useLegacyBands = launcherRig == null || !launcherRig.HasDeformableBands;
+            SetBandsVisible(
+                showPullBands
+                && useLegacyBands
+                && currentNormalizedPower > 0.001f);
+            UpdateLauncherPose(1f);
         }
 
         private void HandleDragCancelled(TurnBasedFlickPiece piece)
@@ -406,6 +475,8 @@ namespace FlickDom.Gameplay
             activePiece = piece;
             launchDirection = GetInitialFacingDirection(piece);
             OverrideCharacterPhysics();
+            currentNormalizedPower = 1f;
+            BeginLauncherPresentation();
             BeginRelease();
         }
 
@@ -413,6 +484,7 @@ namespace FlickDom.Gameplay
         {
             releaseTimer = 0f;
             releaseStartPosition = cachedTransform.position;
+            releaseStartPower = launcherRig != null ? 1f : currentNormalizedPower;
             positionVelocity = Vector3.zero;
             SetBandsVisible(false);
             SetAnimation(releaseAnimationValue);
@@ -449,6 +521,7 @@ namespace FlickDom.Gameplay
 
             SyncKinematicBody();
             activePiece.TrySetCharacterAim(characterLaunchVector);
+            UpdateLauncherPose(1f);
             UpdatePullBands();
         }
 
@@ -550,6 +623,8 @@ namespace FlickDom.Gameplay
             float recoil = Mathf.Sin(normalizedTime * Mathf.PI) * recoilDistance;
             cachedTransform.position = releaseStartPosition - launchDirection * recoil;
             SyncKinematicBody();
+            float launcherReleaseTime = Mathf.Clamp01(normalizedTime * 3.5f);
+            UpdateLauncherPose(Mathf.Lerp(releaseStartPower, 0f, launcherReleaseTime));
 
             if (normalizedTime < 1f)
             {
@@ -591,6 +666,7 @@ namespace FlickDom.Gameplay
         private void StopPresentation(bool returnHome)
         {
             SetBandsVisible(false);
+            HideLauncher();
             SetAnimation(idleAnimationValue);
 
             if (returnHome && hasHomePose)
@@ -604,8 +680,11 @@ namespace FlickDom.Gameplay
 
         private void FinishPresentation()
         {
+            HideLauncher();
             activePiece = null;
             releaseTimer = 0f;
+            currentNormalizedPower = 0f;
+            releaseStartPower = 0f;
             positionVelocity = Vector3.zero;
             SetState(PresentationState.Idle);
             RestoreCharacterPhysics();
@@ -803,6 +882,11 @@ namespace FlickDom.Gameplay
 
         private void SetBandsVisible(bool visible)
         {
+            if (launcherRig != null && launcherRig.HasDeformableBands)
+            {
+                visible = false;
+            }
+
             if (visible)
             {
                 EnsurePullBands();
@@ -837,6 +921,124 @@ namespace FlickDom.Gameplay
             leftBand.SetPosition(1, stonePoint);
             rightBand.SetPosition(0, gripCenter + gripRight);
             rightBand.SetPosition(1, stonePoint);
+        }
+
+        private void BeginLauncherPresentation()
+        {
+            if (activePiece == null || !EnsureLauncherVisual())
+            {
+                return;
+            }
+
+            launcherInstance.SetActive(true);
+            launcherTransform.localScale = launcherScale;
+            Quaternion launcherRotation = Quaternion.LookRotation(
+                launchDirection,
+                Vector3.up) * Quaternion.Euler(launcherEulerOffset);
+            Vector3 targetPouchCenter =
+                activePiece.transform.position + launcherStoneCenterOffset;
+            launcherStoneAnchorWorld = targetPouchCenter;
+            hasLauncherStoneAnchor = true;
+
+            launcherTransform.SetPositionAndRotation(targetPouchCenter, launcherRotation);
+            if (launcherRig != null)
+            {
+                launcherRig.ResetPose();
+                AlignLauncherFrame(targetPouchCenter);
+                launcherRig.BeginPresentation(launchDirection);
+                UpdateLauncherPose(1f);
+            }
+        }
+
+        private void AlignLauncherFrame(Vector3 stoneCenter)
+        {
+            Vector3 frameAxis = launcherRig.FrameAxisWorld;
+            frameAxis.y = 0f;
+            Vector3 desiredFrameAxis = Vector3.Cross(Vector3.up, launchDirection);
+            desiredFrameAxis.y = 0f;
+            if (frameAxis.sqrMagnitude > MinDirectionSqr
+                && desiredFrameAxis.sqrMagnitude > MinDirectionSqr)
+            {
+                float correctionAngle = Vector3.SignedAngle(
+                    frameAxis,
+                    desiredFrameAxis,
+                    Vector3.up);
+                launcherTransform.rotation =
+                    Quaternion.AngleAxis(correctionAngle, Vector3.up)
+                    * launcherTransform.rotation;
+            }
+
+            launcherTransform.position +=
+                stoneCenter - launcherRig.RestPouchCenterWorld;
+
+            Vector3 frameCenterOffset = stoneCenter - launcherRig.FrameCenterWorld;
+            frameCenterOffset.y = 0f;
+            launcherTransform.position += frameCenterOffset;
+        }
+
+        private void UpdateLauncherPose(float pullBlend)
+        {
+            if (launcherRig == null
+                || launcherInstance == null
+                || !launcherInstance.activeSelf)
+            {
+                return;
+            }
+
+            Vector3 stoneCenter = hasLauncherStoneAnchor
+                ? launcherStoneAnchorWorld
+                : launcherRig.RestPouchCenterWorld;
+            Vector3 monkeyGrip = cachedTransform.position
+                + Vector3.up * gripHeight
+                + cachedTransform.forward * launcherGripForwardOffset;
+            launcherRig.SetPouchTarget(
+                launchDirection,
+                Vector3.Lerp(stoneCenter, monkeyGrip, Mathf.Clamp01(pullBlend)));
+        }
+
+        private bool EnsureLauncherVisual()
+        {
+            if (launcherInstance != null)
+            {
+                return true;
+            }
+
+            if (launcherPrefab == null)
+            {
+                return false;
+            }
+
+            launcherInstance = Instantiate(launcherPrefab);
+            launcherInstance.name = launcherPrefab.name + " (Runtime Launcher)";
+            launcherTransform = launcherInstance.transform;
+            launcherRig = launcherInstance.GetComponent<SlingshotMeshVisualRig>();
+            if (launcherRig == null)
+            {
+                launcherRig = launcherInstance.AddComponent<SlingshotMeshVisualRig>();
+            }
+
+            if (!launcherRig.TryInitialize(launcherMaterial))
+            {
+                launcherRig = null;
+            }
+
+            launcherInstance.SetActive(false);
+            return true;
+        }
+
+        private void HideLauncher()
+        {
+            hasLauncherStoneAnchor = false;
+
+            if (launcherRig != null)
+            {
+                launcherRig.ResetPose();
+            }
+
+            if (launcherInstance != null)
+            {
+                launcherInstance.SetActive(false);
+            }
         }
     }
 }

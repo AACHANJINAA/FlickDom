@@ -24,6 +24,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private GameModeManager gameModeManager;
         [SerializeField] private bool autoSetupSlingshotPresenter = true;
         [SerializeField] private MonkeySlingshotFlickPresenter slingshotPresenter;
+        [SerializeField] private GameObject slingshotLauncherPrefab;
+        [SerializeField] private Material slingshotLauncherMaterial;
 
         [Header("Movement")]
         [SerializeField] private Transform cameraTransform;
@@ -155,6 +157,21 @@ namespace FlickDom.Gameplay
             inputEnabled = enabled;
         }
 
+        public void ConfigureSlingshotLauncher(GameObject prefab, Material material)
+        {
+            slingshotLauncherPrefab = prefab;
+            slingshotLauncherMaterial = material;
+            if (slingshotPresenter != null)
+            {
+                slingshotPresenter.ConfigureLauncher(prefab, material);
+                slingshotPresenter.ConfigureLauncherTransform(
+                    new Vector3(0.4f, 0.4f, 0.4f),
+                    new Vector3(0f, 90f, 0f),
+                    Vector3.zero,
+                    0.28f);
+            }
+        }
+
         public void UseSuriyunStandingAnimationPreset()
         {
             useAnimationStates = false;
@@ -187,6 +204,14 @@ namespace FlickDom.Gameplay
             }
 
             slingshotPresenter.SetOwner(owner);
+            slingshotPresenter.ConfigureLauncher(
+                slingshotLauncherPrefab,
+                slingshotLauncherMaterial);
+            slingshotPresenter.ConfigureLauncherTransform(
+                new Vector3(0.4f, 0.4f, 0.4f),
+                new Vector3(0f, 90f, 0f),
+                Vector3.zero,
+                0.28f);
             MonkeyThirdPersonController[] sceneMonkeys =
                 FindObjectsByType<MonkeyThirdPersonController>(
                     FindObjectsInactive.Include,
