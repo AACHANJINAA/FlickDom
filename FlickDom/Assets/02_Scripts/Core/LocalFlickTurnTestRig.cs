@@ -17,9 +17,18 @@ namespace FlickDom.Gameplay
         [SerializeField] private Camera inputCamera;
         [SerializeField] private TurnBasedFlickPiece[] player1Pieces;
         [SerializeField] private TurnBasedFlickPiece[] player2Pieces;
+        [Header("Scene Authored Piece Layout")]
+        [Tooltip("Models placed directly in the scene. Array order becomes the default piece order and piece ID order.")]
+        [SerializeField] private Transform[] player1PieceObjects;
+        [SerializeField] private Transform[] player2PieceObjects;
+        [Tooltip("Adds the gameplay components required by a plain art model at runtime. Existing components are preserved.")]
+        [SerializeField] private bool configureAuthoredPieceComponents = true;
+        [Header("Token Data")]
         [SerializeField] private TokenData[] player1TokenDataSequence;
         [SerializeField] private TokenData[] player2TokenDataSequence;
+        [Header("Startup")]
         [SerializeField] private bool startGameOnPlay = true;
+        [Tooltip("Legacy fallback that clones a configured piece. Keep disabled when using scene-authored piece objects.")]
         [SerializeField] private bool autoCreateMissingPieces = true;
         [SerializeField] private int targetPiecesPerPlayer = 3;
         [SerializeField] private float generatedPieceSpacing = 1.1f;
@@ -62,7 +71,10 @@ namespace FlickDom.Gameplay
                 inputCamera = Camera.main;
             }
 
-            if (autoCreateMissingPieces)
+            player1Pieces = ResolveSceneAuthoredPieces(player1Pieces, player1PieceObjects);
+            player2Pieces = ResolveSceneAuthoredPieces(player2Pieces, player2PieceObjects);
+
+            if (autoCreateMissingPieces && !HasSceneAuthoredPieces())
             {
                 player1Pieces = EnsurePieceCount(player1Pieces, "Player1");
                 player2Pieces = EnsurePieceCount(player2Pieces, "Player2");
@@ -517,6 +529,134 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        private TurnBasedFlickPiece[] ResolveSceneAuthoredPieces(
+            TurnBasedFlickPiece[] configuredPieces,
+            Transform[] authoredPieceObjects)
+        {
+            if (!HasAnyTransform(authoredPieceObjects))
+            {
+                return configuredPieces;
+            }
+
+            TurnBasedFlickPiece[] resolvedPieces = new TurnBasedFlickPiece[authoredPieceObjects.Length];
+            for (int i = 0; i < authoredPieceObjects.Length; i++)
+            {
+                Transform authoredTransform = authoredPieceObjects[i];
+                if (authoredTransform == null)
+                {
+                    Debug.LogError("[TurnTest] A scene-authored piece reference is missing at index " + i + ".", this);
+                    continue;
+                }
+
+                resolvedPieces[i] = ResolveSceneAuthoredPiece(authoredTransform);
+            }
+
+            return resolvedPieces;
+        }
+
+        private TurnBasedFlickPiece ResolveSceneAuthoredPiece(Transform authoredTransform)
+        {
+            if (authoredTransform.TryGetComponent(out TurnBasedFlickPiece existingPiece))
+            {
+                return existingPiece;
+            }
+
+            if (!configureAuthoredPieceComponents)
+            {
+                Debug.LogError(
+                    "[TurnTest] " + authoredTransform.name
+                    + " has no TurnBasedFlickPiece. Enable authored-piece component setup or configure the object in the scene.",
+                    authoredTransform);
+                return null;
+            }
+
+            GameObject pieceObject = authoredTransform.gameObject;
+            EnsureAuthoredPieceCollider(pieceObject);
+
+            if (!pieceObject.TryGetComponent(out Rigidbody pieceRigidbody))
+            {
+                pieceRigidbody = pieceObject.AddComponent<Rigidbody>();
+                pieceRigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+                pieceRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                pieceRigidbody.constraints = RigidbodyConstraints.FreezeRotationX
+                    | RigidbodyConstraints.FreezeRotationZ;
+            }
+
+            if (!pieceObject.TryGetComponent(out TokenSetup _))
+            {
+                pieceObject.AddComponent<TokenSetup>();
+            }
+
+            if (!pieceObject.TryGetComponent(out FlickVisuals _))
+            {
+                pieceObject.AddComponent<FlickVisuals>();
+            }
+
+            return pieceObject.AddComponent<TurnBasedFlickPiece>();
+        }
+
+        private static void EnsureAuthoredPieceCollider(GameObject pieceObject)
+        {
+            if (pieceObject.TryGetComponent(out Collider _))
+            {
+                return;
+            }
+
+            MeshFilter meshFilter = pieceObject.GetComponent<MeshFilter>();
+            if (meshFilter != null && meshFilter.sharedMesh != null)
+            {
+                MeshCollider meshCollider = pieceObject.AddComponent<MeshCollider>();
+                meshCollider.sharedMesh = meshFilter.sharedMesh;
+                meshCollider.convex = true;
+                return;
+            }
+
+            Renderer pieceRenderer = pieceObject.GetComponentInChildren<Renderer>();
+            BoxCollider boxCollider = pieceObject.AddComponent<BoxCollider>();
+            if (pieceRenderer == null)
+            {
+                return;
+            }
+
+            Transform pieceTransform = pieceObject.transform;
+            boxCollider.center = pieceTransform.InverseTransformPoint(pieceRenderer.bounds.center);
+
+            Vector3 lossyScale = pieceTransform.lossyScale;
+            boxCollider.size = new Vector3(
+                DivideByNonZeroScale(pieceRenderer.bounds.size.x, lossyScale.x),
+                DivideByNonZeroScale(pieceRenderer.bounds.size.y, lossyScale.y),
+                DivideByNonZeroScale(pieceRenderer.bounds.size.z, lossyScale.z));
+        }
+
+        private static float DivideByNonZeroScale(float value, float scale)
+        {
+            float absoluteScale = Mathf.Abs(scale);
+            return absoluteScale > 0.0001f ? value / absoluteScale : value;
+        }
+
+        private bool HasSceneAuthoredPieces()
+        {
+            return HasAnyTransform(player1PieceObjects) || HasAnyTransform(player2PieceObjects);
+        }
+
+        private static bool HasAnyTransform(Transform[] transforms)
+        {
+            if (transforms == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < transforms.Length; i++)
+            {
+                if (transforms[i] != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void SubscribePieces(TurnBasedFlickPiece[] pieces, bool subscribe)

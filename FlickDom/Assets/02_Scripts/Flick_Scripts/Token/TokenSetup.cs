@@ -10,7 +10,10 @@ public class TokenSetup : MonoBehaviour
     // FlickVisuals가 Start()에서 머티리얼을 캐싱하기 전에, 먼저 머티리얼과 물리 속성을 세팅해야 하므로 Awake()를 사용합니다.
     void Awake()
     {
-        ApplyTokenData();
+        if (tokenData != null)
+        {
+            ApplyTokenData();
+        }
     }
 
     public void ApplyTokenData()
