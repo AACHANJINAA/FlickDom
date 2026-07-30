@@ -32,6 +32,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float walkSpeed = 2.6f;
         [SerializeField] private float sprintSpeed = 4.2f;
         [SerializeField] private float rotationSpeed = 540f;
+        [SerializeField] private bool faceCameraDirectionWhenIdle = true;
 
         [Header("Animation")]
         [SerializeField] private Animator animator;
@@ -305,12 +306,18 @@ namespace FlickDom.Gameplay
                 desiredMoveDirection.z * speed);
             cachedRigidbody.linearVelocity = targetVelocity;
 
-            if (desiredMoveDirection.sqrMagnitude <= MinInputMagnitude)
+            Vector3 facingDirection = desiredMoveDirection;
+            if (facingDirection.sqrMagnitude <= MinInputMagnitude && faceCameraDirectionWhenIdle)
+            {
+                facingDirection = cameraForward;
+            }
+
+            if (facingDirection.sqrMagnitude <= MinInputMagnitude)
             {
                 return;
             }
 
-            Quaternion targetRotation = Quaternion.LookRotation(desiredMoveDirection, Vector3.up);
+            Quaternion targetRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
             Quaternion nextRotation = Quaternion.RotateTowards(
                 cachedRigidbody.rotation,
                 targetRotation,

@@ -642,7 +642,7 @@ MonoBehaviour:
   zoomSensitivity: 0.01
   followSharpness: 12
   rotationSharpness: 18
-  allowRightMouseOrbit: 1
+  allowRightMouseOrbit: 0
   allowScrollZoom: 1
 --- !u!1 &1305843885
 GameObject:
@@ -1504,6 +1504,7 @@ MonoBehaviour:
   walkSpeed: 2.6
   sprintSpeed: 4.2
   rotationSpeed: 540
+  faceCameraDirectionWhenIdle: 1
   animator: {fileID: 738081066}
   driveAnimator: 1
   useAnimationStates: 0

@@ -18,7 +18,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float zoomSensitivity = 0.01f;
         [SerializeField] private float followSharpness = 12f;
         [SerializeField] private float rotationSharpness = 18f;
-        [SerializeField] private bool allowRightMouseOrbit = true;
+        [SerializeField] private bool allowRightMouseOrbit;
         [SerializeField] private bool allowScrollZoom = true;
 
         private Transform cachedTransform;
@@ -87,7 +87,8 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            if (allowRightMouseOrbit && mouse.rightButton.isPressed)
+            bool shouldOrbit = !allowRightMouseOrbit || mouse.rightButton.isPressed;
+            if (shouldOrbit)
             {
                 Vector2 delta = mouse.delta.ReadValue();
                 yaw += delta.x * mouseSensitivity;
