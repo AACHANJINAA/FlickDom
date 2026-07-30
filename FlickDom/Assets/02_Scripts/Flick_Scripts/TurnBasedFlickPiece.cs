@@ -232,7 +232,9 @@ namespace FlickDom.Gameplay
             {
                 BeginDrag();
             }
-            else if (Mouse.current.leftButton.wasReleasedThisFrame && isDragging)
+            else if (Keyboard.current != null
+                && Keyboard.current.spaceKey.wasPressedThisFrame
+                && isDragging)
             {
                 EndDragAndQueueFlick();
             }
