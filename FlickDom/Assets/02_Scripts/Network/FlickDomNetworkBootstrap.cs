@@ -82,6 +82,7 @@ namespace FlickDom.Networking
         private bool patternCardEventsSubscribed;
         private bool networkGameStarted;
         private bool localGameStartedFromNetwork;
+        private bool localSinglePlayerModeActive;
         private int lobbyPlayerCount;
         private float nextTransformBroadcastTime;
         private const float TransformBroadcastInterval = 0.05f;
@@ -106,6 +107,11 @@ namespace FlickDom.Networking
         public bool IsClientOnly
         {
             get { return networkManager != null && networkManager.IsClient && !networkManager.IsHost; }
+        }
+
+        public bool IsLocalSinglePlayerModeActive
+        {
+            get { return localSinglePlayerModeActive; }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -241,7 +247,7 @@ namespace FlickDom.Networking
             GUI.Label(new Rect(28f, 64f, 296f, 22f), "Target: " + connectAddress + ":" + port);
             GUI.Label(new Rect(28f, 86f, 296f, 22f), "S: Host   C: Client   X: Shutdown");
 
-            if (showLobbyUi && !networkGameStarted)
+            if (showLobbyUi && !networkGameStarted && !localSinglePlayerModeActive)
             {
                 DrawLobbyUi(mode);
             }
@@ -286,6 +292,15 @@ namespace FlickDom.Networking
                 }
 
                 GUILayout.EndHorizontal();
+            }
+
+            GUILayout.Space(6f);
+            using (new GuiEnabledScope(!IsRunning))
+            {
+                if (GUILayout.Button("Single Mode", GUILayout.Height(30f)))
+                {
+                    StartSinglePlayerMode();
+                }
             }
 
             bool canStartGame = networkManager != null
@@ -842,7 +857,9 @@ namespace FlickDom.Networking
         {
             if (!IsRunning)
             {
-                return "Create a room or enter Host IP, then join.";
+                return localSinglePlayerModeActive
+                    ? "Single-player match is running."
+                    : "Create a room, join a room, or start Single Mode.";
             }
 
             if (networkGameStarted)
@@ -873,6 +890,7 @@ namespace FlickDom.Networking
             }
 
             networkGameStarted = true;
+            localSinglePlayerModeActive = false;
             BroadcastLobbyState();
             StartGameLocally();
             SendStartGameMessageToClients();
@@ -916,6 +934,30 @@ namespace FlickDom.Networking
             BroadcastScoreState();
             BroadcastCardState();
             Debug.Log("[Network] Local GameModeManager started.", this);
+        }
+
+        private void StartSinglePlayerMode()
+        {
+            if (IsRunning)
+            {
+                Debug.LogWarning("[Network] Single-player mode cannot start while networking is running.", this);
+                return;
+            }
+
+            ResolveGameModeManager();
+            if (gameModeManager == null)
+            {
+                Debug.LogWarning("[Network] Cannot start single-player mode because GameModeManager was not found.", this);
+                return;
+            }
+
+            localSinglePlayerModeActive = true;
+            localGameStartedFromNetwork = true;
+            SetLocalPlayerRole(FlickDomPlayerId.None);
+            gameModeManager.StartLocalGame();
+            SubscribeGameModeEvents(true);
+            SubscribePatternCardEvents(true);
+            Debug.Log("[Network] Single-player mode started from lobby.", this);
         }
 
         private void RestartNetworkMatchAsHost()
@@ -983,6 +1025,7 @@ namespace FlickDom.Networking
 
             networkGameStarted = false;
             localGameStartedFromNetwork = false;
+            localSinglePlayerModeActive = false;
             Debug.Log("[Network] Local match returned to lobby/menu state.", this);
         }
 
