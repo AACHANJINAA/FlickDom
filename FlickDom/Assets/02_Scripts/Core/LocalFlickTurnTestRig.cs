@@ -34,6 +34,10 @@ namespace FlickDom.Gameplay
         [SerializeField] private float generatedPieceSpacing = 1.1f;
         [SerializeField] private float pieceSelectionRaycastDistance = 1000f;
         [SerializeField] private bool logStateChanges = true;
+        [Header("Monkey Selection")]
+        [SerializeField] private MonkeyThirdPersonController[] monkeySelectors;
+        [SerializeField] private float monkeySelectionRadius = 1.25f;
+        [SerializeField] private bool allowPointerPieceOrderSelection;
         [Header("Order UI")]
         [SerializeField] private Font orderLabelFont;
         [SerializeField] private Vector2 orderLabelSize = new Vector2(72f, 72f);
@@ -48,6 +52,7 @@ namespace FlickDom.Gameplay
         private readonly List<TurnBasedFlickPiece> player1PieceOrder = new List<TurnBasedFlickPiece>(3);
         private readonly List<TurnBasedFlickPiece> player2PieceOrder = new List<TurnBasedFlickPiece>(3);
         private readonly WaitForFixedUpdate waitForFixedUpdate = new WaitForFixedUpdate();
+        private readonly Collider[] monkeySelectionHits = new Collider[16];
         private int player1NextOrderIndex;
         private int player2NextOrderIndex;
         private Coroutine physicsCompletionRoutine;
@@ -70,6 +75,8 @@ namespace FlickDom.Gameplay
             {
                 inputCamera = Camera.main;
             }
+
+            ResolveMonkeySelectors();
 
             player1Pieces = ResolveSceneAuthoredPieces(player1Pieces, player1PieceObjects);
             player2Pieces = ResolveSceneAuthoredPieces(player2Pieces, player2PieceObjects);
@@ -97,6 +104,7 @@ namespace FlickDom.Gameplay
             targetPiecesPerPlayer = Mathf.Max(1, targetPiecesPerPlayer);
             generatedPieceSpacing = Mathf.Max(0.1f, generatedPieceSpacing);
             pieceSelectionRaycastDistance = Mathf.Max(1f, pieceSelectionRaycastDistance);
+            monkeySelectionRadius = Mathf.Max(0.1f, monkeySelectionRadius);
         }
 
         private void OnEnable()
@@ -211,8 +219,8 @@ namespace FlickDom.Gameplay
 
         private void HandlePieceOrderSelectionInput()
         {
-            Mouse mouse = Mouse.current;
-            if (mouse == null || inputCamera == null || !mouse.leftButton.wasPressedThisFrame)
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
             {
                 return;
             }
@@ -228,7 +236,24 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            if (TryFindSelectablePieceUnderPointer(activePlayer, out TurnBasedFlickPiece piece))
+            bool selectionPressed = keyboard.eKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame;
+            if (!selectionPressed)
+            {
+                if (!allowPointerPieceOrderSelection)
+                {
+                    return;
+                }
+
+                Mouse mouse = Mouse.current;
+                if (mouse == null || inputCamera == null || !mouse.leftButton.wasPressedThisFrame)
+                {
+                    return;
+                }
+            }
+
+            if (TryFindSelectablePieceForMonkey(activePlayer, out TurnBasedFlickPiece piece)
+                || (allowPointerPieceOrderSelection
+                    && TryFindSelectablePieceUnderPointer(activePlayer, out piece)))
             {
                 if (TrySubmitNetworkPieceOrderSelection(activePlayer, piece))
                 {
@@ -343,6 +368,113 @@ namespace FlickDom.Gameplay
             }
 
             return selectedPiece != null;
+        }
+
+        private bool TryFindSelectablePieceForMonkey(FlickDomPlayerId player, out TurnBasedFlickPiece selectedPiece)
+        {
+            selectedPiece = null;
+            MonkeyThirdPersonController monkey = GetSelectionMonkey(player);
+            if (monkey == null)
+            {
+                return false;
+            }
+
+            Vector3 monkeyPosition = monkey.transform.position;
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                monkeyPosition,
+                monkeySelectionRadius,
+                monkeySelectionHits,
+                ~0,
+                QueryTriggerInteraction.Collide);
+
+            if (hitCount <= 0)
+            {
+                return false;
+            }
+
+            float closestDistanceSqr = float.MaxValue;
+            for (int i = 0; i < hitCount; i++)
+            {
+                Collider hitCollider = monkeySelectionHits[i];
+                if (hitCollider == null)
+                {
+                    continue;
+                }
+
+                TurnBasedFlickPiece piece = hitCollider.GetComponentInParent<TurnBasedFlickPiece>();
+                if (piece == null
+                    || piece.Owner != player
+                    || IsPieceAlreadyOrdered(player, piece)
+                    || piece.IsDead)
+                {
+                    continue;
+                }
+
+                Vector3 offset = piece.transform.position - monkeyPosition;
+                offset.y = 0f;
+                float distanceSqr = offset.sqrMagnitude;
+                if (distanceSqr >= closestDistanceSqr)
+                {
+                    continue;
+                }
+
+                closestDistanceSqr = distanceSqr;
+                selectedPiece = piece;
+            }
+
+            for (int i = 0; i < hitCount; i++)
+            {
+                monkeySelectionHits[i] = null;
+            }
+
+            return selectedPiece != null;
+        }
+
+        private void ResolveMonkeySelectors()
+        {
+            if (monkeySelectors != null && monkeySelectors.Length > 0)
+            {
+                return;
+            }
+
+            monkeySelectors = FindObjectsByType<MonkeyThirdPersonController>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+        }
+
+        private MonkeyThirdPersonController GetSelectionMonkey(FlickDomPlayerId player)
+        {
+            if (monkeySelectors == null || monkeySelectors.Length == 0)
+            {
+                ResolveMonkeySelectors();
+            }
+
+            if (monkeySelectors == null || monkeySelectors.Length == 0)
+            {
+                return null;
+            }
+
+            MonkeyThirdPersonController fallbackMonkey = null;
+            for (int i = 0; i < monkeySelectors.Length; i++)
+            {
+                MonkeyThirdPersonController monkey = monkeySelectors[i];
+                if (monkey == null)
+                {
+                    continue;
+                }
+
+                if (fallbackMonkey == null)
+                {
+                    fallbackMonkey = monkey;
+                }
+
+                if (monkey.Owner == player)
+                {
+                    return monkey;
+                }
+            }
+
+            return fallbackMonkey;
         }
 
         private void SelectPieceForCurrentOrder(FlickDomPlayerId player, TurnBasedFlickPiece piece)

@@ -492,7 +492,7 @@ namespace FlickDom.Gameplay
         private void RestartCurrentScene()
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
-            if (bootstrap != null && bootstrap.IsRunning)
+            if (bootstrap != null)
             {
                 bootstrap.RestartMatchFromUi();
                 return;
@@ -505,7 +505,7 @@ namespace FlickDom.Gameplay
         private void ReturnToMenu()
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
-            if (bootstrap != null && bootstrap.IsRunning)
+            if (bootstrap != null)
             {
                 bootstrap.ReturnToLobbyFromUi();
                 return;

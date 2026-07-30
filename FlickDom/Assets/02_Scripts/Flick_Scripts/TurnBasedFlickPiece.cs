@@ -209,14 +209,14 @@ namespace FlickDom.Gameplay
 
         private void Update()
         {
-            if (Mouse.current == null || inputCamera == null)
-            {
-                return;
-            }
+            Mouse mouse = Mouse.current;
+            Keyboard keyboard = Keyboard.current;
 
             if (waitForPointerReleaseBeforeInput)
             {
-                if (!Mouse.current.leftButton.isPressed)
+                bool isMouseHeld = mouse != null && mouse.leftButton.isPressed;
+                bool isSpaceHeld = keyboard != null && keyboard.spaceKey.isPressed;
+                if (!isMouseHeld && !isSpaceHeld)
                 {
                     waitForPointerReleaseBeforeInput = false;
                 }
@@ -229,11 +229,15 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            if (Mouse.current.leftButton.wasPressedThisFrame && IsMouseOverPiece())
+            if (!isDragging
+                && keyboard != null
+                && keyboard.spaceKey.wasPressedThisFrame)
             {
                 BeginDrag();
             }
-            else if (Mouse.current.leftButton.wasReleasedThisFrame && isDragging)
+            else if (keyboard != null
+                && keyboard.spaceKey.wasReleasedThisFrame
+                && isDragging)
             {
                 EndDragAndQueueFlick();
             }
@@ -988,6 +992,11 @@ namespace FlickDom.Gameplay
 
         private Vector3 GetMousePositionOnBoard()
         {
+            if (Mouse.current == null || inputCamera == null)
+            {
+                return transform.position;
+            }
+
             Ray ray = inputCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
             Plane boardPlane = new Plane(Vector3.up, Vector3.zero);
 
