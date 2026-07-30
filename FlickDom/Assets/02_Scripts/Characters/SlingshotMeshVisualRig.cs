@@ -180,17 +180,37 @@ namespace FlickDom.Gameplay
             pouchPivot.position = transform.TransformPoint(targetPouchCenterRoot);
             pouchPivot.localRotation = aimDeltaRoot * restPouchPivotLocalRotation;
 
-            if (leftBand != null)
+            if (leftBand != null && rightBand != null)
             {
-                leftBand.SetPouchPose(
+                Vector3 leftPouchAnchor = targetPouchCenterRoot
+                    + aimDeltaRoot
+                    * (leftBand.PouchAnchorRoot - restPouchCenterRoot);
+                Vector3 rightPouchAnchor = targetPouchCenterRoot
+                    + aimDeltaRoot
+                    * (rightBand.PouchAnchorRoot - restPouchCenterRoot);
+
+                float directDistance =
+                    (leftBand.FrameAnchorRoot - leftPouchAnchor).sqrMagnitude
+                    + (rightBand.FrameAnchorRoot - rightPouchAnchor).sqrMagnitude;
+                float crossedDistance =
+                    (leftBand.FrameAnchorRoot - rightPouchAnchor).sqrMagnitude
+                    + (rightBand.FrameAnchorRoot - leftPouchAnchor).sqrMagnitude;
+                if (crossedDistance < directDistance)
+                {
+                    (leftPouchAnchor, rightPouchAnchor) =
+                        (rightPouchAnchor, leftPouchAnchor);
+                }
+
+                leftBand.SetPouchAnchor(leftPouchAnchor);
+                rightBand.SetPouchAnchor(rightPouchAnchor);
+            }
+            else
+            {
+                leftBand?.SetPouchPose(
                     restPouchCenterRoot,
                     targetPouchCenterRoot,
                     aimDeltaRoot);
-            }
-
-            if (rightBand != null)
-            {
-                rightBand.SetPouchPose(
+                rightBand?.SetPouchPose(
                     restPouchCenterRoot,
                     targetPouchCenterRoot,
                     aimDeltaRoot);
@@ -309,6 +329,11 @@ namespace FlickDom.Gameplay
             public Vector3 FrameAnchorRoot
             {
                 get { return frameAnchorRoot; }
+            }
+
+            public Vector3 PouchAnchorRoot
+            {
+                get { return pouchAnchorRoot; }
             }
 
             private BandDeformer(
@@ -463,13 +488,18 @@ namespace FlickDom.Gameplay
                 Vector3 targetPouchCenterRoot,
                 Quaternion pouchRotationRoot)
             {
+                Vector3 targetPouchAnchor = targetPouchCenterRoot
+                    + pouchRotationRoot * (pouchAnchorRoot - restPouchCenterRoot);
+                SetPouchAnchor(targetPouchAnchor);
+            }
+
+            public void SetPouchAnchor(Vector3 targetPouchAnchor)
+            {
                 if (runtimeMesh == null || meshFilter == null || root == null)
                 {
                     return;
                 }
 
-                Vector3 targetPouchAnchor = targetPouchCenterRoot
-                    + pouchRotationRoot * (pouchAnchorRoot - restPouchCenterRoot);
                 Vector3 restSegment = pouchAnchorRoot - frameAnchorRoot;
                 Vector3 targetSegment = targetPouchAnchor - frameAnchorRoot;
                 Quaternion segmentRotation = restSegment.sqrMagnitude > MinDirectionSqr
@@ -500,7 +530,7 @@ namespace FlickDom.Gameplay
 
             public void ResetPose()
             {
-                SetPouchPose(Vector3.zero, Vector3.zero, Quaternion.identity);
+                SetPouchAnchor(pouchAnchorRoot);
             }
 
             public void Dispose()

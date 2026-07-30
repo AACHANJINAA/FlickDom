@@ -73,6 +73,9 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector3 launcherStoneCenterOffset = Vector3.zero;
         [FormerlySerializedAs("pouchPullDistance")]
         [SerializeField] private float launcherGripForwardOffset = 0.28f;
+        [SerializeField] private float stoneInPouchHeightOffset = 0.04f;
+        [SerializeField] private float launcherForwardOvershootDistance = 0.24f;
+        [SerializeField] private float launcherBackwardReboundDistance = 0.08f;
 
         private readonly List<TurnBasedFlickPiece> boundPieces = new List<TurnBasedFlickPiece>(6);
         private Collider[] cachedColliders;
@@ -94,9 +97,10 @@ namespace FlickDom.Gameplay
         private Vector3 positionVelocity;
         private Vector3 launchDirection;
         private Vector3 releaseStartPosition;
+        private Vector3 releasePouchStartWorld;
+        private float pullCharacterHeight;
         private float releaseTimer;
         private float currentNormalizedPower;
-        private float releaseStartPower;
         private int animationParameterHash = DefaultAnimationParameterHash;
         private int currentAnimationValue = int.MinValue;
         private bool hasHomePose;
@@ -149,6 +153,10 @@ namespace FlickDom.Gameplay
             launcherScale.y = Mathf.Max(0.001f, launcherScale.y);
             launcherScale.z = Mathf.Max(0.001f, launcherScale.z);
             launcherGripForwardOffset = Mathf.Max(0f, launcherGripForwardOffset);
+            launcherForwardOvershootDistance =
+                Mathf.Max(0f, launcherForwardOvershootDistance);
+            launcherBackwardReboundDistance =
+                Mathf.Max(0f, launcherBackwardReboundDistance);
             RefreshAnimationParameterHash();
         }
 
@@ -395,15 +403,15 @@ namespace FlickDom.Gameplay
             launchDirection = GetInitialFacingDirection(piece);
             releaseTimer = 0f;
             currentNormalizedPower = 0f;
-            releaseStartPower = 0f;
             positionVelocity = Vector3.zero;
+            pullCharacterHeight = cachedTransform.position.y;
             OverrideCharacterPhysics();
 
             Vector3 right = Vector3.Cross(Vector3.up, launchDirection);
             desiredAimPosition = piece.transform.position
                 - launchDirection * distanceBehindStone
                 + right * sidewaysOffset;
-            desiredAimPosition.y = homePosition.y + heightOffset;
+            desiredAimPosition.y = pullCharacterHeight + heightOffset;
             ClampDesiredAimPosition();
 
             cachedTransform.SetPositionAndRotation(
@@ -414,7 +422,9 @@ namespace FlickDom.Gameplay
             SetAnimation(pullAnimationValue);
             SetState(PresentationState.Pulling);
             BeginLauncherPresentation();
-            piece.TrySetCharacterAim(GetCharacterLaunchVector());
+            piece.TrySetCharacterAim(
+                GetCharacterLaunchVector(),
+                GetStonePouchPosition());
             UpdatePullBands();
         }
 
@@ -484,7 +494,9 @@ namespace FlickDom.Gameplay
         {
             releaseTimer = 0f;
             releaseStartPosition = cachedTransform.position;
-            releaseStartPower = launcherRig != null ? 1f : currentNormalizedPower;
+            releasePouchStartWorld = launcherRig != null
+                ? launcherRig.PouchCenterWorld
+                : launcherStoneAnchorWorld;
             positionVelocity = Vector3.zero;
             SetBandsVisible(false);
             SetAnimation(releaseAnimationValue);
@@ -520,8 +532,10 @@ namespace FlickDom.Gameplay
                 rotationSpeed * Time.deltaTime);
 
             SyncKinematicBody();
-            activePiece.TrySetCharacterAim(characterLaunchVector);
             UpdateLauncherPose(1f);
+            activePiece.TrySetCharacterAim(
+                characterLaunchVector,
+                GetStonePouchPosition());
             UpdatePullBands();
         }
 
@@ -584,7 +598,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            Vector3 piecePosition = activePiece.transform.position;
+            Vector3 piecePosition = GetAimStoneOrigin();
             Vector3 offset = desiredAimPosition - piecePosition;
             offset.y = 0f;
             if (offset.sqrMagnitude <= MinDirectionSqr)
@@ -601,7 +615,7 @@ namespace FlickDom.Gameplay
                 minimumAimDistance,
                 maximumAimDistance);
             desiredAimPosition = piecePosition + offset.normalized * clampedDistance;
-            desiredAimPosition.y = homePosition.y + heightOffset;
+            desiredAimPosition.y = pullCharacterHeight + heightOffset;
         }
 
         private Vector3 GetCharacterLaunchVector()
@@ -611,9 +625,36 @@ namespace FlickDom.Gameplay
                 return Vector3.zero;
             }
 
-            Vector3 vector = activePiece.transform.position - cachedTransform.position;
+            Vector3 vector = GetAimStoneOrigin() - cachedTransform.position;
             vector.y = 0f;
             return Vector3.ClampMagnitude(vector, maximumAimDistance);
+        }
+
+        private Vector3 GetAimStoneOrigin()
+        {
+            if (hasLauncherStoneAnchor)
+            {
+                return launcherStoneAnchorWorld;
+            }
+
+            return activePiece != null
+                ? activePiece.transform.position
+                : cachedTransform.position;
+        }
+
+        private Vector3 GetStonePouchPosition()
+        {
+            if (launcherRig == null
+                || launcherInstance == null
+                || !launcherInstance.activeSelf)
+            {
+                return activePiece != null
+                    ? activePiece.transform.position
+                    : cachedTransform.position;
+            }
+
+            return launcherRig.PouchCenterWorld
+                + Vector3.up * stoneInPouchHeightOffset;
         }
 
         private void UpdateReleasePose()
@@ -623,8 +664,7 @@ namespace FlickDom.Gameplay
             float recoil = Mathf.Sin(normalizedTime * Mathf.PI) * recoilDistance;
             cachedTransform.position = releaseStartPosition - launchDirection * recoil;
             SyncKinematicBody();
-            float launcherReleaseTime = Mathf.Clamp01(normalizedTime * 3.5f);
-            UpdateLauncherPose(Mathf.Lerp(releaseStartPower, 0f, launcherReleaseTime));
+            UpdateLauncherReleasePose(normalizedTime);
 
             if (normalizedTime < 1f)
             {
@@ -639,6 +679,59 @@ namespace FlickDom.Gameplay
             }
 
             FinishPresentation();
+        }
+
+        private void UpdateLauncherReleasePose(float normalizedTime)
+        {
+            if (launcherRig == null
+                || launcherInstance == null
+                || !launcherInstance.activeSelf
+                || !hasLauncherStoneAnchor)
+            {
+                return;
+            }
+
+            Vector3 forwardOvershoot = launcherStoneAnchorWorld
+                + launchDirection * launcherForwardOvershootDistance;
+            Vector3 backwardRebound = launcherStoneAnchorWorld
+                - launchDirection * launcherBackwardReboundDistance;
+            Vector3 target;
+
+            if (normalizedTime < 0.34f)
+            {
+                float stageTime = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    normalizedTime / 0.34f);
+                target = Vector3.Lerp(
+                    releasePouchStartWorld,
+                    forwardOvershoot,
+                    stageTime);
+            }
+            else if (normalizedTime < 0.68f)
+            {
+                float stageTime = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    (normalizedTime - 0.34f) / 0.34f);
+                target = Vector3.Lerp(
+                    forwardOvershoot,
+                    backwardRebound,
+                    stageTime);
+            }
+            else
+            {
+                float stageTime = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    (normalizedTime - 0.68f) / 0.32f);
+                target = Vector3.Lerp(
+                    backwardRebound,
+                    launcherStoneAnchorWorld,
+                    stageTime);
+            }
+
+            launcherRig.SetPouchTarget(launchDirection, target);
         }
 
         private void UpdateReturnPose()
@@ -684,7 +777,6 @@ namespace FlickDom.Gameplay
             activePiece = null;
             releaseTimer = 0f;
             currentNormalizedPower = 0f;
-            releaseStartPower = 0f;
             positionVelocity = Vector3.zero;
             SetState(PresentationState.Idle);
             RestoreCharacterPhysics();

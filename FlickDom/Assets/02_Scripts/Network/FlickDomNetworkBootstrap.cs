@@ -407,7 +407,11 @@ namespace FlickDom.Networking
             return !IsRunning || IsHost;
         }
 
-        public void SubmitFlickRequestToHost(FlickDomPlayerId owner, string pieceId, Vector3 impulse)
+        public void SubmitFlickRequestToHost(
+            FlickDomPlayerId owner,
+            string pieceId,
+            Vector3 impulse,
+            Vector3 launchPosition)
         {
             if (networkManager == null
                 || !networkManager.IsClient
@@ -419,15 +423,16 @@ namespace FlickDom.Networking
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
             Vector3 safeImpulse = ClampNetworkFlickImpulse(impulse);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 3, Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
                 writer.WriteValueSafe(safeImpulse);
+                writer.WriteValueSafe(launchPosition);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickRequestMessageName, NetworkManager.ServerClientId, writer);
             }
 
-            Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ".", this);
+            Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
         }
 
         public void SubmitPieceOrderSelectionToHost(FlickDomPlayerId owner, string pieceId)
@@ -1440,6 +1445,7 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
             reader.ReadValueSafe(out Vector3 impulse);
+            reader.ReadValueSafe(out Vector3 launchPosition);
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
@@ -1461,10 +1467,10 @@ namespace FlickDom.Networking
                 return;
             }
 
-            if (piece.TryQueueAuthoritativeFlick(impulse))
+            if (piece.TryQueueAuthoritativeFlick(impulse, launchPosition))
             {
                 SendFlickAcceptedToClients(owner, pieceId);
-                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Piece: " + pieceId + ", Impulse: " + impulse + ".", this);
+                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Piece: " + pieceId + ", Impulse: " + impulse + ", LaunchPosition: " + launchPosition + ".", this);
             }
             else
             {

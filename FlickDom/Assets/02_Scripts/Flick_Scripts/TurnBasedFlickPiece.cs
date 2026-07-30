@@ -60,6 +60,7 @@ namespace FlickDom.Gameplay
         private Vector3 initialPiecePosition;
         private Vector3 dragTargetPosition;
         private Vector3 characterAimVector;
+        private Vector3 characterAimPiecePosition;
         private Vector3 queuedImpulse;
         private Vector3 flickStartPosition;
         private Quaternion flickStartRotation;
@@ -253,7 +254,7 @@ namespace FlickDom.Gameplay
                 }
 
                 cachedRigidbody.MovePosition(
-                    characterAimActive ? initialPiecePosition : dragTargetPosition);
+                    characterAimActive ? characterAimPiecePosition : dragTargetPosition);
             }
 
             if (launchQueued)
@@ -548,6 +549,7 @@ namespace FlickDom.Gameplay
             initialPiecePosition = transform.position;
             dragTargetPosition = initialPiecePosition;
             characterAimVector = Vector3.zero;
+            characterAimPiecePosition = initialPiecePosition;
             characterAimActive = false;
             isDragging = true;
             ShowFlickPreview(Vector3.zero);
@@ -585,6 +587,13 @@ namespace FlickDom.Gameplay
 
         public bool TrySetCharacterAim(Vector3 launchVector)
         {
+            return TrySetCharacterAim(launchVector, initialPiecePosition);
+        }
+
+        public bool TrySetCharacterAim(
+            Vector3 launchVector,
+            Vector3 presentationPosition)
+        {
             if (!isDragging)
             {
                 return false;
@@ -598,7 +607,8 @@ namespace FlickDom.Gameplay
 
             characterAimActive = true;
             characterAimVector = launchVector;
-            dragTargetPosition = initialPiecePosition;
+            characterAimPiecePosition = presentationPosition;
+            dragTargetPosition = presentationPosition;
             ShowFlickPreview(characterAimVector);
             FlickDragUpdated?.Invoke(
                 this,
@@ -610,6 +620,9 @@ namespace FlickDom.Gameplay
         private void EndDragAndQueueFlick()
         {
             Vector3 forceVector;
+            Vector3 launchPosition = characterAimActive
+                ? characterAimPiecePosition
+                : cachedRigidbody.position;
             if (characterAimActive)
             {
                 forceVector = characterAimVector;
@@ -624,6 +637,7 @@ namespace FlickDom.Gameplay
             isDragging = false;
             characterAimActive = false;
             characterAimVector = Vector3.zero;
+            characterAimPiecePosition = initialPiecePosition;
             HideFlickPreview();
 
             if (forceVector.magnitude > maxDragDistance)
@@ -632,8 +646,10 @@ namespace FlickDom.Gameplay
             }
 
             queuedImpulse = forceVector * forceMultiplier;
+            cachedRigidbody.position = launchPosition;
+            transform.position = launchPosition;
             FlickReleased?.Invoke(this, queuedImpulse);
-            if (TrySubmitNetworkFlickRequest(queuedImpulse))
+            if (TrySubmitNetworkFlickRequest(queuedImpulse, launchPosition))
             {
                 return;
             }
@@ -651,16 +667,36 @@ namespace FlickDom.Gameplay
             isDragging = false;
             characterAimActive = false;
             characterAimVector = Vector3.zero;
+            characterAimPiecePosition = initialPiecePosition;
+            cachedRigidbody.position = initialPiecePosition;
+            transform.position = initialPiecePosition;
             FlickDragCancelled?.Invoke(this);
         }
 
         public bool TryQueueAuthoritativeFlick(Vector3 impulse)
+        {
+            return TryQueueAuthoritativeFlick(impulse, transform.position);
+        }
+
+        public bool TryQueueAuthoritativeFlick(Vector3 impulse, Vector3 requestedLaunchPosition)
         {
             if (isDead || launchedThisTurn || launchQueued)
             {
                 return false;
             }
 
+            if (!IsFinite(requestedLaunchPosition))
+            {
+                return false;
+            }
+
+            EnsureCachedComponents();
+            Vector3 launchOffset = Vector3.ClampMagnitude(
+                requestedLaunchPosition - transform.position,
+                maxDragDistance);
+            Vector3 safeLaunchPosition = transform.position + launchOffset;
+            cachedRigidbody.position = safeLaunchPosition;
+            transform.position = safeLaunchPosition;
             queuedImpulse = impulse;
             launchQueued = true;
             return true;
@@ -717,7 +753,7 @@ namespace FlickDom.Gameplay
             return false;
         }
 
-        private bool TrySubmitNetworkFlickRequest(Vector3 impulse)
+        private bool TrySubmitNetworkFlickRequest(Vector3 impulse, Vector3 launchPosition)
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
             if (bootstrap == null || !bootstrap.IsRunning || bootstrap.IsHost)
@@ -725,7 +761,7 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
-            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse);
+            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition);
             cachedRigidbody.position = initialPiecePosition;
             transform.position = initialPiecePosition;
             return true;
@@ -1021,7 +1057,20 @@ namespace FlickDom.Gameplay
 
             cachedVisuals.SetHighlight(true);
             cachedVisuals.ShowTrajectory(true);
-            cachedVisuals.UpdateTrajectory(initialPiecePosition, forceDirection);
+            Vector3 previewOrigin = characterAimActive
+                ? characterAimPiecePosition
+                : initialPiecePosition;
+            cachedVisuals.UpdateTrajectory(previewOrigin, forceDirection);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return !float.IsNaN(value.x)
+                && !float.IsNaN(value.y)
+                && !float.IsNaN(value.z)
+                && !float.IsInfinity(value.x)
+                && !float.IsInfinity(value.y)
+                && !float.IsInfinity(value.z);
         }
 
         private void HideFlickPreview()

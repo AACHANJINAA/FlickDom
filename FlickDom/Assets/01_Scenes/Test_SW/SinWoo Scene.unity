@@ -1449,6 +1449,8 @@ MonoBehaviour:
   gameModeManager: {fileID: 0}
   autoSetupSlingshotPresenter: 1
   slingshotPresenter: {fileID: 0}
+  slingshotLauncherPrefab: {fileID: 919132149155446097, guid: 6ef3d93ee2ef38349a80ccd1421c12b9, type: 3}
+  slingshotLauncherMaterial: {fileID: 2100000, guid: 28c5f72062f449a8b794142b75809690, type: 2}
   cameraTransform: {fileID: 961739753}
   walkSpeed: 2.6
   sprintSpeed: 4.2
@@ -1876,6 +1878,10 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 6ef3d93ee2ef38349a80ccd1421c12b9, type: 3}
       propertyPath: m_Name
       value: shooter
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 6ef3d93ee2ef38349a80ccd1421c12b9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6415596573534939707, guid: 6ef3d93ee2ef38349a80ccd1421c12b9, type: 3}
       propertyPath: m_LocalPosition.z
