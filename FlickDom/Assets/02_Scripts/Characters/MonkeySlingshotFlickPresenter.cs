@@ -31,9 +31,13 @@ namespace FlickDom.Gameplay
         [Header("WASD Aim")]
         [SerializeField] private Camera aimCamera;
         [SerializeField] private float aimMoveSpeed = 2.4f;
+        [SerializeField] private float aimTurnSpeed = 140f;
+        [SerializeField] private float aimPowerAdjustSpeed = 1.8f;
         [SerializeField] private float distanceBehindStone = 0.72f;
         [SerializeField] private float minimumAimDistance = 0.55f;
         [SerializeField] private float maximumAimDistance = 3f;
+        [SerializeField] private Vector3 aimCameraLocalOffset = new Vector3(0f, 1.35f, 0.08f);
+        [SerializeField] private Vector3 aimLookTargetOffset = new Vector3(0f, 0.12f, 0f);
 
         [Header("Pull Pose")]
         [SerializeField] private float sidewaysOffset;
@@ -110,6 +114,7 @@ namespace FlickDom.Gameplay
         private bool bodyUsedGravity;
         private RigidbodyConstraints bodyConstraints;
         private CollisionDetectionMode bodyCollisionMode;
+        private MonkeyThirdPersonCameraFollow cameraFollow;
 
         public FlickDomPlayerId Owner
         {
@@ -131,6 +136,11 @@ namespace FlickDom.Gameplay
                 aimCamera = Camera.main;
             }
 
+            if (cameraFollow == null && aimCamera != null)
+            {
+                cameraFollow = aimCamera.GetComponent<MonkeyThirdPersonCameraFollow>();
+            }
+
             EnsurePullBands();
             SetBandsVisible(false);
         }
@@ -139,6 +149,8 @@ namespace FlickDom.Gameplay
         {
             distanceBehindStone = Mathf.Max(0.05f, distanceBehindStone);
             aimMoveSpeed = Mathf.Max(0.01f, aimMoveSpeed);
+            aimTurnSpeed = Mathf.Max(1f, aimTurnSpeed);
+            aimPowerAdjustSpeed = Mathf.Max(0.01f, aimPowerAdjustSpeed);
             minimumAimDistance = Mathf.Max(0.05f, minimumAimDistance);
             maximumAimDistance = Mathf.Max(minimumAimDistance, maximumAimDistance);
             positionSmoothTime = Mathf.Max(0.001f, positionSmoothTime);
@@ -422,6 +434,7 @@ namespace FlickDom.Gameplay
             SetAnimation(pullAnimationValue);
             SetState(PresentationState.Pulling);
             BeginLauncherPresentation();
+            EnableAimCameraFocus();
             piece.TrySetCharacterAim(
                 GetCharacterLaunchVector(),
                 GetStonePouchPosition());
@@ -570,23 +583,52 @@ namespace FlickDom.Gameplay
                 vertical += 1f;
             }
 
-            Vector2 input = Vector2.ClampMagnitude(new Vector2(horizontal, vertical), 1f);
-            if (input.sqrMagnitude <= MinDirectionSqr)
+            bool changed = false;
+            Vector3 piecePosition = GetAimStoneOrigin();
+            Vector3 offset = desiredAimPosition - piecePosition;
+            offset.y = 0f;
+
+            if (offset.sqrMagnitude <= MinDirectionSqr)
+            {
+                Vector3 fallbackDirection = launchDirection.sqrMagnitude > MinDirectionSqr
+                    ? -launchDirection
+                    : -cachedTransform.forward;
+                fallbackDirection.y = 0f;
+                offset = fallbackDirection.normalized * Mathf.Max(distanceBehindStone, minimumAimDistance);
+            }
+
+            float currentDistance = Mathf.Clamp(offset.magnitude, minimumAimDistance, maximumAimDistance);
+            Vector3 currentDirection = offset.normalized;
+
+            if (Mathf.Abs(horizontal) > MinDirectionSqr)
+            {
+                float yawDelta = horizontal * aimTurnSpeed * Time.deltaTime;
+                currentDirection = Quaternion.AngleAxis(yawDelta, Vector3.up) * currentDirection;
+                currentDirection.y = 0f;
+                if (currentDirection.sqrMagnitude > MinDirectionSqr)
+                {
+                    currentDirection.Normalize();
+                    changed = true;
+                }
+            }
+
+            if (Mathf.Abs(vertical) > MinDirectionSqr)
+            {
+                currentDistance = Mathf.Clamp(
+                    currentDistance - vertical * aimPowerAdjustSpeed * Time.deltaTime,
+                    minimumAimDistance,
+                    maximumAimDistance);
+                changed = true;
+            }
+
+            if (!changed)
             {
                 SetAnimation(pullAnimationValue);
                 return;
             }
 
-            Vector3 forward = aimCamera != null ? aimCamera.transform.forward : Vector3.forward;
-            Vector3 right = aimCamera != null ? aimCamera.transform.right : Vector3.right;
-            forward.y = 0f;
-            right.y = 0f;
-            forward = forward.sqrMagnitude > MinDirectionSqr ? forward.normalized : Vector3.forward;
-            right = right.sqrMagnitude > MinDirectionSqr ? right.normalized : Vector3.right;
-
-            desiredAimPosition += (forward * input.y + right * input.x).normalized
-                * aimMoveSpeed
-                * Time.deltaTime;
+            desiredAimPosition = piecePosition + currentDirection * currentDistance;
+            desiredAimPosition.y = pullCharacterHeight + heightOffset;
             ClampDesiredAimPosition();
             SetAnimation(aimMoveAnimationValue);
         }
@@ -774,6 +816,7 @@ namespace FlickDom.Gameplay
         private void FinishPresentation()
         {
             HideLauncher();
+            DisableAimCameraFocus();
             activePiece = null;
             releaseTimer = 0f;
             currentNormalizedPower = 0f;
@@ -905,6 +948,41 @@ namespace FlickDom.Gameplay
         private bool CanPresentPiece(TurnBasedFlickPiece piece)
         {
             return piece != null && (reactToAllPlayers || piece.Owner == owner);
+        }
+
+        private void EnableAimCameraFocus()
+        {
+            if (cameraFollow == null)
+            {
+                if (aimCamera == null)
+                {
+                    aimCamera = Camera.main;
+                }
+
+                if (aimCamera != null)
+                {
+                    cameraFollow = aimCamera.GetComponent<MonkeyThirdPersonCameraFollow>();
+                }
+            }
+
+            if (cameraFollow == null || activePiece == null)
+            {
+                return;
+            }
+
+            cameraFollow.EnableAimFocus(
+                cachedTransform,
+                aimCameraLocalOffset,
+                activePiece.transform,
+                aimLookTargetOffset);
+        }
+
+        private void DisableAimCameraFocus()
+        {
+            if (cameraFollow != null)
+            {
+                cameraFollow.DisableAimFocus();
+            }
         }
 
         private void RefreshAnimationParameterHash()
