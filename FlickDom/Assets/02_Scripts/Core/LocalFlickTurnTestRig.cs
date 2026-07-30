@@ -1187,7 +1187,7 @@ namespace FlickDom.Gameplay
                 if (piece != null)
                 {
                     bool isSelectingPlayerPiece = activePlayer != FlickDomPlayerId.None && piece.Owner == activePlayer;
-                    piece.SetOrderSelectionHighlight(isSelectingPlayerPiece, GetSelectionOrderNumber(activePlayer, piece));
+                    piece.SetOrderSelectionHighlight(isSelectingPlayerPiece, GetSelectionOrderNumber(piece.Owner, piece));
                 }
             }
         }
