@@ -891,6 +891,13 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!ShouldRegisterPlacementCandidate(piece))
+            {
+                gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
+                BeginPhysicsCompletionAfterLaunchedPiecesSettle();
+                return;
+            }
+
             PiecePlacementCandidate candidate = gameModeManager.RegisterStoppedPieceCandidate(
                 piece.Owner,
                 piece.PieceId,
@@ -1112,6 +1119,12 @@ namespace FlickDom.Gameplay
                     continue;
                 }
 
+                if (!ShouldRegisterPlacementCandidate(piece))
+                {
+                    gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
+                    continue;
+                }
+
                 PiecePlacementCandidate candidate = gameModeManager.RegisterStoppedPieceCandidate(
                     piece.Owner,
                     piece.PieceId,
@@ -1123,6 +1136,26 @@ namespace FlickDom.Gameplay
                     Debug.Log(BuildCandidateLog(candidate, true), this);
                 }
             }
+        }
+
+        private bool ShouldRegisterPlacementCandidate(TurnBasedFlickPiece piece)
+        {
+            if (piece == null)
+            {
+                return false;
+            }
+
+            if (piece.HasRequiredContactForPlacement)
+            {
+                return true;
+            }
+
+            if (logStateChanges)
+            {
+                Debug.Log("[TurnTest] Ignored placement candidate for " + piece.PieceId + " because it did not touch an opponent piece or wall.", this);
+            }
+
+            return false;
         }
 
         private void RefreshPieceHighlights()

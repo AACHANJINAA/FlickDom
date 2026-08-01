@@ -73,6 +73,7 @@ namespace FlickDom.Gameplay
         private bool isDead;
         private bool invalidatedThisTurn;
         private bool enteredPlayableBoardAfterLaunch;
+        private bool touchedRequiredTargetThisFlick;
         private bool canInteractThisTurn = true;
         private bool waitForPointerReleaseBeforeInput;
         private float stoppedTimer;
@@ -121,6 +122,11 @@ namespace FlickDom.Gameplay
         public bool HasLaunchedThisRound
         {
             get { return launchedThisTurn; }
+        }
+
+        public bool HasRequiredContactForPlacement
+        {
+            get { return touchedRequiredTargetThisFlick; }
         }
 
         public bool IsDragging
@@ -184,6 +190,26 @@ namespace FlickDom.Gameplay
             {
                 stateIndicatorObject.SetActive(false);
             }
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            RegisterRequiredContact(collision != null ? collision.collider : null);
+        }
+
+        private void OnCollisionStay(Collision collision)
+        {
+            RegisterRequiredContact(collision != null ? collision.collider : null);
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            RegisterRequiredContact(other);
+        }
+
+        private void OnTriggerStay(Collider other)
+        {
+            RegisterRequiredContact(other);
         }
 
         private void OnDestroy()
@@ -284,6 +310,7 @@ namespace FlickDom.Gameplay
                 cachedRigidbody.AddForce(queuedImpulse, ForceMode.Impulse);
                 waitingForStop = true;
                 launchedThisTurn = true;
+                touchedRequiredTargetThisFlick = false;
                 enteredPlayableBoardAfterLaunch = IsInsidePlayableBoard();
                 stoppedTimer = 0f;
                 FlickStarted?.Invoke(this);
@@ -447,6 +474,7 @@ namespace FlickDom.Gameplay
             isDead = false;
             invalidatedThisTurn = false;
             enteredPlayableBoardAfterLaunch = false;
+            touchedRequiredTargetThisFlick = false;
             canInteractThisTurn = false;
             waitForPointerReleaseBeforeInput = false;
             stoppedTimer = 0f;
@@ -494,6 +522,52 @@ namespace FlickDom.Gameplay
             EnsureCachedComponents();
             invalidatedThisTurn = true;
             KillPiece();
+        }
+
+        private void RegisterRequiredContact(Collider other)
+        {
+            if (touchedRequiredTargetThisFlick
+                || !launchedThisTurn
+                || isDead
+                || other == null)
+            {
+                return;
+            }
+
+            TurnBasedFlickPiece otherPiece = other.GetComponentInParent<TurnBasedFlickPiece>();
+            if (otherPiece != null)
+            {
+                if (otherPiece != this
+                    && otherPiece.Owner != owner
+                    && otherPiece.Owner != FlickDomPlayerId.None)
+                {
+                    touchedRequiredTargetThisFlick = true;
+                }
+
+                return;
+            }
+
+            if (IsWallCollider(other))
+            {
+                touchedRequiredTargetThisFlick = true;
+            }
+        }
+
+        private static bool IsWallCollider(Collider other)
+        {
+            Transform current = other.transform;
+            while (current != null)
+            {
+                if (current.name.IndexOf("Wall", StringComparison.OrdinalIgnoreCase) >= 0
+                    || current.name.IndexOf("Boundary", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+
+                current = current.parent;
+            }
+
+            return false;
         }
 
         public void BlockInputUntilPointerReleased()
