@@ -230,10 +230,24 @@ namespace FlickDom.Gameplay
             }
 
             if (!isDragging
-                && keyboard != null
-                && keyboard.spaceKey.wasPressedThisFrame)
+                && mouse != null
+                && mouse.leftButton.wasPressedThisFrame
+                && IsMouseOverPiece())
             {
                 BeginDrag();
+            }
+            else if (isDragging
+                && mouse != null
+                && mouse.leftButton.wasReleasedThisFrame)
+            {
+                EndDragAndQueueFlick();
+            }
+            else if (isDragging
+                && keyboard != null
+                && keyboard.escapeKey.wasPressedThisFrame)
+            {
+                CancelDragPresentation();
+                HideFlickPreview();
             }
             else if (keyboard != null
                 && keyboard.spaceKey.wasReleasedThisFrame
@@ -674,6 +688,7 @@ namespace FlickDom.Gameplay
             characterAimPiecePosition = initialPiecePosition;
             cachedRigidbody.position = initialPiecePosition;
             transform.position = initialPiecePosition;
+            HideFlickPreview();
             FlickDragCancelled?.Invoke(this);
         }
 
