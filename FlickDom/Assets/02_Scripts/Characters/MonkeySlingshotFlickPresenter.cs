@@ -23,6 +23,7 @@ namespace FlickDom.Gameplay
         [Header("Binding")]
         [SerializeField] private FlickDomPlayerId owner = FlickDomPlayerId.Player1;
         [SerializeField] private bool reactToAllPlayers = true;
+        [SerializeField] private bool enableFlickPresentation;
         [SerializeField] private TurnBasedFlickPiece[] pieces;
         [SerializeField] private MonkeyThirdPersonController movementController;
         [SerializeField] private Animator animator;
@@ -947,7 +948,9 @@ namespace FlickDom.Gameplay
 
         private bool CanPresentPiece(TurnBasedFlickPiece piece)
         {
-            return piece != null && (reactToAllPlayers || piece.Owner == owner);
+            return enableFlickPresentation
+                && piece != null
+                && (reactToAllPlayers || piece.Owner == owner);
         }
 
         private void EnableAimCameraFocus()

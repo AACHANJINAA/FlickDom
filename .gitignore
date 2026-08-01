@@ -62,3 +62,12 @@ ehthumbs.db
 Thumbs.db
 # 로컬 도구 검색 인덱스 캐시 (Bleve)
 docs/index.bleve/
+
+# ==========================================
+# Local recovery / test run artifacts
+# ==========================================
+FlickDom/Assets/_Recovery/
+FlickDom/Assets/Resources/PerformanceTestRunInfo.json
+FlickDom/Assets/Resources/PerformanceTestRunInfo.json.meta
+FlickDom/Assets/Resources/PerformanceTestRunSettings.json
+FlickDom/Assets/Resources/PerformanceTestRunSettings.json.meta
