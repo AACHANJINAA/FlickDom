@@ -8,7 +8,14 @@ namespace FlickDom.Gameplay
         [Header("References")]
         [SerializeField] private GameModeManager gameModeManager;
         [SerializeField] private TokenMapGridView tokenMapGridView;
+        [SerializeField] private GridCellCandidateResolver flickBoardResolver;
         [SerializeField] private Camera targetCamera;
+
+        [Header("Flick View")]
+        [SerializeField] private Vector3 flickOffset = new Vector3(0f, 4.8f, -2.8f);
+        [SerializeField] private Vector3 flickEulerAngles = new Vector3(60f, 0f, 0f);
+        [SerializeField] private bool useOrthographicDuringFlick = false;
+        [SerializeField] private float flickOrthographicSize = 3.5f;
 
         [Header("Placement View")]
         [SerializeField] private Vector3 placementOffset = new Vector3(0f, 6f, 0f);
@@ -41,6 +48,11 @@ namespace FlickDom.Gameplay
                 tokenMapGridView = GetComponent<TokenMapGridView>();
             }
 
+            if (flickBoardResolver == null)
+            {
+                flickBoardResolver = GetComponent<GridCellCandidateResolver>();
+            }
+
             if (targetCamera == null)
             {
                 targetCamera = Camera.main;
@@ -70,6 +82,7 @@ namespace FlickDom.Gameplay
         private void OnValidate()
         {
             transitionDuration = Mathf.Max(0f, transitionDuration);
+            flickOrthographicSize = Mathf.Max(0.1f, flickOrthographicSize);
             placementOrthographicSize = Mathf.Max(0.1f, placementOrthographicSize);
         }
 
@@ -118,13 +131,20 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (IsFlickViewState(nextState))
+            {
+                MoveToFlickView();
+                return;
+            }
+
             if (nextState == FlickDomGameState.PlacementSelection)
             {
                 MoveToPlacementView();
                 return;
             }
 
-            if (previousState == FlickDomGameState.PlacementSelection && returnWhenLeavingPlacement)
+            if ((previousState == FlickDomGameState.PlacementSelection || IsFlickViewState(previousState))
+                && returnWhenLeavingPlacement)
             {
                 MoveToGameplayView();
             }
@@ -162,6 +182,18 @@ namespace FlickDom.Gameplay
             float targetOrthographicSize = placementOrthographicSize;
 
             BeginTransition(targetPosition, targetRotation, targetOrthographic, targetOrthographicSize);
+        }
+
+        private void MoveToFlickView()
+        {
+            Vector3 focus = GetFlickBoardCenter();
+            Vector3 targetPosition = focus + flickOffset;
+            Quaternion targetRotation = Quaternion.Euler(flickEulerAngles);
+            BeginTransition(
+                targetPosition,
+                targetRotation,
+                useOrthographicDuringFlick,
+                flickOrthographicSize);
         }
 
         private void MoveToGameplayView()
@@ -239,6 +271,28 @@ namespace FlickDom.Gameplay
 
             StopCoroutine(activeTransition);
             activeTransition = null;
+        }
+
+        private static bool IsFlickViewState(FlickDomGameState state)
+        {
+            return state == FlickDomGameState.PieceOrderSelection
+                || state == FlickDomGameState.PlayerFlicking
+                || state == FlickDomGameState.PhysicsProcessing;
+        }
+
+        private Vector3 GetFlickBoardCenter()
+        {
+            if (flickBoardResolver != null)
+            {
+                Vector3 boardMax = flickBoardResolver.BoardMax;
+                Vector3 boardOrigin = flickBoardResolver.BoardOrigin;
+                return new Vector3(
+                    (boardOrigin.x + boardMax.x) * 0.5f,
+                    boardOrigin.y,
+                    (boardOrigin.z + boardMax.z) * 0.5f);
+            }
+
+            return tokenMapGridView != null ? tokenMapGridView.GridCenter : Vector3.zero;
         }
     }
 }

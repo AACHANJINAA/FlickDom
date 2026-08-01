@@ -49,7 +49,7 @@ namespace FlickDom.Gameplay
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged += HandleStateChanged;
-                followEnabled = gameModeManager.CurrentState != FlickDomGameState.PlacementSelection;
+                followEnabled = !UsesBoardView(gameModeManager.CurrentState);
             }
         }
 
@@ -192,11 +192,19 @@ namespace FlickDom.Gameplay
 
         private void HandleStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
         {
-            followEnabled = nextState != FlickDomGameState.PlacementSelection;
+            followEnabled = !UsesBoardView(nextState);
             if (followEnabled)
             {
                 SnapToTarget();
             }
+        }
+
+        private static bool UsesBoardView(FlickDomGameState state)
+        {
+            return state == FlickDomGameState.PieceOrderSelection
+                || state == FlickDomGameState.PlayerFlicking
+                || state == FlickDomGameState.PhysicsProcessing
+                || state == FlickDomGameState.PlacementSelection;
         }
 
         private void SnapToAimFocus()
