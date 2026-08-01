@@ -104,6 +104,7 @@ namespace FlickDom.EditorTools
             if (selectionIndex == 0 && cameraFollow)
             {
                 Undo.RecordObject(cameraFollow, "Configure Monkey Camera Follow");
+                cameraFollow.UseTopViewPreset();
                 cameraFollow.SetTarget(monkeyObject.transform);
                 EditorUtility.SetDirty(cameraFollow);
             }

@@ -8,6 +8,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private Transform target;
         [SerializeField] private GameModeManager gameModeManager;
         [SerializeField] private Vector3 targetOffset = new Vector3(0f, 0.75f, 0f);
+        [SerializeField] private bool useTopView = true;
+        [SerializeField] private float topViewDistance = 8.5f;
+        [SerializeField] private float topViewMinDistance = 5f;
+        [SerializeField] private float topViewMaxDistance = 14f;
+        [SerializeField] private float topViewPitch = 82f;
+        [SerializeField] private float topViewYaw;
         [SerializeField] private float distance = 4.2f;
         [SerializeField] private float minDistance = 2f;
         [SerializeField] private float maxDistance = 7f;
@@ -66,6 +72,10 @@ namespace FlickDom.Gameplay
             minDistance = Mathf.Max(0.5f, minDistance);
             maxDistance = Mathf.Max(minDistance, maxDistance);
             distance = Mathf.Clamp(distance, minDistance, maxDistance);
+            topViewMinDistance = Mathf.Max(1f, topViewMinDistance);
+            topViewMaxDistance = Mathf.Max(topViewMinDistance, topViewMaxDistance);
+            topViewDistance = Mathf.Clamp(topViewDistance, topViewMinDistance, topViewMaxDistance);
+            topViewPitch = Mathf.Clamp(topViewPitch, 65f, 88f);
             maxPitch = Mathf.Max(minPitch, maxPitch);
             pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             followSharpness = Mathf.Max(0.01f, followSharpness);
@@ -93,6 +103,20 @@ namespace FlickDom.Gameplay
             SnapToTarget();
         }
 
+        public void UseTopViewPreset()
+        {
+            useTopView = true;
+            targetOffset = new Vector3(0f, 0.4f, 0f);
+            topViewDistance = 8.5f;
+            topViewMinDistance = 5f;
+            topViewMaxDistance = 14f;
+            topViewPitch = 82f;
+            topViewYaw = 0f;
+            allowRightMouseOrbit = false;
+            allowScrollZoom = true;
+            SnapToTarget();
+        }
+
         public void SnapToTarget()
         {
             if (aimFocusActive)
@@ -111,9 +135,9 @@ namespace FlickDom.Gameplay
                 cachedTransform = transform;
             }
 
-            Quaternion orbitRotation = Quaternion.Euler(pitch, yaw, 0f);
+            Quaternion orbitRotation = GetOrbitRotation();
             Vector3 focusPoint = target.position + targetOffset;
-            Vector3 desiredPosition = focusPoint - orbitRotation * Vector3.forward * distance;
+            Vector3 desiredPosition = focusPoint - orbitRotation * Vector3.forward * GetCameraDistance();
             Quaternion desiredRotation = Quaternion.LookRotation(focusPoint - desiredPosition, Vector3.up);
 
             cachedTransform.SetPositionAndRotation(desiredPosition, desiredRotation);
@@ -153,6 +177,23 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (useTopView)
+            {
+                if (allowScrollZoom)
+                {
+                    float topViewScroll = mouse.scroll.ReadValue().y;
+                    if (!Mathf.Approximately(topViewScroll, 0f))
+                    {
+                        topViewDistance = Mathf.Clamp(
+                            topViewDistance - topViewScroll * zoomSensitivity,
+                            topViewMinDistance,
+                            topViewMaxDistance);
+                    }
+                }
+
+                return;
+            }
+
             bool shouldOrbit = !allowRightMouseOrbit || mouse.rightButton.isPressed;
             if (shouldOrbit)
             {
@@ -179,9 +220,9 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            Quaternion orbitRotation = Quaternion.Euler(pitch, yaw, 0f);
+            Quaternion orbitRotation = GetOrbitRotation();
             Vector3 focusPoint = target.position + targetOffset;
-            Vector3 desiredPosition = focusPoint - orbitRotation * Vector3.forward * distance;
+            Vector3 desiredPosition = focusPoint - orbitRotation * Vector3.forward * GetCameraDistance();
             Quaternion desiredRotation = Quaternion.LookRotation(focusPoint - desiredPosition, Vector3.up);
             float positionT = 1f - Mathf.Exp(-followSharpness * deltaTime);
             float rotationT = 1f - Mathf.Exp(-rotationSharpness * deltaTime);
@@ -244,6 +285,18 @@ namespace FlickDom.Gameplay
 
             desiredRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
             return true;
+        }
+
+        private Quaternion GetOrbitRotation()
+        {
+            return useTopView
+                ? Quaternion.Euler(topViewPitch, topViewYaw, 0f)
+                : Quaternion.Euler(pitch, yaw, 0f);
+        }
+
+        private float GetCameraDistance()
+        {
+            return useTopView ? topViewDistance : distance;
         }
     }
 }
