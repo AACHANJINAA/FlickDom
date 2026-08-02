@@ -246,6 +246,107 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1 &738081062 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6558351570595821722, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
+  m_PrefabInstance: {fileID: 1660593428}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &738081063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 738081062}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c0c195bf910df84d9e08211086e27e4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.MonkeyThirdPersonController
+  owner: 1
+  inputEnabled: 1
+  requireActivePlayer: 0
+  gameModeManager: {fileID: 0}
+  autoSetupSlingshotPresenter: 1
+  slingshotPresenter: {fileID: 2000000001}
+  slingshotLauncherPrefab: {fileID: 0}
+  slingshotLauncherMaterial: {fileID: 0}
+  cameraTransform: {fileID: 961739753}
+  walkSpeed: 2.6
+  sprintSpeed: 4.2
+  rotationSpeed: 540
+  faceCameraDirectionWhenIdle: 1
+  animator: {fileID: 738081066}
+  driveAnimator: 1
+  useAnimationStates: 0
+  idleAnimationState: IdleA
+  walkAnimationState: Walk
+  runAnimationState: Run
+  animationCrossFadeSeconds: 0.12
+  useAnimationIntParameter: 1
+  idleAnimationValue: 1
+  walkAnimationValue: 21
+  runAnimationValue: 18
+--- !u!136 &738081064
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 738081062}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.35
+  m_Height: 1.1
+  m_Direction: 1
+  m_Center: {x: 0, y: 0.55, z: 0}
+--- !u!54 &738081065
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 738081062}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 1
+  m_Constraints: 80
+  m_CollisionDetection: 3
+--- !u!95 &738081066 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 479649274824538202, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
+  m_PrefabInstance: {fileID: 1660593428}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &738081067 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
+  m_PrefabInstance: {fileID: 1660593428}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &789277668
 GameObject:
   m_ObjectHideFlags: 0
@@ -631,7 +732,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.MonkeyThirdPersonCameraFollow
   target: {fileID: 738081067}
+  gameModeManager: {fileID: 0}
   targetOffset: {x: 0, y: 0.75, z: 0}
+  useTopView: 1
+  topViewDistance: 8.5
+  topViewMinDistance: 5
+  topViewMaxDistance: 14
+  topViewPitch: 82
+  topViewYaw: 0
   distance: 4.2
   minDistance: 2
   maxDistance: 7
@@ -645,6 +753,8 @@ MonoBehaviour:
   rotationSharpness: 18
   allowRightMouseOrbit: 0
   allowScrollZoom: 1
+  aimFocusSharpness: 18
+  aimRotationSharpness: 24
 --- !u!1 &1305843885
 GameObject:
   m_ObjectHideFlags: 0
@@ -873,7 +983,7 @@ Transform:
   m_GameObject: {fileID: 1305843885}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3, y: 0.25, z: 0}
+  m_LocalPosition: {x: 3, y: 0.27, z: 0.05}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1004,6 +1114,9 @@ MonoBehaviour:
   - {fileID: 1305843886}
   player2Pieces:
   - {fileID: 789277670}
+  player1PieceObjects: []
+  player2PieceObjects: []
+  configureAuthoredPieceComponents: 1
   player1TokenDataSequence:
   - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
   - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
@@ -1018,6 +1131,9 @@ MonoBehaviour:
   generatedPieceSpacing: 1.1
   pieceSelectionRaycastDistance: 1000
   logStateChanges: 1
+  monkeySelectors: []
+  monkeySelectionRadius: 1.25
+  allowPointerPieceOrderSelection: 0
   orderLabelFont: {fileID: 0}
   orderLabelSize: {x: 72, y: 72}
   orderLabelWorldOffset: {x: 0, y: 0.8, z: 0}
@@ -1070,7 +1186,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlacementCameraController
   gameModeManager: {fileID: 1371976854}
   tokenMapGridView: {fileID: 1371976857}
+  flickBoardResolver: {fileID: 0}
   targetCamera: {fileID: 961739752}
+  flickOffset: {x: 0, y: 4.8, z: -2.8}
+  flickEulerAngles: {x: 60, y: 0, z: 0}
+  useOrthographicDuringFlick: 0
+  flickOrthographicSize: 3.5
   placementOffset: {x: 0, y: 6, z: 0}
   placementEulerAngles: {x: 90, y: 0, z: 0}
   useOrthographicDuringPlacement: 1
@@ -1211,11 +1332,13 @@ MonoBehaviour:
   orderLabelSize: {x: 260, y: 42}
   winLabelSize: {x: 520, y: 120}
   restartButtonSize: {x: 220, y: 56}
+  returnToMenuButtonSize: {x: 220, y: 56}
   player1Offset: {x: 28, y: -24}
   player2Offset: {x: -28, y: -24}
   turnOffset: {x: 0, y: -34}
   orderOffset: {x: 0, y: -72}
   restartButtonOffset: {x: 0, y: -88}
+  returnToMenuButtonOffset: {x: 0, y: -142}
   player1Prefix: P1
   player2Prefix: P2
   yourTurnText: Your Turn
@@ -1223,6 +1346,7 @@ MonoBehaviour:
   player1WinText: P1 WIN!!
   player2WinText: P2 WIN!!
   restartButtonText: RESTART
+  returnToMenuButtonText: MENU
   player1Color: {r: 0.18, g: 0.42, b: 1, a: 1}
   player2Color: {r: 1, g: 0.22, b: 0.18, a: 1}
   firstOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
@@ -1425,209 +1549,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1800000001
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1800000002}
-  - component: {fileID: 1800000003}
-  m_Layer: 0
-  m_Name: Card Slot
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1800000002
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1800000001}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.18, z: 3.8}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1800000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1800000001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9dc02af6f4c34caf9d8a125e3c8be31e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardSlot
-  slotSize: {x: 1, y: 1}
-  showEmptySlot: 1
-  baseThickness: 0.025
-  borderThickness: 0.045
-  surfaceYOffset: -0.01
-  baseColor: {r: 1, g: 1, b: 1, a: 0.88}
-  borderColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
---- !u!1 &738081062 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6558351570595821722, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
-  m_PrefabInstance: {fileID: 1660593428}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &738081063
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 738081062}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6c0c195bf910df84d9e08211086e27e4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.MonkeyThirdPersonController
-  owner: 1
-  inputEnabled: 1
-  requireActivePlayer: 0
-  gameModeManager: {fileID: 0}
-  autoSetupSlingshotPresenter: 1
-  slingshotPresenter: {fileID: 2000000001}
-  slingshotLauncherPrefab: {fileID: 0}
-  slingshotLauncherMaterial: {fileID: 0}
-  cameraTransform: {fileID: 961739753}
-  walkSpeed: 2.6
-  sprintSpeed: 4.2
-  rotationSpeed: 540
-  faceCameraDirectionWhenIdle: 1
-  animator: {fileID: 738081066}
-  driveAnimator: 1
-  useAnimationStates: 0
-  idleAnimationState: IdleA
-  walkAnimationState: Walk
-  runAnimationState: Run
-  animationCrossFadeSeconds: 0.12
-  useAnimationIntParameter: 1
-  idleAnimationValue: 1
-  walkAnimationValue: 21
-  runAnimationValue: 18
---- !u!136 &738081064
-CapsuleCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 738081062}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.35
-  m_Height: 1.1
-  m_Direction: 1
-  m_Center: {x: 0, y: 0.55, z: 0}
---- !u!54 &738081065
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 738081062}
-  serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 1
-  m_Constraints: 80
-  m_CollisionDetection: 3
---- !u!95 &738081066 stripped
-Animator:
-  m_CorrespondingSourceObject: {fileID: 479649274824538202, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
-  m_PrefabInstance: {fileID: 1660593428}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &738081067 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
-  m_PrefabInstance: {fileID: 1660593428}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &2000000001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 738081062}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e34b6c2afbd6450e8a3d24e155bd325f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.MonkeySlingshotFlickPresenter
-  owner: 1
-  reactToAllPlayers: 1
-  pieces: []
-  movementController: {fileID: 738081063}
-  animator: {fileID: 738081066}
-  cachedRigidbody: {fileID: 738081065}
-  aimCamera: {fileID: 961739752}
-  aimMoveSpeed: 2.4
-  distanceBehindStone: 0.72
-  minimumAimDistance: 0.55
-  maximumAimDistance: 3
-  sidewaysOffset: 0
-  heightOffset: 0
-  positionSmoothTime: 0.045
-  rotationSpeed: 900
-  releasePoseSeconds: 0.42
-  recoilDistance: 0.14
-  returnToHomeAfterRelease: 0
-  returnSpeed: 5
-  returnRotationSpeed: 720
-  driveAnimator: 1
-  animationParameter: animation
-  idleAnimationValue: 1
-  aimMoveAnimationValue: 21
-  pullAnimationValue: 4
-  releaseAnimationValue: 37
-  showPullBands: 0
-  bandColor: {r: 0.34, g: 0.12, b: 0.035, a: 1}
-  bandWidth: 0.035
-  gripHeight: 0.62
-  gripHalfWidth: 0.18
-  stoneBandHeight: 0.12
-  disableCollidersDuringPresentation: 1
-  launcherPrefab: {fileID: 0}
-  launcherMaterial: {fileID: 0}
-  launcherScale: {x: 0.4, y: 0.4, z: 0.4}
-  launcherEulerOffset: {x: 0, y: 90, z: 0}
-  launcherStoneCenterOffset: {x: 0, y: 0, z: 0}
-  launcherGripForwardOffset: 0.28
 --- !u!1001 &1660593428
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1697,6 +1618,116 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 2000000001}
   m_SourcePrefab: {fileID: 100100000, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
+--- !u!1 &1800000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1800000002}
+  - component: {fileID: 1800000003}
+  m_Layer: 0
+  m_Name: Card Slot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1800000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1800000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.18, z: 3.8}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1800000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1800000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9dc02af6f4c34caf9d8a125e3c8be31e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardSlot
+  slotSize: {x: 1, y: 1}
+  showEmptySlot: 1
+  baseThickness: 0.025
+  borderThickness: 0.045
+  surfaceYOffset: -0.01
+  baseColor: {r: 1, g: 1, b: 1, a: 0.88}
+  borderColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
+--- !u!114 &2000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 738081062}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e34b6c2afbd6450e8a3d24e155bd325f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.MonkeySlingshotFlickPresenter
+  owner: 1
+  reactToAllPlayers: 1
+  enableFlickPresentation: 0
+  pieces: []
+  movementController: {fileID: 738081063}
+  animator: {fileID: 738081066}
+  cachedRigidbody: {fileID: 738081065}
+  aimCamera: {fileID: 961739752}
+  aimMoveSpeed: 2.4
+  aimTurnSpeed: 140
+  aimPowerAdjustSpeed: 1.8
+  distanceBehindStone: 0.72
+  minimumAimDistance: 0.55
+  maximumAimDistance: 3
+  aimCameraLocalOffset: {x: 0, y: 1.35, z: 0.08}
+  aimLookTargetOffset: {x: 0, y: 0.12, z: 0}
+  sidewaysOffset: 0
+  heightOffset: 0
+  positionSmoothTime: 0.045
+  rotationSpeed: 900
+  releasePoseSeconds: 0.42
+  recoilDistance: 0.14
+  returnToHomeAfterRelease: 0
+  returnSpeed: 5
+  returnRotationSpeed: 720
+  driveAnimator: 1
+  animationParameter: animation
+  idleAnimationValue: 1
+  aimMoveAnimationValue: 21
+  pullAnimationValue: 4
+  releaseAnimationValue: 37
+  showPullBands: 0
+  bandColor: {r: 0.34, g: 0.12, b: 0.035, a: 1}
+  bandWidth: 0.035
+  gripHeight: 0.62
+  gripHalfWidth: 0.18
+  stoneBandHeight: 0.12
+  disableCollidersDuringPresentation: 1
+  launcherPrefab: {fileID: 0}
+  launcherMaterial: {fileID: 0}
+  launcherScale: {x: 0.4, y: 0.4, z: 0.4}
+  launcherEulerOffset: {x: 0, y: 90, z: 0}
+  launcherStoneCenterOffset: {x: 0, y: 0, z: 0}
+  launcherGripForwardOffset: 0.28
+  stoneInPouchHeightOffset: 0.04
+  launcherForwardOvershootDistance: 0.24
+  launcherBackwardReboundDistance: 0.08
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
