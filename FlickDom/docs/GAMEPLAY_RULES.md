@@ -31,6 +31,17 @@ Last updated: August 5, 2026
 
 - The first player to reach 10 points wins the match.
 
+## Flick contact rule
+
+- A launched piece must collide with another piece or a wall before it settles.
+- If it settles without either collision, it is removed from the field and cannot become a placement candidate.
+- Contact with either player's piece satisfies this rule.
+
+## Piece order selection
+
+- At the start of a round, the active player selects the order of their three pieces by left-clicking each piece.
+- Proximity to the monkey and the `E`/`Space` keys are not used for piece-order selection.
+
 ## Implementation notes
 
 - Scene setup for token sequences should be consistent across gameplay scenes that use `LocalFlickTurnTestRig`.

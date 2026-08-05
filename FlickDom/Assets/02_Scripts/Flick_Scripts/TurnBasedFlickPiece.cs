@@ -524,6 +524,13 @@ namespace FlickDom.Gameplay
             KillPiece();
         }
 
+        public void RemoveFromFieldAfterMissedContact()
+        {
+            EnsureCachedComponents();
+            invalidatedThisTurn = true;
+            KillPiece();
+        }
+
         private void RegisterRequiredContact(Collider other)
         {
             if (touchedRequiredTargetThisFlick
@@ -537,9 +544,7 @@ namespace FlickDom.Gameplay
             TurnBasedFlickPiece otherPiece = other.GetComponentInParent<TurnBasedFlickPiece>();
             if (otherPiece != null)
             {
-                if (otherPiece != this
-                    && otherPiece.Owner != owner
-                    && otherPiece.Owner != FlickDomPlayerId.None)
+                if (otherPiece != this)
                 {
                     touchedRequiredTargetThisFlick = true;
                 }
