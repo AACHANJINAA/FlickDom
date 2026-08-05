@@ -1,6 +1,6 @@
 ﻿# FlickDom Gameplay Rules
 
-Last updated: July 24, 2026
+Last updated: August 5, 2026
 
 ## Token material rules
 
@@ -16,9 +16,10 @@ Last updated: July 24, 2026
 
 ## Card draw rules
 
-- The card deck is shuffled before cards are presented.
-- After shuffling, 3 random cards are shown to players.
-- The 3 visible cards are selected from the shuffled deck.
+- A match has 3 stages, and stages do not have a difficulty.
+- The full 9-card pool is shuffled once at the start of a match.
+- The shuffled cards are dealt without duplicates: 3 random cards per stage.
+- Card difficulty belongs to each card and does not depend on the current stage.
 
 ## Card score rules
 

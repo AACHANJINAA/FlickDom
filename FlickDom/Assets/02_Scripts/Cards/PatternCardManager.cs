@@ -12,11 +12,17 @@ namespace FlickDom.Gameplay
         [SerializeField] private GameModeManager gameModeManager;
         [SerializeField] private TokenMapManager tokenMapManager;
 
-        [Header("Active Card")]
+        private const int StageCount = 3;
+        private const int CardsPerStage = 3;
+
+        [Header("Stage Cards")]
         [SerializeField] private PatternCardData activeCard;
         [SerializeField] private PatternCardData[] cardDeck;
+        [InspectorName("Auto Create Random Stage Cards")]
         [SerializeField] private bool autoCreateEasyFallbackCard = true;
+        [InspectorName("Advance Stage On Cards Exhausted")]
         [SerializeField] private bool advanceFallbackDeckOnExhaustion = true;
+        [InspectorName("Clear Token Map On Stage Advance")]
         [SerializeField] private bool clearTokenMapOnFallbackDeckAdvance = true;
         [SerializeField] private bool finishRoundOnCardsExhausted = true;
         [SerializeField] private bool allowRotatedMatches = true;
@@ -27,6 +33,7 @@ namespace FlickDom.Gameplay
 
         private PatternCardData[][] runtimeFallbackDecks = new PatternCardData[0][];
         private int currentFallbackDeckIndex;
+        private int cardDrawSeed;
         private PatternCardData[] runtimeCards = new PatternCardData[0];
         private bool[] claimedCards = new bool[0];
         private FlickDomPlayerId lastChangedOwner = FlickDomPlayerId.None;
@@ -79,6 +86,16 @@ namespace FlickDom.Gameplay
         public int CurrentFallbackDeckIndex
         {
             get { return currentFallbackDeckIndex; }
+        }
+
+        public int CurrentStageNumber
+        {
+            get { return currentFallbackDeckIndex + 1; }
+        }
+
+        public int CardDrawSeed
+        {
+            get { return cardDrawSeed; }
         }
 
         private void Awake()
@@ -136,6 +153,11 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.StateChanged -= HandleStateChanged;
             }
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseRuntimeFallbackDecks();
         }
 
         public void SetActiveCard(PatternCardData nextCard)
@@ -458,10 +480,20 @@ namespace FlickDom.Gameplay
             return snapshot;
         }
 
-        public void ApplyNetworkCardStateSnapshot(int nextFallbackDeckIndex, IReadOnlyList<bool> nextClaimedCards)
+        public void ApplyNetworkCardStateSnapshot(
+            int nextFallbackDeckIndex,
+            int nextCardDrawSeed,
+            IReadOnlyList<bool> nextClaimedCards)
         {
             int clampedDeckIndex = Mathf.Max(0, nextFallbackDeckIndex);
-            if (clampedDeckIndex != currentFallbackDeckIndex)
+            bool drawChanged = cardDrawSeed != nextCardDrawSeed;
+            if (drawChanged)
+            {
+                cardDrawSeed = nextCardDrawSeed;
+                RebuildRuntimeFallbackDecks();
+            }
+
+            if (drawChanged || clampedDeckIndex != currentFallbackDeckIndex)
             {
                 EnsureRuntimeFallbackDecks();
                 if (runtimeFallbackDecks != null && clampedDeckIndex < runtimeFallbackDecks.Length)
@@ -483,7 +515,7 @@ namespace FlickDom.Gameplay
             }
 
             ActiveCardChanged?.Invoke(ActiveCard);
-            Debug.Log("[PatternCard] Network card snapshot applied. DeckIndex: " + currentFallbackDeckIndex + ", Remaining: " + RemainingCardCount + ".", this);
+            Debug.Log("[PatternCard] Network card snapshot applied. Stage: " + CurrentStageNumber + ", DrawSeed: " + cardDrawSeed + ", Remaining: " + RemainingCardCount + ".", this);
         }
 
         private static bool CanControlScoreState()
@@ -501,7 +533,8 @@ namespace FlickDom.Gameplay
 
             if (runtimeFallbackDecks == null || runtimeFallbackDecks.Length <= 0)
             {
-                runtimeFallbackDecks = PatternCardData.CreateRuntimeProgressionDecks();
+                EnsureCardDrawSeed();
+                RebuildRuntimeFallbackDecks();
                 currentFallbackDeckIndex = 0;
             }
         }
@@ -538,7 +571,16 @@ namespace FlickDom.Gameplay
         private void ResetCardProgress()
         {
             currentFallbackDeckIndex = 0;
-            EnsureRuntimeFallbackDecks();
+            if (activeCard == null && !HasConfiguredDeck() && autoCreateEasyFallbackCard)
+            {
+                cardDrawSeed = CreateCardDrawSeed();
+                RebuildRuntimeFallbackDecks();
+            }
+            else
+            {
+                EnsureRuntimeFallbackDecks();
+            }
+
             RefreshRuntimeCards();
         }
 
@@ -564,7 +606,7 @@ namespace FlickDom.Gameplay
 
             if (logCardClaims && ActiveCard != null)
             {
-                Debug.Log("[PatternCard] Card round changed to " + ActiveCard.Difficulty + ".", this);
+                Debug.Log("[PatternCard] Advanced to Stage " + CurrentStageNumber + ".", this);
             }
 
             return true;
@@ -614,6 +656,56 @@ namespace FlickDom.Gameplay
             }
 
             return false;
+        }
+
+        private void EnsureCardDrawSeed()
+        {
+            if (cardDrawSeed == 0)
+            {
+                cardDrawSeed = CreateCardDrawSeed();
+            }
+        }
+
+        private void RebuildRuntimeFallbackDecks()
+        {
+            ReleaseRuntimeFallbackDecks();
+            runtimeFallbackDecks = PatternCardData.CreateRuntimeStageDecks(
+                cardDrawSeed,
+                StageCount,
+                CardsPerStage);
+        }
+
+        private void ReleaseRuntimeFallbackDecks()
+        {
+            if (runtimeFallbackDecks == null)
+            {
+                return;
+            }
+
+            for (int stageIndex = 0; stageIndex < runtimeFallbackDecks.Length; stageIndex++)
+            {
+                PatternCardData[] stageCards = runtimeFallbackDecks[stageIndex];
+                if (stageCards == null)
+                {
+                    continue;
+                }
+
+                for (int cardIndex = 0; cardIndex < stageCards.Length; cardIndex++)
+                {
+                    if (stageCards[cardIndex] != null)
+                    {
+                        Destroy(stageCards[cardIndex]);
+                    }
+                }
+            }
+
+            runtimeFallbackDecks = new PatternCardData[0][];
+        }
+
+        private static int CreateCardDrawSeed()
+        {
+            int seed = Guid.NewGuid().GetHashCode();
+            return seed == 0 ? 1 : seed;
         }
 
         private void ResetClaimedCards()

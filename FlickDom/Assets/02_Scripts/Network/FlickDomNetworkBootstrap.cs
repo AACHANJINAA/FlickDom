@@ -1980,12 +1980,13 @@ namespace FlickDom.Networking
             }
 
             bool[] claimedCards = patternCardManager.GetClaimedCardSnapshot();
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (5 + claimedCards.Length), Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (6 + claimedCards.Length), Allocator.Temp))
             {
                 writer.WriteValueSafe(patternCardManager.Player1Score);
                 writer.WriteValueSafe(patternCardManager.Player2Score);
                 writer.WriteValueSafe((int)patternCardManager.Winner);
                 writer.WriteValueSafe(patternCardManager.CurrentFallbackDeckIndex);
+                writer.WriteValueSafe(patternCardManager.CardDrawSeed);
                 writer.WriteValueSafe(claimedCards.Length);
                 for (int i = 0; i < claimedCards.Length; i++)
                 {
@@ -1995,7 +1996,7 @@ namespace FlickDom.Networking
                 networkManager.CustomMessagingManager.SendNamedMessage(ScoreStateMessageName, clients, writer);
             }
 
-            Debug.Log("[Network] Score state broadcast. P1: " + patternCardManager.Player1Score + ", P2: " + patternCardManager.Player2Score + ", Winner: " + patternCardManager.Winner + ", DeckIndex: " + patternCardManager.CurrentFallbackDeckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+            Debug.Log("[Network] Score state broadcast. P1: " + patternCardManager.Player1Score + ", P2: " + patternCardManager.Player2Score + ", Winner: " + patternCardManager.Winner + ", Stage: " + patternCardManager.CurrentStageNumber + ", DrawSeed: " + patternCardManager.CardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
         private void HandleScoreStateMessage(ulong senderClientId, FastBufferReader reader)
@@ -2009,6 +2010,7 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out int player2Score);
             reader.ReadValueSafe(out int winnerValue);
             reader.ReadValueSafe(out int deckIndex);
+            reader.ReadValueSafe(out int cardDrawSeed);
             reader.ReadValueSafe(out int claimedCount);
             List<bool> claimedCards = new List<bool>(Mathf.Max(0, claimedCount));
             for (int i = 0; i < claimedCount; i++)
@@ -2021,10 +2023,10 @@ namespace FlickDom.Networking
             if (patternCardManager != null)
             {
                 patternCardManager.ApplyNetworkScoreSnapshot(player1Score, player2Score, (FlickDomPlayerId)winnerValue);
-                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, claimedCards);
+                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards);
             }
 
-            Debug.Log("[Network] Score state received from Host. P1: " + player1Score + ", P2: " + player2Score + ", Winner: " + (FlickDomPlayerId)winnerValue + ", DeckIndex: " + deckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+            Debug.Log("[Network] Score state received from Host. P1: " + player1Score + ", P2: " + player2Score + ", Winner: " + (FlickDomPlayerId)winnerValue + ", StageIndex: " + deckIndex + ", DrawSeed: " + cardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
         private void BroadcastCardState()
@@ -2049,9 +2051,10 @@ namespace FlickDom.Networking
             }
 
             bool[] claimedCards = patternCardManager.GetClaimedCardSnapshot();
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (2 + claimedCards.Length), Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * (3 + claimedCards.Length), Allocator.Temp))
             {
                 writer.WriteValueSafe(patternCardManager.CurrentFallbackDeckIndex);
+                writer.WriteValueSafe(patternCardManager.CardDrawSeed);
                 writer.WriteValueSafe(claimedCards.Length);
                 for (int i = 0; i < claimedCards.Length; i++)
                 {
@@ -2061,7 +2064,7 @@ namespace FlickDom.Networking
                 networkManager.CustomMessagingManager.SendNamedMessage(CardStateMessageName, clients, writer);
             }
 
-            Debug.Log("[Network] Card state broadcast. DeckIndex: " + patternCardManager.CurrentFallbackDeckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+            Debug.Log("[Network] Card state broadcast. Stage: " + patternCardManager.CurrentStageNumber + ", DrawSeed: " + patternCardManager.CardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
         private void HandleCardStateMessage(ulong senderClientId, FastBufferReader reader)
@@ -2072,6 +2075,7 @@ namespace FlickDom.Networking
             }
 
             reader.ReadValueSafe(out int deckIndex);
+            reader.ReadValueSafe(out int cardDrawSeed);
             reader.ReadValueSafe(out int claimedCount);
             List<bool> claimedCards = new List<bool>(Mathf.Max(0, claimedCount));
             for (int i = 0; i < claimedCount; i++)
@@ -2083,10 +2087,10 @@ namespace FlickDom.Networking
             ResolvePatternCardManager();
             if (patternCardManager != null)
             {
-                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, claimedCards);
+                patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards);
             }
 
-            Debug.Log("[Network] Card state received from Host. DeckIndex: " + deckIndex + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+            Debug.Log("[Network] Card state received from Host. StageIndex: " + deckIndex + ", DrawSeed: " + cardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
         private static string BuildClaimedCardsLog(IReadOnlyList<bool> claimedCards)

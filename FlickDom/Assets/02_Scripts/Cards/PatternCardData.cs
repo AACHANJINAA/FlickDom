@@ -271,14 +271,78 @@ namespace FlickDom.Gameplay
             };
         }
 
-        public static PatternCardData[][] CreateRuntimeProgressionDecks()
+        public static PatternCardData[] CreateRuntimeCardPool()
         {
-            return new[]
+            PatternCardData[] easyCards = CreateRuntimeEasyDeck();
+            PatternCardData[] normalCards = CreateRuntimeNormalDeck();
+            PatternCardData[] hardCards = CreateRuntimeHardDeck();
+            PatternCardData[] cardPool = new PatternCardData[
+                easyCards.Length + normalCards.Length + hardCards.Length];
+
+            int destinationIndex = 0;
+            CopyCards(easyCards, cardPool, ref destinationIndex);
+            CopyCards(normalCards, cardPool, ref destinationIndex);
+            CopyCards(hardCards, cardPool, ref destinationIndex);
+            return cardPool;
+        }
+
+        public static PatternCardData[][] CreateRuntimeStageDecks(
+            int shuffleSeed,
+            int stageCount = 3,
+            int cardsPerStage = 3)
+        {
+            PatternCardData[] cardPool = CreateRuntimeCardPool();
+            int normalizedStageCount = Mathf.Max(1, stageCount);
+            int normalizedCardsPerStage = Mathf.Max(1, cardsPerStage);
+            int requiredCardCount = normalizedStageCount * normalizedCardsPerStage;
+            if (cardPool.Length < requiredCardCount)
             {
-                CreateRuntimeEasyDeck(),
-                CreateRuntimeNormalDeck(),
-                CreateRuntimeHardDeck()
-            };
+                Debug.LogError(
+                    "[PatternCard] Not enough cards to create "
+                    + normalizedStageCount
+                    + " stages with "
+                    + normalizedCardsPerStage
+                    + " cards each.");
+                return new PatternCardData[0][];
+            }
+
+            System.Random random = new System.Random(shuffleSeed);
+            for (int i = cardPool.Length - 1; i > 0; i--)
+            {
+                int swapIndex = random.Next(i + 1);
+                (cardPool[i], cardPool[swapIndex]) =
+                    (cardPool[swapIndex], cardPool[i]);
+            }
+
+            PatternCardData[][] stageDecks =
+                new PatternCardData[normalizedStageCount][];
+            int sourceIndex = 0;
+            for (int stageIndex = 0; stageIndex < stageDecks.Length; stageIndex++)
+            {
+                PatternCardData[] stageCards =
+                    new PatternCardData[normalizedCardsPerStage];
+                for (int cardIndex = 0; cardIndex < stageCards.Length; cardIndex++)
+                {
+                    stageCards[cardIndex] = cardPool[sourceIndex];
+                    sourceIndex++;
+                }
+
+                stageDecks[stageIndex] = stageCards;
+            }
+
+            return stageDecks;
+        }
+
+        private static void CopyCards(
+            PatternCardData[] source,
+            PatternCardData[] destination,
+            ref int destinationIndex)
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                destination[destinationIndex] = source[i];
+                destinationIndex++;
+            }
         }
 
         private static int GetScoreValueForDifficulty(PatternCardDifficulty difficulty)
