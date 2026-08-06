@@ -565,7 +565,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 789277668}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: -2497650918596781483, guid: e49cf3b3205d71248a94b5e46acab6c9, type: 3}
 --- !u!4 &789277679
 Transform:
   m_ObjectHideFlags: 0
@@ -1000,7 +1000,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1305843885}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: -6043152560544980575, guid: 01841124d01fa4741a2daed526bbb5b1, type: 3}
 --- !u!4 &1305843895
 Transform:
   m_ObjectHideFlags: 0
@@ -1158,9 +1158,6 @@ MonoBehaviour:
   generatedPieceSpacing: 1.1
   pieceSelectionRaycastDistance: 1000
   logStateChanges: 1
-  monkeySelectors: []
-  monkeySelectionRadius: 1.25
-  allowPointerPieceOrderSelection: 0
   orderLabelFont: {fileID: 0}
   orderLabelSize: {x: 72, y: 72}
   orderLabelWorldOffset: {x: 0, y: 0.8, z: 0}
