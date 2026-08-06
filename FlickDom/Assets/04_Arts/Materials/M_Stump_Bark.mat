@@ -24,27 +24,31 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: f8299a48e7b94f24db0cb63154ca2f87, type: 3}
+        m_Texture: {fileID: 2800000, guid: 4648b5fa47dfde040bf049a0c95111e3, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: f46ab5f1aea8e40489bdf36af5018fae, type: 3}
+        m_Texture: {fileID: 2800000, guid: de61d64bcee95364dafa9e8a94250462, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 0ff0a4ab4dbb0b74ea2dbc35e0c966a4, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BumpScale: 0.22
+    - _BumpScale: 0.34
     - _Metallic: 0
-    - _RimPower: 3
-    - _Smoothness: 0.12
-    - _SpecularIntensity: 0.5
+    - _OcclusionStrength: 0.24
+    - _RimIntensity: 0.055
+    - _RimPower: 3.4
+    - _RotateTexture90: 0
+    - _Smoothness: 0.62
+    - _SpecularIntensity: 0.42
+    - _TextureStrength: 0.92
     m_Colors:
-    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _BaseColor: {r: 1, g: 0.96, b: 0.9, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
-    - _RimColor: {r: 1, g: 1, b: 1, a: 1}
+    - _RimColor: {r: 1, g: 0.78, b: 0.52, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

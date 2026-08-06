@@ -39,12 +39,13 @@ Material:
     m_Floats:
     - _BumpScale: 1
     - _Metallic: 0
-    - _RimPower: 3
-    - _Smoothness: 0.25
-    - _SpecularIntensity: 0.5
+    - _RimIntensity: 0.12
+    - _RimPower: 3.2
+    - _Smoothness: 0.3
+    - _SpecularIntensity: 0.68
     m_Colors:
-    - _BaseColor: {r: 0.85, g: 0.2, b: 0.18, a: 1}
+    - _BaseColor: {r: 0.72, g: 0.38, b: 0.32, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
-    - _RimColor: {r: 1, g: 1, b: 1, a: 1}
+    - _RimColor: {r: 1, g: 0.76, b: 0.66, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

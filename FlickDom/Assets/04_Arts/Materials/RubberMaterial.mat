@@ -105,11 +105,12 @@ Material:
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _RimPower: 3
-    - _Smoothness: 0.35
+    - _RimIntensity: 0.07
+    - _RimPower: 3.8
+    - _Smoothness: 0.22
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
-    - _SpecularIntensity: 0.5
+    - _SpecularIntensity: 0.42
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0

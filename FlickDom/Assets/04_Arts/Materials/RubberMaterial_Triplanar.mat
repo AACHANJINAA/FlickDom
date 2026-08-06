@@ -39,9 +39,10 @@ Material:
     m_Floats:
     - _BumpScale: 1
     - _Metallic: 0
-    - _RimPower: 3
-    - _Smoothness: 0.35
-    - _SpecularIntensity: 0.5
+    - _RimIntensity: 0.07
+    - _RimPower: 3.8
+    - _Smoothness: 0.22
+    - _SpecularIntensity: 0.42
     - _TriplanarScale: 1
     - _TriplanarSharpness: 4
     m_Colors:

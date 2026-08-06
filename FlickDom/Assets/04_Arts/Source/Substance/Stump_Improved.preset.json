@@ -1,0 +1,27 @@
+{
+  "name": "FlickDom Stylized Tree Stump Improved",
+  "style": "soft handmade wooden toy",
+  "resolution": [768, 768],
+  "textures": {
+    "cut": {
+      "baseColor": "Assets/04_Arts/Textures/Stump/Improved/T_StumpCut_Improved_BaseColor.png",
+      "normal": "Assets/04_Arts/Textures/Stump/Improved/T_StumpCut_Improved_Normal.png",
+      "mask": "Assets/04_Arts/Textures/Stump/Improved/T_StumpCut_Improved_Mask.png",
+      "ringCountVisible": "approximately 11-13",
+      "ringContrast": 0.068,
+      "normalStrength": 0.16
+    },
+    "bark": {
+      "baseColor": "Assets/04_Arts/Textures/Stump/Improved/T_StumpBark_Improved_BaseColor.png",
+      "normal": "Assets/04_Arts/Textures/Stump/Improved/T_StumpBark_Improved_Normal.png",
+      "mask": "Assets/04_Arts/Textures/Stump/Improved/T_StumpBark_Improved_Mask.png",
+      "majorVerticalRidges": 10.5,
+      "normalStrength": 0.34
+    }
+  },
+  "materials": [
+    "Assets/04_Arts/Materials/Stump/M_Stump_Bark_Improved.mat",
+    "Assets/04_Arts/Materials/Stump/M_Stump_Cut_Improved.mat"
+  ],
+  "notes": "Original stump materials remain untouched. Improved materials are assigned only in the AssetGallery_PBR demo scene."
+}

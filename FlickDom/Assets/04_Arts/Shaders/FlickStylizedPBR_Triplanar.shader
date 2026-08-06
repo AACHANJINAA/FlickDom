@@ -13,12 +13,13 @@ Shader "FlickDom/StylizedPBR_Triplanar"
         [NoScaleOffset] _MetallicGlossMap ("Mask Map (R=Metallic, A=Smoothness)", 2D) = "white" {}
         _Metallic ("Metallic Scale", Range(0, 1)) = 0.0
         _Smoothness ("Smoothness Scale", Range(0, 1)) = 0.5
-        _SpecularIntensity ("Specular Intensity (흰색 반사광 조절)", Range(0, 2)) = 0.5
+        _SpecularIntensity ("PBR Reflectance Scale", Range(0, 2)) = 0.65
 
         [HDR] _EmissionColor ("Emission Color", Color) = (0, 0, 0, 0)
 
         _RimColor ("Rim Color", Color) = (1, 1, 1, 1)
         _RimPower ("Rim Power", Range(0.1, 10.0)) = 3.0
+        _RimIntensity ("Rim Intensity", Range(0, 1)) = 0.12
 
         [Header(Triplanar Mapping)]
         _TriplanarScale ("Triplanar Scale (tiles per world unit)", Float) = 1.0
@@ -41,8 +42,12 @@ Shader "FlickDom/StylizedPBR_Triplanar"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #define _SPECULAR_SETUP 1
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             struct Attributes
@@ -79,6 +84,7 @@ Shader "FlickDom/StylizedPBR_Triplanar"
                 half4 _EmissionColor;
                 half4 _RimColor;
                 half _RimPower;
+                half _RimIntensity;
                 float _TriplanarScale;
                 float _TriplanarSharpness;
             CBUFFER_END
@@ -129,48 +135,53 @@ Shader "FlickDom/StylizedPBR_Triplanar"
                 half4 texColor = SampleTriplanar(TEXTURE2D_ARGS(_MainTex, sampler_MainTex), input.positionOS, triBlend, _TriplanarScale);
                 half4 mask = SampleTriplanar(TEXTURE2D_ARGS(_MetallicGlossMap, sampler_MetallicGlossMap), input.positionOS, triBlend, _TriplanarScale);
 
-                float3 albedo = texColor.rgb * _BaseColor.rgb;
-                float alpha = texColor.a * _BaseColor.a;
-                float metallic = mask.r * _Metallic;
-                float smoothness = mask.a * _Smoothness;
+                half3 albedo = texColor.rgb * _BaseColor.rgb;
+                half alpha = texColor.a * _BaseColor.a;
+                half metallic = saturate(mask.r * _Metallic);
+                half smoothness = saturate(mask.a * _Smoothness);
 
                 // 노멀 맵은 UV 기반 샘플링 그대로 유지 (트라이플래너 노멀 블렌딩은 범위 밖)
                 half4 bumpMap = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
-                float3 normalTS = UnpackNormalScale(bumpMap, _BumpScale);
+                half3 normalTS = UnpackNormalScale(bumpMap, _BumpScale);
 
-                float3x3 tangentToWorld = float3x3(
+                half3x3 tangentToWorld = half3x3(
                     normalize(input.tangentWS),
                     normalize(input.bitangentWS),
                     normalize(input.normalWS)
                 );
-                float3 normal = normalize(mul(normalTS, tangentToWorld));
+                half3 normal = NormalizeNormalPerPixel(mul(normalTS, tangentToWorld));
+                half3 viewDir = GetWorldSpaceNormalizeViewDir(input.positionWS);
 
-                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - input.positionWS);
+                InputData inputData = (InputData)0;
+                inputData.positionWS = input.positionWS;
+                inputData.positionCS = input.positionHCS;
+                inputData.normalWS = normal;
+                inputData.viewDirectionWS = viewDir;
+                inputData.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                inputData.fogCoord = ComputeFogFactor(input.positionHCS.z);
+                inputData.vertexLighting = half3(0, 0, 0);
+                inputData.bakedGI = SampleSH(normal);
+                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionHCS);
+                inputData.shadowMask = half4(1, 1, 1, 1);
+                inputData.tangentToWorld = tangentToWorld;
 
-                float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
-                Light mainLight = GetMainLight(shadowCoord);
+                SurfaceData surfaceData = (SurfaceData)0;
+                surfaceData.albedo = albedo;
+                surfaceData.specular = lerp(half3(0.04h, 0.04h, 0.04h), albedo, metallic) * _SpecularIntensity;
+                surfaceData.metallic = metallic;
+                surfaceData.smoothness = smoothness;
+                surfaceData.normalTS = normalTS;
+                surfaceData.emission = _EmissionColor.rgb;
+                surfaceData.occlusion = 1.0h;
+                surfaceData.alpha = alpha;
 
-                float NdotL = saturate(dot(normal, mainLight.direction));
-                float3 diffuse = mainLight.color * NdotL * mainLight.shadowAttenuation;
+                half4 color = UniversalFragmentPBR(inputData, surfaceData);
 
-                float3 halfVector = normalize(mainLight.direction + viewDir);
-                float NdotH = saturate(dot(normal, halfVector));
-
-                float specularPower = exp2(10.0 * smoothness + 1.0);
-                float spec = pow(NdotH, specularPower) * metallic * _SpecularIntensity;
-                float3 specular = mainLight.color * spec * mainLight.shadowAttenuation;
-
-                float3 ambient = SampleSH(normal);
-
-                float rim = 1.0 - saturate(dot(normal, viewDir));
-                rim = smoothstep(0.4, 1.0, rim);
-                rim = pow(rim, _RimPower);
-
-                float3 rimLighting = _RimColor.rgb * rim * albedo * mainLight.color;
-
-                float3 finalColor = albedo * (diffuse + ambient) + specular + rimLighting + _EmissionColor.rgb;
-
-                return half4(finalColor, alpha);
+                half rim = pow(saturate(1.0h - dot(normal, viewDir)), _RimPower);
+                color.rgb += _RimColor.rgb * albedo * rim * _RimIntensity;
+                color.rgb = MixFog(color.rgb, inputData.fogCoord);
+                color.a = alpha;
+                return color;
             }
             ENDHLSL
         }

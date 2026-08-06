@@ -1,0 +1,36 @@
+{
+  "name": "FlickDom Soft Maple",
+  "authoringTool": "Adobe Substance 3D Designer 16.0.4",
+  "archive": "SD_FlickDom_SoftMaple.sbsar",
+  "graph": "pkg://wood_american_cherry",
+  "resolution": [1024, 1024],
+  "randomSeed": 11,
+  "parameters": {
+    "luminosity": 0.54,
+    "contrast": -0.36,
+    "hue_shift": 0.0,
+    "saturation": 0.34,
+    "normal_intensity": 0.12,
+    "normal_format": 1,
+    "height_range": 0.02,
+    "height_position": 0.5,
+    "ao_spreading": 0.8,
+    "knots": 0.02,
+    "fibers": 0.1,
+    "color": [0.75, 0.62, 0.45],
+    "base_roughness": 0.78
+  },
+  "unity": {
+    "shader": "FlickDom/StylizedPBR",
+    "materials": [
+      "M_Board_Pale_SD",
+      "M_BoardWall_SD",
+      "M_StartTray_SD"
+    ],
+    "albedoTextureStrength": [0.46, 0.52, 0.48],
+    "normalStrength": [0.50, 0.56, 0.54],
+    "occlusionStrength": [0.18, 0.18, 0.20],
+    "textureTiling": [[1.3, 1.3], [1.8, 1.0], [1.6, 1.0]],
+    "rotateTexture90": [false, true, true]
+  }
+}
