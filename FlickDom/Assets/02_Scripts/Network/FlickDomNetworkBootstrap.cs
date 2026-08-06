@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using FlickDom.Gameplay;
 using Unity.Collections;
 using Unity.Netcode;
@@ -17,6 +19,7 @@ namespace FlickDom.Networking
         [SerializeField] private UnityTransport unityTransport;
         [SerializeField] private string networkSceneName = DefaultNetworkSceneName;
         [SerializeField] private string connectAddress = "127.0.0.1";
+        [SerializeField] private string hostListenAddress = "0.0.0.0";
         [SerializeField] private ushort port = 7777;
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
@@ -245,7 +248,7 @@ namespace FlickDom.Networking
             GUI.Box(new Rect(16f, 16f, 320f, 92f), "FlickDom Network");
             GUI.Label(new Rect(28f, 42f, 296f, 22f), "Mode: " + mode + " / LocalRole: " + LocalPlayerId);
             GUI.Label(new Rect(28f, 64f, 296f, 22f), "Target: " + connectAddress + ":" + port);
-            GUI.Label(new Rect(28f, 86f, 296f, 22f), "S: Host   C: Client   X: Shutdown");
+            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Listen: " + hostListenAddress + "   S: Host   C: Client   X: Shutdown");
 
             if (showLobbyUi && !networkGameStarted && !localSinglePlayerModeActive)
             {
@@ -269,8 +272,14 @@ namespace FlickDom.Networking
             GUILayout.Label("Players: " + GetVisiblePlayerCount() + " / " + maxPlayers);
 
             GUILayout.Space(8f);
-            GUILayout.Label("Host IP");
+            GUILayout.Label("Host IP / Join IP");
             addressInput = GUILayout.TextField(addressInput);
+
+            string shareableHostAddress = GetShareableHostAddress();
+            if (!string.IsNullOrEmpty(shareableHostAddress))
+            {
+                GUILayout.Label("LAN Share IP: " + shareableHostAddress);
+            }
 
             GUILayout.Label("Port");
             portInput = GUILayout.TextField(portInput);
@@ -338,7 +347,7 @@ namespace FlickDom.Networking
             }
 
             Debug.Log("[Network] Starting Host on " + connectAddress + ":" + port + ".", this);
-            ConfigureTransport(connectAddress, port);
+            ConfigureTransportForHost(connectAddress, port);
             bool started = networkManager.StartHost();
             if (!started)
             {
@@ -361,7 +370,7 @@ namespace FlickDom.Networking
             }
 
             Debug.Log("[Network] Starting Client. Target is " + connectAddress + ":" + port + ".", this);
-            ConfigureTransport(connectAddress, port);
+            ConfigureTransportForClient(connectAddress, port);
             bool started = networkManager.StartClient();
             if (!started)
             {
@@ -713,9 +722,45 @@ namespace FlickDom.Networking
             return true;
         }
 
-        private void ConfigureTransport(string address, ushort targetPort)
+        private void ConfigureTransportForHost(string address, ushort targetPort)
+        {
+            string listenAddress = string.IsNullOrWhiteSpace(hostListenAddress) ? "0.0.0.0" : hostListenAddress.Trim();
+            unityTransport.SetConnectionData(address, targetPort, listenAddress);
+        }
+
+        private void ConfigureTransportForClient(string address, ushort targetPort)
         {
             unityTransport.SetConnectionData(address, targetPort);
+        }
+
+        private static string GetShareableHostAddress()
+        {
+            try
+            {
+                IPAddress[] hostAddresses = Dns.GetHostAddresses(Dns.GetHostName());
+                for (int i = 0; i < hostAddresses.Length; i++)
+                {
+                    IPAddress address = hostAddresses[i];
+                    if (address.AddressFamily != AddressFamily.InterNetwork)
+                    {
+                        continue;
+                    }
+
+                    string value = address.ToString();
+                    if (value.StartsWith("127.", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    return value;
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[Network] Failed to resolve LAN IP for lobby display: " + exception.Message, null);
+            }
+
+            return string.Empty;
         }
 
         private void SubscribeNetworkEvents(bool subscribe)
