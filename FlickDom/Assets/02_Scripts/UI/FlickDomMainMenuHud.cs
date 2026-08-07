@@ -496,7 +496,12 @@ namespace FlickDom.Gameplay
             {
                 portInput.interactable = canEditConnection;
                 string currentPortText = bootstrap != null ? bootstrap.CurrentPort.ToString() : "7777";
-                if (!portInput.isFocused && !string.Equals(portInput.text, currentPortText, System.StringComparison.Ordinal))
+                bool shouldSyncActualHostPort = hasBootstrap
+                    && bootstrap.IsRunning
+                    && bootstrap.LocalPlayerId == FlickDomPlayerId.Player1;
+                if (shouldSyncActualHostPort
+                    && !portInput.isFocused
+                    && !string.Equals(portInput.text, currentPortText, System.StringComparison.Ordinal))
                 {
                     portInput.text = currentPortText;
                 }
