@@ -73,6 +73,10 @@ namespace FlickDom.Gameplay
         private Material player1OwnedMaterial;
         private Material player2OwnedMaterial;
         private Transform cachedTransform;
+        private Transform placementGridRoot;
+        private Transform player1StarRoot;
+        private Transform player2StarRoot;
+        private bool placementBoardVisible = true;
         private GameObject[] player1Stars;
         private GameObject[] player2Stars;
         private Vector2Int?[] player1StarCells;
@@ -278,8 +282,31 @@ namespace FlickDom.Gameplay
             return false;
         }
 
+        public void SetPlacementBoardVisible(bool visible)
+        {
+            if (placementBoardVisible == visible)
+            {
+                return;
+            }
+
+            placementBoardVisible = visible;
+            if (placementGridRoot != null)
+            {
+                placementGridRoot.gameObject.SetActive(visible);
+            }
+
+            SetStarRootVisible(player1StarRoot, visible);
+            SetStarRootVisible(player2StarRoot, visible);
+            SetStarPoolVisible(player1Stars, visible);
+            SetStarPoolVisible(player2Stars, visible);
+        }
+
         private void BuildGrid()
         {
+            placementGridRoot = new GameObject("Generated Token Map Board").transform;
+            placementGridRoot.SetParent(cachedTransform, false);
+            placementGridRoot.gameObject.SetActive(placementBoardVisible);
+
             cellRendererGroups = new Renderer[boardSize * boardSize][];
             candidateMarkerRenderers = new Renderer[boardSize, boardSize];
             candidateMarkerObjects = new GameObject[boardSize, boardSize];
@@ -296,7 +323,7 @@ namespace FlickDom.Gameplay
                 {
                     GameObject cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     cellObject.name = "Token Map Cell " + x + "," + y;
-                    cellObject.transform.SetParent(cachedTransform, false);
+                    cellObject.transform.SetParent(placementGridRoot, false);
                     cellObject.transform.position = new Vector3(
                         gridCenter.x + (x * step) - offset,
                         gridCenter.y,
@@ -361,7 +388,7 @@ namespace FlickDom.Gameplay
         {
             GameObject markerObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             markerObject.name = "Token Map Candidate Marker " + x + "," + y;
-            markerObject.transform.SetParent(cachedTransform, false);
+            markerObject.transform.SetParent(placementGridRoot, false);
             markerObject.transform.position = new Vector3(
                 cellPosition.x,
                 cellPosition.y + (tileHeight * 0.5f) + candidateMarkerYOffset,
@@ -464,7 +491,7 @@ namespace FlickDom.Gameplay
             }
 
             int flags = candidateFlags[cell.x, cell.y];
-            bool hasCandidate = showCandidateMarkers && flags != 0;
+            bool hasCandidate = placementBoardVisible && showCandidateMarkers && flags != 0;
             markerObject.SetActive(hasCandidate);
             if (!hasCandidate)
             {
@@ -603,6 +630,8 @@ namespace FlickDom.Gameplay
             GameObject[] stars = new GameObject[poolSize];
             Transform root = new GameObject(player + " Occupation Stars").transform;
             root.SetParent(cachedTransform, false);
+            root.gameObject.SetActive(placementBoardVisible);
+            SetStarRoot(player, root);
             CreateMarkerTray(player, root, poolSize);
 
             for (int i = 0; i < poolSize; i++)
@@ -843,7 +872,7 @@ namespace FlickDom.Gameplay
 
             starCells[starIndex] = cell;
             stars[starIndex].transform.position = GetStarCellWorldPosition(cell);
-            stars[starIndex].SetActive(true);
+            stars[starIndex].SetActive(placementBoardVisible);
         }
 
         private void PlaceFlickBoardStar(FlickDomPlayerId player, Vector2Int cell)
@@ -977,7 +1006,7 @@ namespace FlickDom.Gameplay
         private void MoveStarToTray(FlickDomPlayerId player, GameObject starObject, int index)
         {
             starObject.transform.position = GetStarTrayWorldPosition(player, index);
-            starObject.SetActive(true);
+            starObject.SetActive(placementBoardVisible);
         }
 
         private Vector3 GetStarCellWorldPosition(Vector2Int cell)
@@ -1065,6 +1094,44 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        private void SetStarRoot(FlickDomPlayerId player, Transform root)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                player1StarRoot = root;
+                return;
+            }
+
+            if (player == FlickDomPlayerId.Player2)
+            {
+                player2StarRoot = root;
+            }
+        }
+
+        private static void SetStarRootVisible(Transform root, bool visible)
+        {
+            if (root != null)
+            {
+                root.gameObject.SetActive(visible);
+            }
+        }
+
+        private static void SetStarPoolVisible(GameObject[] stars, bool visible)
+        {
+            if (stars == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < stars.Length; i++)
+            {
+                if (stars[i] != null)
+                {
+                    stars[i].SetActive(visible);
+                }
+            }
         }
 
         private GameObject[] GetFlickBoardStars(FlickDomPlayerId player)

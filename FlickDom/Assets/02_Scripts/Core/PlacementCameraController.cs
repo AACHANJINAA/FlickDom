@@ -97,6 +97,7 @@ namespace FlickDom.Gameplay
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged += HandleStateChanged;
+                SetPlacementBoardVisible(!IsFlickViewState(gameModeManager.CurrentState));
             }
         }
 
@@ -149,6 +150,9 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            SetPlacementBoardVisible(!IsFlickViewState(gameModeManager != null
+                ? gameModeManager.CurrentState
+                : FlickDomGameState.NotStarted));
             BeginTransition(
                 manualPreviewPosition,
                 manualPreviewRotation,
@@ -207,6 +211,7 @@ namespace FlickDom.Gameplay
 
         private void MoveToPlacementView()
         {
+            SetPlacementBoardVisible(true);
             Vector3 focus = tokenMapGridView != null ? tokenMapGridView.GridCenter : Vector3.zero;
             Vector3 targetPosition = focus + placementOffset;
             Quaternion targetRotation = Quaternion.Euler(placementEulerAngles);
@@ -218,6 +223,7 @@ namespace FlickDom.Gameplay
 
         private void MoveToFlickView()
         {
+            SetPlacementBoardVisible(false);
             Vector3 focus = GetFlickBoardCenter();
             flickOrbitYaw = flickEulerAngles.y;
             Vector3 targetPosition = GetFlickOrbitPosition(focus);
@@ -240,6 +246,7 @@ namespace FlickDom.Gameplay
 
         private void MoveToGameplayView()
         {
+            SetPlacementBoardVisible(true);
             BeginTransition(gameplayPosition, gameplayRotation, gameplayOrthographic, gameplayOrthographicSize);
         }
 
@@ -320,6 +327,14 @@ namespace FlickDom.Gameplay
             return state == FlickDomGameState.PieceOrderSelection
                 || state == FlickDomGameState.PlayerFlicking
                 || state == FlickDomGameState.PhysicsProcessing;
+        }
+
+        private void SetPlacementBoardVisible(bool visible)
+        {
+            if (tokenMapGridView != null)
+            {
+                tokenMapGridView.SetPlacementBoardVisible(visible);
+            }
         }
 
         private Vector3 GetFlickOrbitPosition(Vector3 focus)
