@@ -31,7 +31,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private Material player2PieceMaterialOverride;
         [Header("Start Tray Visuals")]
         [SerializeField] private GameObject startTrayPrefab;
+        [SerializeField] private GridCellCandidateResolver startTrayBoardResolver;
         [SerializeField] private bool showStartTrays = true;
+        [SerializeField] private bool alignStartTraysToBoardCells = true;
+        [SerializeField] private float startTrayCellSizeRatio = 0.95f;
+        [SerializeField] private float startTraySideGap = 0.16f;
+        [SerializeField] private float startTrayHeight = 0.04f;
         [SerializeField] private Vector3 startTrayScale = Vector3.one;
         [SerializeField] private float startTrayWorldY = 0.025f;
         [Header("Startup")]
@@ -79,6 +84,11 @@ namespace FlickDom.Gameplay
                 inputCamera = Camera.main;
             }
 
+            if (startTrayBoardResolver == null)
+            {
+                startTrayBoardResolver = GetComponent<GridCellCandidateResolver>();
+            }
+
             player1Pieces = ResolveSceneAuthoredPieces(player1Pieces, player1PieceObjects);
             player2Pieces = ResolveSceneAuthoredPieces(player2Pieces, player2PieceObjects);
 
@@ -108,6 +118,9 @@ namespace FlickDom.Gameplay
             targetPiecesPerPlayer = Mathf.Max(1, targetPiecesPerPlayer);
             generatedPieceSpacing = Mathf.Max(0.1f, generatedPieceSpacing);
             pieceSelectionRaycastDistance = Mathf.Max(1f, pieceSelectionRaycastDistance);
+            startTrayCellSizeRatio = Mathf.Clamp(startTrayCellSizeRatio, 0.1f, 2f);
+            startTraySideGap = Mathf.Max(0f, startTraySideGap);
+            startTrayHeight = Mathf.Max(0.01f, startTrayHeight);
             startTrayScale.x = Mathf.Max(0.01f, startTrayScale.x);
             startTrayScale.y = Mathf.Max(0.01f, startTrayScale.y);
             startTrayScale.z = Mathf.Max(0.01f, startTrayScale.z);
@@ -232,11 +245,15 @@ namespace FlickDom.Gameplay
 
             Transform root = new GameObject("Generated Start Trays").transform;
             root.SetParent(transform, false);
-            CreateStartTraysForPieces(player1Pieces, root, "P1");
-            CreateStartTraysForPieces(player2Pieces, root, "P2");
+            CreateStartTraysForPieces(player1Pieces, root, FlickDomPlayerId.Player1, "P1");
+            CreateStartTraysForPieces(player2Pieces, root, FlickDomPlayerId.Player2, "P2");
         }
 
-        private void CreateStartTraysForPieces(TurnBasedFlickPiece[] pieces, Transform parent, string prefix)
+        private void CreateStartTraysForPieces(
+            TurnBasedFlickPiece[] pieces,
+            Transform parent,
+            FlickDomPlayerId owner,
+            string prefix)
         {
             if (pieces == null)
             {
@@ -259,11 +276,46 @@ namespace FlickDom.Gameplay
 
                 Vector3 piecePosition = piece.transform.position;
                 trayObject.name = prefix + " Start Tray " + (i + 1);
-                trayObject.transform.position = new Vector3(piecePosition.x, startTrayWorldY, piecePosition.z);
+                trayObject.transform.position = GetStartTrayPosition(owner, piecePosition);
                 trayObject.transform.rotation = Quaternion.identity;
-                trayObject.transform.localScale = startTrayScale;
+                trayObject.transform.localScale = Vector3.one;
                 RemoveVisualColliders(trayObject);
+                FitVisualToSize(trayObject, GetStartTrayTargetSize());
+                trayObject.transform.localScale = Vector3.Scale(trayObject.transform.localScale, startTrayScale);
             }
+        }
+
+        private Vector3 GetStartTrayPosition(FlickDomPlayerId owner, Vector3 piecePosition)
+        {
+            if (!alignStartTraysToBoardCells || startTrayBoardResolver == null)
+            {
+                return new Vector3(piecePosition.x, startTrayWorldY, piecePosition.z);
+            }
+
+            float traySize = GetStartTrayCellSize();
+            Vector3 boardOrigin = startTrayBoardResolver.BoardOrigin;
+            Vector3 boardMax = startTrayBoardResolver.BoardMax;
+            float z = Mathf.Clamp(
+                piecePosition.z,
+                boardOrigin.z + traySize * 0.5f,
+                boardMax.z - traySize * 0.5f);
+            float x = owner == FlickDomPlayerId.Player1
+                ? boardOrigin.x - startTraySideGap - traySize * 0.5f
+                : boardMax.x + startTraySideGap + traySize * 0.5f;
+
+            return new Vector3(x, startTrayWorldY, z);
+        }
+
+        private Vector3 GetStartTrayTargetSize()
+        {
+            float traySize = GetStartTrayCellSize();
+            return new Vector3(traySize, startTrayHeight, traySize);
+        }
+
+        private float GetStartTrayCellSize()
+        {
+            float baseSize = startTrayBoardResolver != null ? startTrayBoardResolver.CellSize : 1f;
+            return Mathf.Max(0.01f, baseSize * startTrayCellSizeRatio);
         }
 
         private void HandlePieceOrderSelectionInput()
@@ -1587,6 +1639,32 @@ namespace FlickDom.Gameplay
             {
                 Destroy(colliders[i]);
             }
+        }
+
+        private static void FitVisualToSize(GameObject rootObject, Vector3 targetSize)
+        {
+            Renderer[] renderers = rootObject.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+
+            Vector3 size = bounds.size;
+            if (size.x <= 0f || size.y <= 0f || size.z <= 0f)
+            {
+                return;
+            }
+
+            rootObject.transform.localScale = new Vector3(
+                targetSize.x / size.x,
+                targetSize.y / size.y,
+                targetSize.z / size.z);
         }
 
         private static GameObject InstantiateVisualObject(GameObject prefab, Transform parent)
