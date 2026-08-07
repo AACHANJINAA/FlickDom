@@ -1571,6 +1571,10 @@ MonoBehaviour:
   targetYOffset: 35
   startScale: 0.18
   framePadding: 8
+  stageTextFormat: Stage {0}
+  stageLabelSize: {x: 420, y: 64}
+  stageLabelYOffset: 260
+  stageLabelFontSize: 42
   confirmButtonText: "\uD655\uC778"
   confirmButtonSize: {x: 170, y: 48}
   confirmButtonYOffset: -285
@@ -1580,11 +1584,12 @@ MonoBehaviour:
   - Segoe UI
   - Arial Unicode MS
   - Arial
-  dimmerColor: {r: 0, g: 0, b: 0, a: 0.42}
+  dimmerColor: {r: 0.02, g: 0.07, b: 0.12, a: 0.32}
   frameColor: {r: 1, g: 1, b: 1, a: 0.98}
-  confirmButtonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.98}
-  confirmButtonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
-  confirmButtonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
+  stageTextColor: {r: 1, g: 0.93, b: 0.55, a: 1}
+  confirmButtonColor: {r: 1, g: 0.88, b: 0.28, a: 0.98}
+  confirmButtonHighlightedColor: {r: 1, g: 0.96, b: 0.55, a: 1}
+  confirmButtonPressedColor: {r: 0.94, g: 0.7, b: 0.12, a: 1}
   confirmButtonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
   fallbackBaseColor: {r: 0.96, g: 0.94, b: 0.88, a: 1}
   easyColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}

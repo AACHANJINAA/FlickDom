@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
@@ -13,6 +14,8 @@ namespace FlickDom.Gameplay
     {
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
+        [SerializeField] private GameModeManager gameModeManager;
+        [SerializeField] private FlickDomNetworkBootstrap gameStartGate;
         [SerializeField] private Transform deckTransform;
         [SerializeField] private Camera worldCamera;
 
@@ -22,6 +25,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private int maxDisplayedCards = 3;
 
         [Header("Animation")]
+        [InspectorName("Show On Game Start")]
         [SerializeField] private bool showOnStart = true;
         [SerializeField] private bool replayOnCardSetChanged = true;
         [SerializeField] private int canvasSortingOrder = 130;
@@ -36,6 +40,10 @@ namespace FlickDom.Gameplay
         [SerializeField] private float framePadding = 8f;
 
         [Header("Confirm Button")]
+        [SerializeField] private string stageTextFormat = "Stage {0}";
+        [SerializeField] private Vector2 stageLabelSize = new Vector2(420f, 64f);
+        [SerializeField] private float stageLabelYOffset = 260f;
+        [SerializeField] private int stageLabelFontSize = 42;
         [SerializeField] private string confirmButtonText = "확인";
         [SerializeField] private Vector2 confirmButtonSize = new Vector2(170f, 48f);
         [SerializeField] private float confirmButtonYOffset = -285f;
@@ -49,11 +57,12 @@ namespace FlickDom.Gameplay
         };
 
         [Header("Colors")]
-        [SerializeField] private Color dimmerColor = new Color(0f, 0f, 0f, 0.42f);
+        [SerializeField] private Color dimmerColor = new Color(0.02f, 0.07f, 0.12f, 0.32f);
         [SerializeField] private Color frameColor = new Color(1f, 1f, 1f, 0.98f);
-        [SerializeField] private Color confirmButtonColor = new Color(0.93f, 0.95f, 0.96f, 0.98f);
-        [SerializeField] private Color confirmButtonHighlightedColor = Color.white;
-        [SerializeField] private Color confirmButtonPressedColor = new Color(0.78f, 0.84f, 0.9f, 1f);
+        [SerializeField] private Color stageTextColor = new Color(1f, 0.93f, 0.55f, 1f);
+        [SerializeField] private Color confirmButtonColor = new Color(1f, 0.88f, 0.28f, 0.98f);
+        [SerializeField] private Color confirmButtonHighlightedColor = new Color(1f, 0.96f, 0.55f, 1f);
+        [SerializeField] private Color confirmButtonPressedColor = new Color(0.94f, 0.7f, 0.12f, 1f);
         [SerializeField] private Color confirmButtonTextColor = new Color(0.08f, 0.1f, 0.12f, 1f);
         [SerializeField] private Color fallbackBaseColor = new Color(0.96f, 0.94f, 0.88f, 1f);
         [SerializeField] private Color easyColor = new Color(0.42f, 0.68f, 0.12f, 1f);
@@ -64,10 +73,14 @@ namespace FlickDom.Gameplay
         private Canvas canvas;
         private RectTransform canvasRect;
         private GameObject dimmerObject;
+        private GameObject stageLabelObject;
+        private Text stageLabelText;
+        private CanvasGroup stageLabelCanvasGroup;
         private GameObject confirmButtonObject;
         private CanvasGroup confirmButtonCanvasGroup;
         private Font resolvedFont;
         private Coroutine revealRoutine;
+        private Coroutine pendingGameStartRevealRoutine;
         private readonly List<RevealCardView> activeCardViews = new List<RevealCardView>(3);
         private bool hasShownCardSet;
         private bool confirmRequested;
@@ -86,6 +99,13 @@ namespace FlickDom.Gameplay
             {
                 cardManager = GetComponent<PatternCardManager>();
             }
+
+            if (gameModeManager == null)
+            {
+                gameModeManager = GetComponent<GameModeManager>();
+            }
+
+            ResolveGameStartGate();
 
             if (deckTransform == null)
             {
@@ -114,7 +134,7 @@ namespace FlickDom.Gameplay
         {
             if (showOnStart)
             {
-                TryPlayCurrentCardSet(false);
+                TryPlayCurrentCardSetAfterGameStart(false);
             }
         }
 
@@ -127,8 +147,10 @@ namespace FlickDom.Gameplay
             }
 
             StopRevealRoutine();
+            StopPendingGameStartRevealRoutine();
             ClearActiveCards();
             SetDimmerVisible(false);
+            SetStageLabelVisible(false);
             SetConfirmButtonVisible(false);
         }
 
@@ -155,6 +177,9 @@ namespace FlickDom.Gameplay
             targetSpacing = Mathf.Max(0f, targetSpacing);
             startScale = Mathf.Clamp(startScale, 0.01f, 1f);
             framePadding = Mathf.Max(0f, framePadding);
+            stageLabelSize.x = Mathf.Max(160f, stageLabelSize.x);
+            stageLabelSize.y = Mathf.Max(36f, stageLabelSize.y);
+            stageLabelFontSize = Mathf.Max(10, stageLabelFontSize);
             confirmButtonSize.x = Mathf.Max(80f, confirmButtonSize.x);
             confirmButtonSize.y = Mathf.Max(32f, confirmButtonSize.y);
             confirmButtonFontSize = Mathf.Max(10, confirmButtonFontSize);
@@ -168,6 +193,16 @@ namespace FlickDom.Gameplay
 
         private void HandleActiveCardChanged(PatternCardData card)
         {
+            if (!IsRevealGateOpen())
+            {
+                if (showOnStart && !hasShownCardSet)
+                {
+                    TryPlayCurrentCardSetAfterGameStart(false);
+                }
+
+                return;
+            }
+
             if (showOnStart && !hasShownCardSet)
             {
                 TryPlayCurrentCardSet(false);
@@ -185,7 +220,88 @@ namespace FlickDom.Gameplay
             StopRevealRoutine();
             ClearActiveCards();
             SetDimmerVisible(false);
+            SetStageLabelVisible(false);
             SetConfirmButtonVisible(false);
+        }
+
+        private void TryPlayCurrentCardSetAfterGameStart(bool force)
+        {
+            if (IsRevealGateOpen())
+            {
+                StopPendingGameStartRevealRoutine();
+                pendingGameStartRevealRoutine = StartCoroutine(PlayCurrentCardSetNextFrame(force));
+                return;
+            }
+
+            if (pendingGameStartRevealRoutine == null)
+            {
+                pendingGameStartRevealRoutine = StartCoroutine(WaitForGameStartAndPlayCurrentCardSet(force));
+            }
+        }
+
+        private IEnumerator WaitForGameStartAndPlayCurrentCardSet(bool force)
+        {
+            while (!IsRevealGateOpen())
+            {
+                yield return null;
+            }
+
+            yield return null;
+            pendingGameStartRevealRoutine = null;
+            TryPlayCurrentCardSet(force);
+        }
+
+        private IEnumerator PlayCurrentCardSetNextFrame(bool force)
+        {
+            yield return null;
+            pendingGameStartRevealRoutine = null;
+            TryPlayCurrentCardSet(force);
+        }
+
+        private void StopPendingGameStartRevealRoutine()
+        {
+            if (pendingGameStartRevealRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(pendingGameStartRevealRoutine);
+            pendingGameStartRevealRoutine = null;
+        }
+
+        private bool IsRevealGateOpen()
+        {
+            FlickDomNetworkBootstrap gate = ResolveGameStartGate();
+            if (gate != null)
+            {
+                return gate.IsGameActive;
+            }
+
+            return gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.NotStarted;
+        }
+
+        private FlickDomNetworkBootstrap ResolveGameStartGate()
+        {
+            if (gameStartGate != null && gameStartGate.isActiveAndEnabled)
+            {
+                return gameStartGate;
+            }
+
+            FlickDomNetworkBootstrap activeGate = FlickDomNetworkBootstrap.Active;
+            if (activeGate != null && activeGate.isActiveAndEnabled)
+            {
+                gameStartGate = activeGate;
+                return gameStartGate;
+            }
+
+            gameStartGate = FindAnyObjectByType<FlickDomNetworkBootstrap>();
+            if (gameStartGate != null && !gameStartGate.isActiveAndEnabled)
+            {
+                gameStartGate = null;
+            }
+
+            return gameStartGate;
         }
 
         private void TryPlayCurrentCardSet(bool force)
@@ -244,6 +360,8 @@ namespace FlickDom.Gameplay
 
             ClearActiveCards();
             SetDimmerVisible(true);
+            RefreshStageLabelText();
+            SetStageLabelVisible(true);
             SetConfirmButtonVisible(false);
             confirmRequested = false;
 
@@ -292,6 +410,7 @@ namespace FlickDom.Gameplay
 
             ClearActiveCards();
             SetDimmerVisible(false);
+            SetStageLabelVisible(false);
             revealRoutine = null;
         }
 
@@ -331,8 +450,10 @@ namespace FlickDom.Gameplay
             canvasObject.AddComponent<GraphicRaycaster>();
             canvasRect = canvasObject.GetComponent<RectTransform>();
             dimmerObject = CreateDimmer();
+            stageLabelObject = CreateStageLabel();
             confirmButtonObject = CreateConfirmButton();
             SetDimmerVisible(false);
+            SetStageLabelVisible(false);
             SetConfirmButtonVisible(false);
             EnsureEventSystem();
         }
@@ -352,6 +473,32 @@ namespace FlickDom.Gameplay
             image.color = dimmerColor;
             image.raycastTarget = true;
             return dimmer;
+        }
+
+        private GameObject CreateStageLabel()
+        {
+            GameObject labelObject = new GameObject("Card Reveal Stage Label");
+            labelObject.transform.SetParent(canvas.transform, false);
+
+            RectTransform rectTransform = labelObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.anchoredPosition = new Vector2(0f, stageLabelYOffset);
+            rectTransform.sizeDelta = stageLabelSize;
+
+            stageLabelText = labelObject.AddComponent<Text>();
+            stageLabelText.font = ResolveFont(stageTextFormat, stageLabelFontSize);
+            stageLabelText.fontSize = stageLabelFontSize;
+            stageLabelText.fontStyle = FontStyle.Bold;
+            stageLabelText.alignment = TextAnchor.MiddleCenter;
+            stageLabelText.color = stageTextColor;
+            stageLabelText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            stageLabelText.verticalOverflow = VerticalWrapMode.Truncate;
+            stageLabelText.raycastTarget = false;
+
+            stageLabelCanvasGroup = labelObject.AddComponent<CanvasGroup>();
+            return labelObject;
         }
 
         private GameObject CreateConfirmButton()
@@ -406,6 +553,34 @@ namespace FlickDom.Gameplay
         private void ConfirmReveal()
         {
             confirmRequested = true;
+        }
+
+        private void RefreshStageLabelText()
+        {
+            if (stageLabelText == null)
+            {
+                return;
+            }
+
+            int stageNumber = cardManager != null ? cardManager.CurrentStageNumber : 1;
+            stageLabelText.text = FormatStageText(stageNumber);
+        }
+
+        private string FormatStageText(int stageNumber)
+        {
+            if (string.IsNullOrEmpty(stageTextFormat))
+            {
+                return "Stage " + stageNumber;
+            }
+
+            try
+            {
+                return string.Format(stageTextFormat, stageNumber);
+            }
+            catch (System.FormatException)
+            {
+                return stageTextFormat + " " + stageNumber;
+            }
         }
 
         private RevealCardView CreateRevealCard(PatternCardData card, Vector2 startPosition)
@@ -625,6 +800,7 @@ namespace FlickDom.Gameplay
 
             StopCoroutine(revealRoutine);
             revealRoutine = null;
+            SetStageLabelVisible(false);
             SetConfirmButtonVisible(false);
         }
 
@@ -652,6 +828,22 @@ namespace FlickDom.Gameplay
             if (visible)
             {
                 SetDimmerAlpha(dimmerColor.a);
+            }
+        }
+
+        private void SetStageLabelVisible(bool visible)
+        {
+            if (stageLabelObject == null)
+            {
+                return;
+            }
+
+            stageLabelObject.SetActive(visible);
+            if (stageLabelCanvasGroup != null)
+            {
+                stageLabelCanvasGroup.alpha = visible ? 1f : 0f;
+                stageLabelCanvasGroup.blocksRaycasts = false;
+                stageLabelCanvasGroup.interactable = false;
             }
         }
 

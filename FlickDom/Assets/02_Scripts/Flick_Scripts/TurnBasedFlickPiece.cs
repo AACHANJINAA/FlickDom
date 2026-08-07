@@ -704,6 +704,7 @@ namespace FlickDom.Gameplay
 
             characterAimActive = true;
             characterAimVector = launchVector;
+            presentationPosition = PreserveAimHeight(presentationPosition);
             characterAimPiecePosition = presentationPosition;
             dragTargetPosition = presentationPosition;
             ShowFlickPreview(characterAimVector);
@@ -720,6 +721,7 @@ namespace FlickDom.Gameplay
             Vector3 launchPosition = characterAimActive
                 ? characterAimPiecePosition
                 : cachedRigidbody.position;
+            launchPosition = PreserveAimHeight(launchPosition);
             if (characterAimActive)
             {
                 forceVector = characterAimVector;
@@ -789,10 +791,12 @@ namespace FlickDom.Gameplay
             }
 
             EnsureCachedComponents();
+            requestedLaunchPosition = PreserveCurrentHeight(requestedLaunchPosition);
             Vector3 launchOffset = Vector3.ClampMagnitude(
                 requestedLaunchPosition - transform.position,
                 maxDragDistance);
             Vector3 safeLaunchPosition = transform.position + launchOffset;
+            safeLaunchPosition = PreserveCurrentHeight(safeLaunchPosition);
             cachedRigidbody.position = safeLaunchPosition;
             transform.position = safeLaunchPosition;
             queuedImpulse = impulse;
@@ -1092,7 +1096,7 @@ namespace FlickDom.Gameplay
             }
 
             Ray ray = inputCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
-            Plane boardPlane = new Plane(Vector3.up, Vector3.zero);
+            Plane boardPlane = new Plane(Vector3.up, Vector3.up * GetInputProjectionHeight());
 
             if (boardPlane.Raycast(ray, out float enter))
             {
@@ -1100,6 +1104,32 @@ namespace FlickDom.Gameplay
             }
 
             return transform.position;
+        }
+
+        private float GetInputProjectionHeight()
+        {
+            if (isDragging)
+            {
+                return initialPiecePosition.y;
+            }
+
+            return cachedRigidbody != null
+                ? cachedRigidbody.position.y
+                : transform.position.y;
+        }
+
+        private Vector3 PreserveAimHeight(Vector3 position)
+        {
+            position.y = initialPiecePosition.y;
+            return position;
+        }
+
+        private Vector3 PreserveCurrentHeight(Vector3 position)
+        {
+            position.y = cachedRigidbody != null
+                ? cachedRigidbody.position.y
+                : transform.position.y;
+            return position;
         }
 
         private bool IsMouseOverPiece()

@@ -27,8 +27,8 @@ namespace FlickDom.Networking
 
         [Header("Local Test Controls")]
         [SerializeField] private bool enableKeyboardShortcuts = true;
-        [SerializeField] private bool showRuntimeStatus = true;
-        [SerializeField] private bool showLobbyUi = true;
+        [SerializeField] private bool showRuntimeStatus;
+        [SerializeField] private bool showLobbyUi;
         [SerializeField] private bool disableLocalAutoStartForNetworkLobby = true;
         [SerializeField] private bool enableCommandLineAutoStart = true;
         [SerializeField] private Key startHostKey = Key.S;
@@ -115,6 +115,52 @@ namespace FlickDom.Networking
         public bool IsLocalSinglePlayerModeActive
         {
             get { return localSinglePlayerModeActive; }
+        }
+
+        public bool IsGameActive
+        {
+            get { return networkGameStarted || localSinglePlayerModeActive; }
+        }
+
+        public int VisiblePlayerCount
+        {
+            get { return GetVisiblePlayerCount(); }
+        }
+
+        public int MaxPlayers
+        {
+            get { return maxPlayers; }
+        }
+
+        public bool CanStartNetworkGame
+        {
+            get
+            {
+                return networkManager != null
+                    && networkManager.IsHost
+                    && GetHostConnectedPlayerCount() >= maxPlayers
+                    && !networkGameStarted;
+            }
+        }
+
+        public string CurrentNetworkModeText
+        {
+            get { return GetCurrentNetworkModeText(); }
+        }
+
+        public string LobbyStatusText
+        {
+            get { return GetLobbyHint(CanStartNetworkGame); }
+        }
+
+        public string CurrentConnectAddress
+        {
+            get { return connectAddress; }
+        }
+
+        public ushort CurrentPort
+        {
+            get { return port; }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -228,22 +274,7 @@ namespace FlickDom.Networking
                 return;
             }
 
-            string mode = "Offline";
-            if (networkManager != null)
-            {
-                if (networkManager.IsHost)
-                {
-                    mode = "Host";
-                }
-                else if (networkManager.IsClient)
-                {
-                    mode = "Client";
-                }
-                else if (networkManager.IsServer)
-                {
-                    mode = "Server";
-                }
-            }
+            string mode = GetCurrentNetworkModeText();
 
             GUI.Box(new Rect(16f, 16f, 320f, 92f), "FlickDom Network");
             GUI.Label(new Rect(28f, 42f, 296f, 22f), "Mode: " + mode + " / LocalRole: " + LocalPlayerId);
@@ -418,6 +449,11 @@ namespace FlickDom.Networking
 
         public bool AllowsLocalInputFor(FlickDomPlayerId playerId)
         {
+            if (localSinglePlayerModeActive)
+            {
+                return true;
+            }
+
             if (!IsRunning)
             {
                 return true;
@@ -428,6 +464,11 @@ namespace FlickDom.Networking
 
         public bool AllowsLocalStateControl()
         {
+            if (localSinglePlayerModeActive)
+            {
+                return true;
+            }
+
             return !IsRunning || IsHost;
         }
 
@@ -925,7 +966,19 @@ namespace FlickDom.Networking
             return "Connected. Waiting for Host to start.";
         }
 
-        private void StartNetworkGame()
+        public bool TryStartNetworkGameFromMenu()
+        {
+            StartNetworkGame();
+            return networkGameStarted;
+        }
+
+        public bool TryStartSinglePlayerModeFromMenu()
+        {
+            StartSinglePlayerMode();
+            return localSinglePlayerModeActive;
+        }
+
+        public void StartNetworkGame()
         {
             if (networkManager == null || !networkManager.IsHost)
             {
@@ -986,7 +1039,7 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Local GameModeManager started.", this);
         }
 
-        private void StartSinglePlayerMode()
+        public void StartSinglePlayerMode()
         {
             if (IsRunning)
             {
@@ -1008,6 +1061,31 @@ namespace FlickDom.Networking
             SubscribeGameModeEvents(true);
             SubscribePatternCardEvents(true);
             Debug.Log("[Network] Single-player mode started from lobby.", this);
+        }
+
+        private string GetCurrentNetworkModeText()
+        {
+            if (networkManager == null)
+            {
+                return "Offline";
+            }
+
+            if (networkManager.IsHost)
+            {
+                return "Host";
+            }
+
+            if (networkManager.IsClient)
+            {
+                return "Client";
+            }
+
+            if (networkManager.IsServer)
+            {
+                return "Server";
+            }
+
+            return "Offline";
         }
 
         private void RestartNetworkMatchAsHost()
