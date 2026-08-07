@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using FlickDom.Gameplay;
 using Unity.Collections;
@@ -20,6 +21,7 @@ namespace FlickDom.Networking
         [SerializeField] private string networkSceneName = DefaultNetworkSceneName;
         [SerializeField] private string connectAddress = "127.0.0.1";
         [SerializeField] private string hostListenAddress = "0.0.0.0";
+        [SerializeField] private bool forceHostListenOnAllInterfaces = true;
         [SerializeField] private ushort port = 7777;
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
@@ -53,6 +55,8 @@ namespace FlickDom.Networking
         private const string RestartMatchMessageName = "FlickDom.RestartMatch";
         private const string ReturnToLobbyRequestMessageName = "FlickDom.ReturnToLobbyRequest";
         private const string ReturnToLobbyMessageName = "FlickDom.ReturnToLobby";
+        private const string LoopbackAddress = "127.0.0.1";
+        private const string AnyListenAddress = "0.0.0.0";
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
@@ -156,6 +160,11 @@ namespace FlickDom.Networking
         public string CurrentConnectAddress
         {
             get { return connectAddress; }
+        }
+
+        public string CurrentShareableHostAddresses
+        {
+            get { return GetShareableHostAddresses(); }
         }
 
         public ushort CurrentPort
@@ -278,8 +287,8 @@ namespace FlickDom.Networking
 
             GUI.Box(new Rect(16f, 16f, 320f, 92f), "FlickDom Network");
             GUI.Label(new Rect(28f, 42f, 296f, 22f), "Mode: " + mode + " / LocalRole: " + LocalPlayerId);
-            GUI.Label(new Rect(28f, 64f, 296f, 22f), "Target: " + connectAddress + ":" + port);
-            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Listen: " + hostListenAddress + "   S: Host   C: Client   X: Shutdown");
+            GUI.Label(new Rect(28f, 64f, 296f, 22f), "Join Target: " + connectAddress + ":" + port);
+            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Host Listen: " + GetHostListenAddress() + "   S: Host   C: Client   X: Shutdown");
 
             if (showLobbyUi && !networkGameStarted && !localSinglePlayerModeActive)
             {
@@ -303,13 +312,13 @@ namespace FlickDom.Networking
             GUILayout.Label("Players: " + GetVisiblePlayerCount() + " / " + maxPlayers);
 
             GUILayout.Space(8f);
-            GUILayout.Label("Host IP / Join IP");
+            GUILayout.Label("Join IP");
             addressInput = GUILayout.TextField(addressInput);
 
-            string shareableHostAddress = GetShareableHostAddress();
-            if (!string.IsNullOrEmpty(shareableHostAddress))
+            string shareableHostAddresses = GetShareableHostAddresses();
+            if (!string.IsNullOrEmpty(shareableHostAddresses))
             {
-                GUILayout.Label("LAN Share IP: " + shareableHostAddress);
+                GUILayout.Label("Host Share IPs: " + shareableHostAddresses);
             }
 
             GUILayout.Label("Port");
@@ -377,8 +386,11 @@ namespace FlickDom.Networking
                 return;
             }
 
-            Debug.Log("[Network] Starting Host on " + connectAddress + ":" + port + ".", this);
-            ConfigureTransportForHost(connectAddress, port);
+            string listenAddress = GetHostListenAddress();
+            Debug.Log("[Network] Starting Host. Local client address: " + LoopbackAddress
+                + ":" + port + ", Listen: " + listenAddress + ":" + port
+                + ", Share IPs: " + GetShareableHostAddresses() + ".", this);
+            ConfigureTransportForHost(port);
             bool started = networkManager.StartHost();
             if (!started)
             {
@@ -443,7 +455,7 @@ namespace FlickDom.Networking
                 return;
             }
 
-            connectAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address.Trim();
+            connectAddress = string.IsNullOrWhiteSpace(address) ? LoopbackAddress : address.Trim();
             port = targetPort;
         }
 
@@ -763,10 +775,10 @@ namespace FlickDom.Networking
             return true;
         }
 
-        private void ConfigureTransportForHost(string address, ushort targetPort)
+        private void ConfigureTransportForHost(ushort targetPort)
         {
-            string listenAddress = string.IsNullOrWhiteSpace(hostListenAddress) ? "0.0.0.0" : hostListenAddress.Trim();
-            unityTransport.SetConnectionData(address, targetPort, listenAddress);
+            string listenAddress = GetHostListenAddress();
+            unityTransport.SetConnectionData(LoopbackAddress, targetPort, listenAddress);
         }
 
         private void ConfigureTransportForClient(string address, ushort targetPort)
@@ -774,7 +786,66 @@ namespace FlickDom.Networking
             unityTransport.SetConnectionData(address, targetPort);
         }
 
-        private static string GetShareableHostAddress()
+        private string GetHostListenAddress()
+        {
+            if (forceHostListenOnAllInterfaces)
+            {
+                return AnyListenAddress;
+            }
+
+            return string.IsNullOrWhiteSpace(hostListenAddress) ? AnyListenAddress : hostListenAddress.Trim();
+        }
+
+        private static string GetShareableHostAddresses()
+        {
+            List<string> addresses = new List<string>();
+
+            try
+            {
+                NetworkInterface[] interfaces = NetworkInterface.GetAllNetworkInterfaces();
+                for (int i = 0; i < interfaces.Length; i++)
+                {
+                    NetworkInterface networkInterface = interfaces[i];
+                    if (networkInterface.OperationalStatus != OperationalStatus.Up
+                        || networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                    {
+                        continue;
+                    }
+
+                    IPInterfaceProperties properties = networkInterface.GetIPProperties();
+                    UnicastIPAddressInformationCollection unicastAddresses = properties.UnicastAddresses;
+                    foreach (UnicastIPAddressInformation unicastAddress in unicastAddresses)
+                    {
+                        IPAddress address = unicastAddress.Address;
+                        if (address.AddressFamily != AddressFamily.InterNetwork)
+                        {
+                            continue;
+                        }
+
+                        string value = address.ToString();
+                        if (IsNonShareableIpv4(value) || addresses.Contains(value))
+                        {
+                            continue;
+                        }
+
+                        addresses.Add(value);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[Network] Failed to resolve adapter IPs for lobby display: " + exception.Message, null);
+            }
+
+            if (addresses.Count == 0)
+            {
+                AddDnsHostAddresses(addresses);
+            }
+
+            return string.Join(", ", addresses);
+        }
+
+        private static void AddDnsHostAddresses(List<string> addresses)
         {
             try
             {
@@ -788,20 +859,24 @@ namespace FlickDom.Networking
                     }
 
                     string value = address.ToString();
-                    if (value.StartsWith("127.", StringComparison.Ordinal))
+                    if (!IsNonShareableIpv4(value) && !addresses.Contains(value))
                     {
-                        continue;
+                        addresses.Add(value);
                     }
-
-                    return value;
                 }
             }
             catch (Exception exception)
             {
-                Debug.LogWarning("[Network] Failed to resolve LAN IP for lobby display: " + exception.Message, null);
+                Debug.LogWarning("[Network] Failed to resolve DNS host IPs for lobby display: " + exception.Message, null);
             }
+        }
 
-            return string.Empty;
+        private static bool IsNonShareableIpv4(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                || value.StartsWith("127.", StringComparison.Ordinal)
+                || value.StartsWith("169.254.", StringComparison.Ordinal)
+                || string.Equals(value, AnyListenAddress, StringComparison.Ordinal);
         }
 
         private void SubscribeNetworkEvents(bool subscribe)
@@ -909,7 +984,7 @@ namespace FlickDom.Networking
 
         private void ApplyLobbyConnectionInput()
         {
-            string trimmedAddress = string.IsNullOrWhiteSpace(addressInput) ? "127.0.0.1" : addressInput.Trim();
+            string trimmedAddress = string.IsNullOrWhiteSpace(addressInput) ? LoopbackAddress : addressInput.Trim();
             if (!ushort.TryParse(portInput, out ushort parsedPort))
             {
                 parsedPort = 7777;
