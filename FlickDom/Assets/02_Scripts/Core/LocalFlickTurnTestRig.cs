@@ -1143,48 +1143,71 @@ namespace FlickDom.Gameplay
                 tokenMapGridView.ClearCandidateHighlights();
             }
 
-            RegisterFinalPlacementCandidates(player1Pieces);
-            RegisterFinalPlacementCandidates(player2Pieces);
+            RegisterFinalPlacementCandidatesInTurnOrder();
         }
 
-        private void RegisterFinalPlacementCandidates(TurnBasedFlickPiece[] pieces)
+        private void RegisterFinalPlacementCandidatesInTurnOrder()
         {
-            if (pieces == null || gameModeManager == null)
+            IReadOnlyList<FlickDomPlayerId> turnOrder = gameModeManager.RoundTurnOrder;
+            int player1OrderIndex = 0;
+            int player2OrderIndex = 0;
+
+            for (int i = 0; i < turnOrder.Count; i++)
+            {
+                FlickDomPlayerId owner = turnOrder[i];
+                int orderIndex = owner == FlickDomPlayerId.Player2 ? player2OrderIndex++ : player1OrderIndex++;
+                RegisterFinalPlacementCandidate(GetOrderedPieceForPlacement(owner, orderIndex));
+            }
+        }
+
+        private TurnBasedFlickPiece GetOrderedPieceForPlacement(FlickDomPlayerId owner, int orderIndex)
+        {
+            EnsureDefaultOrderForPlayer(owner);
+
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(owner);
+            if (order != null && orderIndex >= 0 && orderIndex < order.Count)
+            {
+                return order[orderIndex];
+            }
+
+            TurnBasedFlickPiece[] pieces = GetPiecesForPlayer(owner);
+            if (pieces == null || orderIndex < 0 || orderIndex >= pieces.Length)
+            {
+                return null;
+            }
+
+            return pieces[orderIndex];
+        }
+
+        private void RegisterFinalPlacementCandidate(TurnBasedFlickPiece piece)
+        {
+            if (piece == null || gameModeManager == null || piece.IsDead || !piece.HasLaunchedThisRound)
             {
                 return;
             }
 
-            for (int i = 0; i < pieces.Length; i++)
+            if (piece.ShouldBeRemovedAfterLeavingPlayableBoard())
             {
-                TurnBasedFlickPiece piece = pieces[i];
-                if (piece == null || piece.IsDead || !piece.HasLaunchedThisRound)
-                {
-                    continue;
-                }
+                piece.MarkDeadAfterExternalBoardExit();
+                return;
+            }
 
-                if (piece.ShouldBeRemovedAfterLeavingPlayableBoard())
-                {
-                    piece.MarkDeadAfterExternalBoardExit();
-                    continue;
-                }
+            if (!ShouldRegisterPlacementCandidate(piece))
+            {
+                gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
+                piece.RemoveFromFieldAfterMissedContact();
+                return;
+            }
 
-                if (!ShouldRegisterPlacementCandidate(piece))
-                {
-                    gameModeManager.RemoveStoppedPieceCandidate(piece.Owner, piece.PieceId);
-                    piece.RemoveFromFieldAfterMissedContact();
-                    continue;
-                }
+            PiecePlacementCandidate candidate = gameModeManager.RegisterStoppedPieceCandidate(
+                piece.Owner,
+                piece.PieceId,
+                piece.transform.position,
+                piece.TokenRadius);
 
-                PiecePlacementCandidate candidate = gameModeManager.RegisterStoppedPieceCandidate(
-                    piece.Owner,
-                    piece.PieceId,
-                    piece.transform.position,
-                    piece.TokenRadius);
-
-                if (logStateChanges && candidate != null)
-                {
-                    Debug.Log(BuildCandidateLog(candidate, true), this);
-                }
+            if (logStateChanges && candidate != null)
+            {
+                Debug.Log(BuildCandidateLog(candidate, true), this);
             }
         }
 
