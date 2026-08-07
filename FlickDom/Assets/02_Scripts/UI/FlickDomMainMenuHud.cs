@@ -12,6 +12,7 @@ namespace FlickDom.Gameplay
     public sealed class FlickDomMainMenuHud : MonoBehaviour
     {
         private const string TargetSceneName = "good_Scene";
+        private const int MenuCanvasSortingOrder = 300;
 
         [Header("Background")]
         [SerializeField] private Texture2D backgroundTexture;
@@ -141,7 +142,7 @@ namespace FlickDom.Gameplay
 
             canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 80;
+            canvas.sortingOrder = MenuCanvasSortingOrder;
 
             CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -632,17 +633,39 @@ namespace FlickDom.Gameplay
 
         private static void EnsureEventSystem()
         {
-            if (FindAnyObjectByType<EventSystem>() != null)
+            EventSystem eventSystem = FindAnyObjectByType<EventSystem>();
+            if (eventSystem == null)
+            {
+                GameObject eventSystemObject = new GameObject("Generated Main Menu EventSystem");
+                eventSystem = eventSystemObject.AddComponent<EventSystem>();
+            }
+
+            EnsureSupportedInputModule(eventSystem.gameObject);
+        }
+
+        private static void EnsureSupportedInputModule(GameObject eventSystemObject)
+        {
+            if (eventSystemObject == null)
             {
                 return;
             }
 
-            GameObject eventSystemObject = new GameObject("Generated Main Menu EventSystem");
-            eventSystemObject.AddComponent<EventSystem>();
 #if ENABLE_INPUT_SYSTEM
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            if (eventSystemObject.GetComponent<InputSystemUIInputModule>() == null)
+            {
+                StandaloneInputModule legacyModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+                if (legacyModule != null)
+                {
+                    legacyModule.enabled = false;
+                }
+
+                eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            }
 #else
-            eventSystemObject.AddComponent<StandaloneInputModule>();
+            if (eventSystemObject.GetComponent<StandaloneInputModule>() == null)
+            {
+                eventSystemObject.AddComponent<StandaloneInputModule>();
+            }
 #endif
         }
     }

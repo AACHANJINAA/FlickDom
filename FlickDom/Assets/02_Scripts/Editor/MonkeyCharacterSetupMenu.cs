@@ -11,7 +11,13 @@ namespace FlickDom.EditorTools
         private const string RemovePlateMenuPath = "FlickDom/Characters/Remove Selected Monkey Strike Plate";
         private const string SetupLauncherMenuPath =
             "FlickDom/Characters/Setup Slingshot Launcher In Open Scene";
+        private const string SetupSelectedLaunchRigMenuPath =
+            "FlickDom/Characters/Use Selected Launch Rig For Monkeys";
+        private const string CreateLaunchRigMenuPath =
+            "FlickDom/Characters/Create Launch Rig And Use For Monkeys";
         private const string PlateObjectName = "Monkey Strike Plate";
+        private const string LaunchRigObjectName = "LaunchRig";
+        private const string LaunchPostPrefabPath = "Assets/03_Prefabs/Props/PF_LaunchPost.prefab";
         private const string LauncherModelPath = "Assets/04_Arts/shooter/shooter.fbx";
         private const string LauncherTexturePath =
             "Assets/04_Arts/shooter/Slingshot_BaseColor.png";
@@ -92,6 +98,7 @@ namespace FlickDom.EditorTools
             Undo.RecordObject(slingshotPresenter, "Configure Monkey Slingshot Presenter");
             slingshotPresenter.SetOwner(selectionIndex == 0 ? FlickDomPlayerId.Player1 : FlickDomPlayerId.Player2);
             slingshotPresenter.SetReactToAllPlayers(selectionCount == 1);
+            slingshotPresenter.SetFlickPresentationEnabled(true);
             slingshotPresenter.UseSuriyunAnimationPreset();
 
             if (sceneCamera)
@@ -157,6 +164,166 @@ namespace FlickDom.EditorTools
                 $"Slingshot launcher setup complete for {controllers.Length} monkey controller(s).");
         }
 
+        [MenuItem(SetupSelectedLaunchRigMenuPath, true)]
+        private static bool CanSetupSelectedLaunchRig()
+        {
+            return ResolveSelectedLaunchRig() != null;
+        }
+
+        [MenuItem(SetupSelectedLaunchRigMenuPath)]
+        private static void SetupSelectedLaunchRigForMonkeys()
+        {
+            GameObject launchRig = ResolveSelectedLaunchRig();
+            if (!launchRig)
+            {
+                Debug.LogWarning("Select a LaunchRig object that contains LaunchPost_A and LaunchPost_B.");
+                return;
+            }
+
+            ConfigureLaunchRigForMonkeys(launchRig, true);
+        }
+
+        [MenuItem(CreateLaunchRigMenuPath)]
+        private static void CreateLaunchRigAndUseForMonkeys()
+        {
+            GameObject launchRig = CreateLaunchRigPreview();
+            if (!launchRig)
+            {
+                return;
+            }
+
+            ConfigureLaunchRigForMonkeys(launchRig, true);
+            Selection.activeGameObject = launchRig;
+        }
+
+        private static void ConfigureLaunchRigForMonkeys(GameObject launchRig, bool disablePreview)
+        {
+            if (!launchRig)
+            {
+                Debug.LogWarning("LaunchRig was not found.");
+                return;
+            }
+
+            MonkeyThirdPersonController[] controllers =
+                Object.FindObjectsByType<MonkeyThirdPersonController>(
+                    FindObjectsInactive.Include);
+            if (controllers.Length == 0)
+            {
+                Debug.LogWarning("No monkey controller was found in the open scene.");
+                return;
+            }
+
+            Vector3 rigScale = launchRig.transform.localScale;
+            for (int i = 0; i < controllers.Length; i++)
+            {
+                Undo.RecordObject(controllers[i], "Configure Launch Rig Launcher");
+                controllers[i].ConfigureSlingshotLauncher(
+                    launchRig,
+                    null,
+                    rigScale,
+                    Vector3.zero,
+                    Vector3.zero,
+                    0.28f);
+                EditorUtility.SetDirty(controllers[i]);
+
+                MonkeySlingshotFlickPresenter presenter =
+                    GetOrAddComponent<MonkeySlingshotFlickPresenter>(controllers[i].gameObject);
+                Undo.RecordObject(presenter, "Configure Launch Rig Presenter");
+                presenter.SetOwner(controllers[i].Owner);
+                presenter.SetReactToAllPlayers(controllers.Length == 1);
+                presenter.SetFlickPresentationEnabled(true);
+                presenter.ConfigureLauncher(launchRig, null);
+                presenter.ConfigureLauncherTransform(
+                    rigScale,
+                    Vector3.zero,
+                    Vector3.zero,
+                    0.28f);
+                presenter.UseSuriyunAnimationPreset();
+                EditorUtility.SetDirty(presenter);
+            }
+
+            if (disablePreview && launchRig.activeSelf)
+            {
+                Undo.RecordObject(launchRig, "Disable Launch Rig Preview");
+                launchRig.SetActive(false);
+                EditorUtility.SetDirty(launchRig);
+            }
+
+            if (EditorSceneManager.GetActiveScene().IsValid())
+            {
+                EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            }
+
+            Debug.Log(
+                $"LaunchRig setup complete for {controllers.Length} monkey controller(s). Source preview was disabled.");
+        }
+
+        private static GameObject CreateLaunchRigPreview()
+        {
+            GameObject existingRig = GameObject.Find(LaunchRigObjectName);
+            if (existingRig != null && HasLaunchRigPosts(existingRig.transform))
+            {
+                Undo.RecordObject(existingRig, "Reuse Launch Rig");
+                existingRig.SetActive(true);
+                EditorUtility.SetDirty(existingRig);
+                return existingRig;
+            }
+
+            GameObject launchPostPrefab =
+                AssetDatabase.LoadAssetAtPath<GameObject>(LaunchPostPrefabPath);
+            if (launchPostPrefab == null)
+            {
+                Debug.LogError(
+                    $"Launch post prefab was not found at '{LaunchPostPrefabPath}'.");
+                return null;
+            }
+
+            GameObject rigRoot = new GameObject(LaunchRigObjectName);
+            Undo.RegisterCreatedObjectUndo(rigRoot, "Create Launch Rig");
+            rigRoot.transform.position = Vector3.zero;
+            rigRoot.transform.rotation = Quaternion.identity;
+            rigRoot.transform.localScale = Vector3.one;
+
+            GameObject leftPost = InstantiateLaunchPost(launchPostPrefab, rigRoot.transform, "LaunchPost_A");
+            GameObject rightPost = InstantiateLaunchPost(launchPostPrefab, rigRoot.transform, "LaunchPost_B");
+            if (leftPost == null || rightPost == null)
+            {
+                Undo.DestroyObjectImmediate(rigRoot);
+                return null;
+            }
+
+            leftPost.transform.localPosition = new Vector3(-0.42f, 0f, 0f);
+            rightPost.transform.localPosition = new Vector3(0.42f, 0f, 0f);
+
+            EditorUtility.SetDirty(rigRoot);
+            if (EditorSceneManager.GetActiveScene().IsValid())
+            {
+                EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            }
+
+            return rigRoot;
+        }
+
+        private static GameObject InstantiateLaunchPost(
+            GameObject launchPostPrefab,
+            Transform parent,
+            string objectName)
+        {
+            GameObject postObject =
+                PrefabUtility.InstantiatePrefab(launchPostPrefab, parent) as GameObject;
+            if (postObject == null)
+            {
+                postObject = Object.Instantiate(launchPostPrefab, parent);
+            }
+
+            Undo.RegisterCreatedObjectUndo(postObject, "Create Launch Post");
+            postObject.name = objectName;
+            postObject.transform.localRotation = Quaternion.identity;
+            postObject.transform.localScale = Vector3.one;
+            EditorUtility.SetDirty(postObject);
+            return postObject;
+        }
+
         private static Material GetOrCreateLauncherMaterial()
         {
             Material material =
@@ -218,6 +385,52 @@ namespace FlickDom.EditorTools
                 roots[i].SetActive(false);
                 EditorUtility.SetDirty(roots[i]);
             }
+        }
+
+        private static GameObject ResolveSelectedLaunchRig()
+        {
+            GameObject selectedObject = Selection.activeGameObject;
+            if (!selectedObject)
+            {
+                return null;
+            }
+
+            Transform current = selectedObject.transform;
+            while (current)
+            {
+                if (HasLaunchRigPosts(current))
+                {
+                    return current.gameObject;
+                }
+
+                current = current.parent;
+            }
+
+            return null;
+        }
+
+        private static bool HasLaunchRigPosts(Transform root)
+        {
+            return FindDescendant(root, "LaunchPost_A") != null
+                && FindDescendant(root, "LaunchPost_B") != null;
+        }
+
+        private static Transform FindDescendant(Transform root, string objectName)
+        {
+            Transform[] descendants = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < descendants.Length; i++)
+            {
+                if (descendants[i]
+                    && string.Equals(
+                        descendants[i].name,
+                        objectName,
+                        System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return descendants[i];
+                }
+            }
+
+            return null;
         }
 
         private static T GetOrAddComponent<T>(GameObject gameObject) where T : Component

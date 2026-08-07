@@ -13,26 +13,53 @@ namespace FlickDom.Gameplay
     {
         private const float MinDirectionSqr = 0.0001f;
         private const float EndpointSlice = 0.12f;
+        private const float SimpleBandWidth = 0.035f;
+        private const float SimplePocketHalfWidth = 0.23f;
+        private const float SimplePocketDepth = 0.08f;
 
         private Transform pouch;
         private Transform pouchPivot;
         private Renderer pouchRenderer;
         private BandDeformer leftBand;
         private BandDeformer rightBand;
+        private Transform simpleLeftPost;
+        private Transform simpleRightPost;
+        private LineRenderer simpleLeftBand;
+        private LineRenderer simpleRightBand;
+        private LineRenderer simplePocketBand;
+        private Material simpleBandMaterial;
         private Vector3 restPouchCenterRoot;
         private Quaternion restPouchPivotLocalRotation;
         private Vector3 initialLaunchDirection;
+        private Vector3 simpleLeftFrameAnchorRoot;
+        private Vector3 simpleRightFrameAnchorRoot;
+        private Vector3 simplePouchCenterWorld;
+        private Vector3 simpleLaunchDirection = Vector3.forward;
         private bool initialized;
+        private bool useSimplePostRig;
 
         public bool HasDeformableBands
         {
-            get { return initialized && leftBand != null && rightBand != null; }
+            get
+            {
+                return initialized
+                    && ((leftBand != null && rightBand != null)
+                        || (useSimplePostRig
+                            && simpleLeftBand != null
+                            && simpleRightBand != null
+                            && simplePocketBand != null));
+            }
         }
 
         public Vector3 PouchCenterWorld
         {
             get
             {
+                if (useSimplePostRig)
+                {
+                    return simplePouchCenterWorld;
+                }
+
                 return pouchRenderer != null
                     ? pouchRenderer.bounds.center
                     : transform.TransformPoint(restPouchCenterRoot);
@@ -50,7 +77,10 @@ namespace FlickDom.Gameplay
             {
                 if (leftBand == null || rightBand == null)
                 {
-                    return transform.position;
+                    return useSimplePostRig
+                        ? transform.TransformPoint(
+                            (simpleLeftFrameAnchorRoot + simpleRightFrameAnchorRoot) * 0.5f)
+                        : transform.position;
                 }
 
                 Vector3 centerRoot =
@@ -65,6 +95,14 @@ namespace FlickDom.Gameplay
             {
                 if (leftBand == null || rightBand == null)
                 {
+                    if (useSimplePostRig)
+                    {
+                        Vector3 simpleAxisRoot = simpleRightFrameAnchorRoot - simpleLeftFrameAnchorRoot;
+                        return simpleAxisRoot.sqrMagnitude > MinDirectionSqr
+                            ? transform.TransformVector(simpleAxisRoot).normalized
+                            : transform.right;
+                    }
+
                     return transform.right;
                 }
 
@@ -80,8 +118,12 @@ namespace FlickDom.Gameplay
         {
             if (initialized)
             {
-                ApplyMaterialOverride(materialOverride);
-                return pouchPivot != null;
+                if (!useSimplePostRig)
+                {
+                    ApplyMaterialOverride(materialOverride);
+                }
+
+                return useSimplePostRig || pouchPivot != null;
             }
 
             pouch = FindDescendant(transform, "Pouch");
@@ -89,10 +131,7 @@ namespace FlickDom.Gameplay
             Transform rightBandTransform = FindDescendant(transform, "RightBand");
             if (pouch == null || leftBandTransform == null || rightBandTransform == null)
             {
-                Debug.LogWarning(
-                    "Slingshot rig requires children named Pouch, LeftBand and RightBand.",
-                    this);
-                return false;
+                return TryInitializeSimplePostRig();
             }
 
             pouchRenderer = pouch.GetComponentInChildren<Renderer>(true);
@@ -140,7 +179,7 @@ namespace FlickDom.Gameplay
             float pullDistance,
             float normalizedPower)
         {
-            if (!initialized || pouchPivot == null)
+            if (!initialized || (!useSimplePostRig && pouchPivot == null))
             {
                 return;
             }
@@ -159,8 +198,18 @@ namespace FlickDom.Gameplay
             Vector3 worldLaunchDirection,
             Vector3 targetPouchCenterWorld)
         {
-            if (!initialized || pouchPivot == null)
+            if (!initialized || (!useSimplePostRig && pouchPivot == null))
             {
+                return;
+            }
+
+            if (useSimplePostRig)
+            {
+                simpleLaunchDirection = FlattenDirection(
+                    worldLaunchDirection,
+                    simpleLaunchDirection);
+                simplePouchCenterWorld = targetPouchCenterWorld;
+                UpdateSimpleBands();
                 return;
             }
 
@@ -219,8 +268,18 @@ namespace FlickDom.Gameplay
 
         public void ResetPose()
         {
-            if (!initialized || pouchPivot == null)
+            if (!initialized || (!useSimplePostRig && pouchPivot == null))
             {
+                return;
+            }
+
+            if (useSimplePostRig)
+            {
+                simplePouchCenterWorld = transform.TransformPoint(restPouchCenterRoot);
+                simpleLaunchDirection = FlattenDirection(
+                    initialLaunchDirection,
+                    transform.forward);
+                UpdateSimpleBands();
                 return;
             }
 
@@ -234,6 +293,123 @@ namespace FlickDom.Gameplay
         {
             leftBand?.Dispose();
             rightBand?.Dispose();
+
+            if (simpleBandMaterial != null)
+            {
+                Destroy(simpleBandMaterial);
+                simpleBandMaterial = null;
+            }
+        }
+
+        private bool TryInitializeSimplePostRig()
+        {
+            simpleLeftPost = FindDescendant(transform, "LaunchPost_A");
+            simpleRightPost = FindDescendant(transform, "LaunchPost_B");
+            if (simpleLeftPost == null || simpleRightPost == null)
+            {
+                Debug.LogWarning(
+                    "Slingshot rig requires children named Pouch, LeftBand and RightBand, or LaunchPost_A and LaunchPost_B.",
+                    this);
+                return false;
+            }
+
+            DisableColliders();
+            useSimplePostRig = true;
+            simpleLeftFrameAnchorRoot = GetPostAnchorRoot(simpleLeftPost);
+            simpleRightFrameAnchorRoot = GetPostAnchorRoot(simpleRightPost);
+            Vector3 postCenterRoot = (simpleLeftFrameAnchorRoot + simpleRightFrameAnchorRoot) * 0.5f;
+            restPouchCenterRoot = postCenterRoot;
+            restPouchPivotLocalRotation = Quaternion.identity;
+            CreateSimpleBandRenderers();
+
+            initialized = true;
+            ResetPose();
+            return true;
+        }
+
+        private Vector3 GetPostAnchorRoot(Transform post)
+        {
+            Renderer renderer = post.GetComponentInChildren<Renderer>(true);
+            if (renderer == null)
+            {
+                return transform.InverseTransformPoint(post.position);
+            }
+
+            Bounds bounds = renderer.bounds;
+            return transform.InverseTransformPoint(bounds.center + Vector3.up * bounds.extents.y);
+        }
+
+        private void CreateSimpleBandRenderers()
+        {
+            Shader shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+            {
+                shader = Shader.Find("Universal Render Pipeline/Unlit");
+            }
+
+            if (shader != null)
+            {
+                simpleBandMaterial = new Material(shader)
+                {
+                    color = new Color(0.18f, 0.07f, 0.025f, 1f)
+                };
+            }
+
+            simpleLeftBand = CreateSimpleBandRenderer("LaunchRig Band Left");
+            simpleRightBand = CreateSimpleBandRenderer("LaunchRig Band Right");
+            simplePocketBand = CreateSimpleBandRenderer("LaunchRig Pocket Band");
+            simplePocketBand.positionCount = 3;
+        }
+
+        private LineRenderer CreateSimpleBandRenderer(string objectName)
+        {
+            GameObject bandObject = new GameObject(objectName);
+            bandObject.transform.SetParent(transform, false);
+            LineRenderer line = bandObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = 2;
+            line.startWidth = SimpleBandWidth;
+            line.endWidth = SimpleBandWidth;
+            line.startColor = new Color(0.18f, 0.07f, 0.025f, 1f);
+            line.endColor = new Color(0.18f, 0.07f, 0.025f, 1f);
+            line.sharedMaterial = simpleBandMaterial;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.enabled = true;
+            return line;
+        }
+
+        private void UpdateSimpleBands()
+        {
+            Vector3 pouchRight = Vector3.Cross(Vector3.up, simpleLaunchDirection);
+            if (pouchRight.sqrMagnitude <= MinDirectionSqr)
+            {
+                pouchRight = transform.right;
+            }
+
+            pouchRight.Normalize();
+            Vector3 leftPouch = simplePouchCenterWorld - pouchRight * SimplePocketHalfWidth;
+            Vector3 rightPouch = simplePouchCenterWorld + pouchRight * SimplePocketHalfWidth;
+            Vector3 pocketBack = simplePouchCenterWorld - simpleLaunchDirection * SimplePocketDepth;
+
+            if (simpleLeftBand != null)
+            {
+                simpleLeftBand.SetPosition(0, transform.TransformPoint(simpleLeftFrameAnchorRoot));
+                simpleLeftBand.SetPosition(1, leftPouch);
+            }
+
+            if (simpleRightBand != null)
+            {
+                simpleRightBand.SetPosition(0, transform.TransformPoint(simpleRightFrameAnchorRoot));
+                simpleRightBand.SetPosition(1, rightPouch);
+            }
+
+            if (simplePocketBand != null)
+            {
+                simplePocketBand.SetPosition(0, leftPouch);
+                simplePocketBand.SetPosition(1, pocketBack);
+                simplePocketBand.SetPosition(2, rightPouch);
+            }
         }
 
         private void CreatePouchPivot()

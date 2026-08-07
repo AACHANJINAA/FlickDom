@@ -26,6 +26,10 @@ namespace FlickDom.Gameplay
         [SerializeField] private MonkeySlingshotFlickPresenter slingshotPresenter;
         [SerializeField] private GameObject slingshotLauncherPrefab;
         [SerializeField] private Material slingshotLauncherMaterial;
+        [SerializeField] private Vector3 slingshotLauncherScale = new Vector3(0.4f, 0.4f, 0.4f);
+        [SerializeField] private Vector3 slingshotLauncherEulerOffset = new Vector3(0f, 90f, 0f);
+        [SerializeField] private Vector3 slingshotLauncherStoneCenterOffset = Vector3.zero;
+        [SerializeField] private float slingshotLauncherGripForwardOffset = 0.28f;
 
         [Header("Movement")]
         [SerializeField] private Transform cameraTransform;
@@ -111,6 +115,10 @@ namespace FlickDom.Gameplay
             sprintSpeed = Mathf.Max(walkSpeed, sprintSpeed);
             rotationSpeed = Mathf.Max(0f, rotationSpeed);
             animationCrossFadeSeconds = Mathf.Max(0f, animationCrossFadeSeconds);
+            slingshotLauncherScale.x = Mathf.Max(0.001f, slingshotLauncherScale.x);
+            slingshotLauncherScale.y = Mathf.Max(0.001f, slingshotLauncherScale.y);
+            slingshotLauncherScale.z = Mathf.Max(0.001f, slingshotLauncherScale.z);
+            slingshotLauncherGripForwardOffset = Mathf.Max(0f, slingshotLauncherGripForwardOffset);
         }
 
         private void Update()
@@ -160,16 +168,40 @@ namespace FlickDom.Gameplay
 
         public void ConfigureSlingshotLauncher(GameObject prefab, Material material)
         {
+            ConfigureSlingshotLauncher(
+                prefab,
+                material,
+                new Vector3(0.4f, 0.4f, 0.4f),
+                new Vector3(0f, 90f, 0f),
+                Vector3.zero,
+                0.28f);
+        }
+
+        public void ConfigureSlingshotLauncher(
+            GameObject prefab,
+            Material material,
+            Vector3 launcherScale,
+            Vector3 launcherEulerOffset,
+            Vector3 launcherStoneCenterOffset,
+            float launcherGripForwardOffset)
+        {
             slingshotLauncherPrefab = prefab;
             slingshotLauncherMaterial = material;
+            slingshotLauncherScale = new Vector3(
+                Mathf.Max(0.001f, launcherScale.x),
+                Mathf.Max(0.001f, launcherScale.y),
+                Mathf.Max(0.001f, launcherScale.z));
+            slingshotLauncherEulerOffset = launcherEulerOffset;
+            slingshotLauncherStoneCenterOffset = launcherStoneCenterOffset;
+            slingshotLauncherGripForwardOffset = Mathf.Max(0f, launcherGripForwardOffset);
             if (slingshotPresenter != null)
             {
                 slingshotPresenter.ConfigureLauncher(prefab, material);
                 slingshotPresenter.ConfigureLauncherTransform(
-                    new Vector3(0.4f, 0.4f, 0.4f),
-                    new Vector3(0f, 90f, 0f),
-                    Vector3.zero,
-                    0.28f);
+                    slingshotLauncherScale,
+                    slingshotLauncherEulerOffset,
+                    slingshotLauncherStoneCenterOffset,
+                    slingshotLauncherGripForwardOffset);
             }
         }
 
@@ -209,10 +241,10 @@ namespace FlickDom.Gameplay
                 slingshotLauncherPrefab,
                 slingshotLauncherMaterial);
             slingshotPresenter.ConfigureLauncherTransform(
-                new Vector3(0.4f, 0.4f, 0.4f),
-                new Vector3(0f, 90f, 0f),
-                Vector3.zero,
-                0.28f);
+                slingshotLauncherScale,
+                slingshotLauncherEulerOffset,
+                slingshotLauncherStoneCenterOffset,
+                slingshotLauncherGripForwardOffset);
             MonkeyThirdPersonController[] sceneMonkeys =
                 FindObjectsByType<MonkeyThirdPersonController>(
                     FindObjectsInactive.Include,

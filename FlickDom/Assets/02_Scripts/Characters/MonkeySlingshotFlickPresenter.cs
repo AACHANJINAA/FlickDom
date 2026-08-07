@@ -258,6 +258,25 @@ namespace FlickDom.Gameplay
             }
         }
 
+        public void SetFlickPresentationEnabled(bool value)
+        {
+            if (enableFlickPresentation == value)
+            {
+                return;
+            }
+
+            enableFlickPresentation = value;
+            if (!enableFlickPresentation)
+            {
+                StopPresentation(true);
+            }
+
+            if (isActiveAndEnabled)
+            {
+                RebindPieces();
+            }
+        }
+
         public void SetPieces(TurnBasedFlickPiece[] flickPieces)
         {
             pieces = flickPieces;
