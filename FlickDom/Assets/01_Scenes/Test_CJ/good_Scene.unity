@@ -1158,6 +1158,10 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
   player1PieceMaterialOverride: {fileID: 2100000, guid: e5fd0ccf0abfe064db017f8af834fffe, type: 2}
   player2PieceMaterialOverride: {fileID: 2100000, guid: 615519a92c1a8474c8a124080188a5ba, type: 2}
+  startTrayPrefab: {fileID: 3580514821724020511, guid: d79dd2f394717824dbd357d05de38f71, type: 3}
+  showStartTrays: 1
+  startTrayScale: {x: 1, y: 1, z: 1}
+  startTrayWorldY: 0.025
   startGameOnPlay: 1
   autoCreateMissingPieces: 1
   targetPiecesPerPlayer: 3
@@ -1245,6 +1249,8 @@ MonoBehaviour:
   flickEulerAngles: {x: 60, y: 0, z: 0}
   useOrthographicDuringFlick: 0
   flickOrthographicSize: 3.5
+  allowRightMouseFlickOrbit: 1
+  flickOrbitSensitivity: 0.18
   placementOffset: {x: 0, y: 6, z: 0}
   placementEulerAngles: {x: 90, y: 0, z: 0}
   useOrthographicDuringPlacement: 1

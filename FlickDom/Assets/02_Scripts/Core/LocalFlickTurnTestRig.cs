@@ -29,6 +29,11 @@ namespace FlickDom.Gameplay
         [Header("Piece Visual Overrides")]
         [SerializeField] private Material player1PieceMaterialOverride;
         [SerializeField] private Material player2PieceMaterialOverride;
+        [Header("Start Tray Visuals")]
+        [SerializeField] private GameObject startTrayPrefab;
+        [SerializeField] private bool showStartTrays = true;
+        [SerializeField] private Vector3 startTrayScale = Vector3.one;
+        [SerializeField] private float startTrayWorldY = 0.025f;
         [Header("Startup")]
         [SerializeField] private bool startGameOnPlay = true;
         [Tooltip("Legacy fallback that clones a configured piece. Keep disabled when using scene-authored piece objects.")]
@@ -93,6 +98,7 @@ namespace FlickDom.Gameplay
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
             ConfigurePieces(player2Pieces, FlickDomPlayerId.Player2, "P2");
+            BuildStartTrayVisuals();
             EnsureOrderLabelUi();
             HideAllOrderLabels();
         }
@@ -102,6 +108,9 @@ namespace FlickDom.Gameplay
             targetPiecesPerPlayer = Mathf.Max(1, targetPiecesPerPlayer);
             generatedPieceSpacing = Mathf.Max(0.1f, generatedPieceSpacing);
             pieceSelectionRaycastDistance = Mathf.Max(1f, pieceSelectionRaycastDistance);
+            startTrayScale.x = Mathf.Max(0.01f, startTrayScale.x);
+            startTrayScale.y = Mathf.Max(0.01f, startTrayScale.y);
+            startTrayScale.z = Mathf.Max(0.01f, startTrayScale.z);
         }
 
         private void OnEnable()
@@ -211,6 +220,49 @@ namespace FlickDom.Gameplay
                 }
 
                 piece.Configure(owner, prefix + "_" + (i + 1), gameModeManager);
+            }
+        }
+
+        private void BuildStartTrayVisuals()
+        {
+            if (!showStartTrays || startTrayPrefab == null)
+            {
+                return;
+            }
+
+            Transform root = new GameObject("Generated Start Trays").transform;
+            root.SetParent(transform, false);
+            CreateStartTraysForPieces(player1Pieces, root, "P1");
+            CreateStartTraysForPieces(player2Pieces, root, "P2");
+        }
+
+        private void CreateStartTraysForPieces(TurnBasedFlickPiece[] pieces, Transform parent, string prefix)
+        {
+            if (pieces == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                GameObject trayObject = InstantiateVisualObject(startTrayPrefab, parent);
+                if (trayObject == null)
+                {
+                    continue;
+                }
+
+                Vector3 piecePosition = piece.transform.position;
+                trayObject.name = prefix + " Start Tray " + (i + 1);
+                trayObject.transform.position = new Vector3(piecePosition.x, startTrayWorldY, piecePosition.z);
+                trayObject.transform.rotation = Quaternion.identity;
+                trayObject.transform.localScale = startTrayScale;
+                RemoveVisualColliders(trayObject);
             }
         }
 
@@ -1526,6 +1578,36 @@ namespace FlickDom.Gameplay
             }
 
             return count;
+        }
+
+        private static void RemoveVisualColliders(GameObject rootObject)
+        {
+            Collider[] colliders = rootObject.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Destroy(colliders[i]);
+            }
+        }
+
+        private static GameObject InstantiateVisualObject(GameObject prefab, Transform parent)
+        {
+            Object instance = Instantiate((Object)prefab, parent);
+            if (instance is GameObject gameObject)
+            {
+                return gameObject;
+            }
+
+            if (instance is Component component)
+            {
+                return component.gameObject;
+            }
+
+            if (instance != null)
+            {
+                Destroy(instance);
+            }
+
+            return null;
         }
 
         private string BuildCandidateLog(PiecePlacementCandidate candidate, bool isFinalCandidate)

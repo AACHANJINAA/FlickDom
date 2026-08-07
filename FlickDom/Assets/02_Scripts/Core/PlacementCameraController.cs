@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace FlickDom.Gameplay
 {
@@ -16,6 +17,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector3 flickEulerAngles = new Vector3(60f, 0f, 0f);
         [SerializeField] private bool useOrthographicDuringFlick = false;
         [SerializeField] private float flickOrthographicSize = 3.5f;
+        [SerializeField] private bool allowRightMouseFlickOrbit = true;
+        [SerializeField] private float flickOrbitSensitivity = 0.18f;
 
         [Header("Placement View")]
         [SerializeField] private Vector3 placementOffset = new Vector3(0f, 6f, 0f);
@@ -35,6 +38,7 @@ namespace FlickDom.Gameplay
         private float manualPreviewOrthographicSize;
         private bool hasManualPreviewPose;
         private Coroutine activeTransition;
+        private float flickOrbitYaw;
 
         private void Awake()
         {
@@ -59,6 +63,33 @@ namespace FlickDom.Gameplay
             }
 
             CacheGameplayCameraPose();
+            flickOrbitYaw = flickEulerAngles.y;
+        }
+
+        private void Update()
+        {
+            if (targetCamera == null
+                || gameModeManager == null
+                || !allowRightMouseFlickOrbit
+                || !IsFlickViewState(gameModeManager.CurrentState))
+            {
+                return;
+            }
+
+            Mouse mouse = Mouse.current;
+            if (mouse == null || !mouse.rightButton.isPressed)
+            {
+                return;
+            }
+
+            Vector2 delta = mouse.delta.ReadValue();
+            if (Mathf.Abs(delta.x) <= 0.01f)
+            {
+                return;
+            }
+
+            flickOrbitYaw += delta.x * flickOrbitSensitivity;
+            ApplyFlickOrbitPose();
         }
 
         private void OnEnable()
@@ -83,6 +114,7 @@ namespace FlickDom.Gameplay
         {
             transitionDuration = Mathf.Max(0f, transitionDuration);
             flickOrthographicSize = Mathf.Max(0.1f, flickOrthographicSize);
+            flickOrbitSensitivity = Mathf.Max(0.01f, flickOrbitSensitivity);
             placementOrthographicSize = Mathf.Max(0.1f, placementOrthographicSize);
         }
 
@@ -187,13 +219,23 @@ namespace FlickDom.Gameplay
         private void MoveToFlickView()
         {
             Vector3 focus = GetFlickBoardCenter();
-            Vector3 targetPosition = focus + flickOffset;
-            Quaternion targetRotation = Quaternion.Euler(flickEulerAngles);
+            flickOrbitYaw = flickEulerAngles.y;
+            Vector3 targetPosition = GetFlickOrbitPosition(focus);
+            Quaternion targetRotation = GetFlickOrbitRotation(focus, targetPosition);
             BeginTransition(
                 targetPosition,
                 targetRotation,
                 useOrthographicDuringFlick,
                 flickOrthographicSize);
+        }
+
+        private void ApplyFlickOrbitPose()
+        {
+            StopActiveTransition();
+            Vector3 focus = GetFlickBoardCenter();
+            Vector3 targetPosition = GetFlickOrbitPosition(focus);
+            Quaternion targetRotation = GetFlickOrbitRotation(focus, targetPosition);
+            ApplyCameraPose(targetPosition, targetRotation, useOrthographicDuringFlick, flickOrthographicSize);
         }
 
         private void MoveToGameplayView()
@@ -278,6 +320,23 @@ namespace FlickDom.Gameplay
             return state == FlickDomGameState.PieceOrderSelection
                 || state == FlickDomGameState.PlayerFlicking
                 || state == FlickDomGameState.PhysicsProcessing;
+        }
+
+        private Vector3 GetFlickOrbitPosition(Vector3 focus)
+        {
+            Quaternion yawRotation = Quaternion.Euler(0f, flickOrbitYaw, 0f);
+            return focus + (yawRotation * flickOffset);
+        }
+
+        private static Quaternion GetFlickOrbitRotation(Vector3 focus, Vector3 cameraPosition)
+        {
+            Vector3 lookDirection = focus - cameraPosition;
+            if (lookDirection.sqrMagnitude <= 0.0001f)
+            {
+                return Quaternion.identity;
+            }
+
+            return Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
         }
 
         private Vector3 GetFlickBoardCenter()
