@@ -1082,6 +1082,10 @@ MonoBehaviour:
   visualGap: 0.035
   visualCellColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   visualAlternateCellColor: {r: 0.55, g: 0.58, b: 0.6, a: 1}
+  boardCellVisualPrefab: {fileID: 100100000, guid: c495cc5316267b243888a3f032969825, type: 3}
+  boundaryWallVisualPrefab: {fileID: 100100000, guid: ca2e0eb2029cd014eb086303d9a85284, type: 3}
+  boardCellMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
+  boundaryWallMaterialOverride: {fileID: 2100000, guid: c27692f72f1a314438d6399edafd55a8, type: 2}
   buildTopBottomBoundaryWalls: 1
   boundaryWallHeight: 0.7
   boundaryWallThickness: 0.28
@@ -1186,6 +1190,10 @@ MonoBehaviour:
   gap: 0.05
   tileHeight: 0.04
   enableCellColliders: 1
+  cellVisualPrefab: {fileID: 100100000, guid: c495cc5316267b243888a3f032969825, type: 3}
+  emptyMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
+  player1OwnedMaterialOverride: {fileID: 0}
+  player2OwnedMaterialOverride: {fileID: 0}
   emptyColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   player1CandidateColor: {r: 0.05, g: 0.28, b: 1, a: 1}
   player2CandidateColor: {r: 1, g: 0.12, b: 0.08, a: 1}

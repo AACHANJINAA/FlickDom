@@ -20,6 +20,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private float tileHeight = 0.04f;
         [SerializeField] private bool enableCellColliders = true;
 
+        [Header("Board Art")]
+        [SerializeField] private GameObject cellVisualPrefab;
+        [SerializeField] private Material emptyMaterialOverride;
+        [SerializeField] private Material player1OwnedMaterialOverride;
+        [SerializeField] private Material player2OwnedMaterialOverride;
+
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
         [SerializeField] private Color player1CandidateColor = new Color(0.05f, 0.28f, 1f);
@@ -34,7 +40,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float candidateMarkerHeight = 0.035f;
         [SerializeField] private float candidateMarkerYOffset = 0.045f;
 
-        private Renderer[,] cellRenderers;
+        private Renderer[][] cellRendererGroups;
         private Renderer[,] candidateMarkerRenderers;
         private GameObject[,] candidateMarkerObjects;
         private FlickDomPlayerId[,] ownerCells;
@@ -228,7 +234,7 @@ namespace FlickDom.Gameplay
 
         private void BuildGrid()
         {
-            cellRenderers = new Renderer[boardSize, boardSize];
+            cellRendererGroups = new Renderer[boardSize * boardSize][];
             candidateMarkerRenderers = new Renderer[boardSize, boardSize];
             candidateMarkerObjects = new GameObject[boardSize, boardSize];
             ownerCells = new FlickDomPlayerId[boardSize, boardSize];
@@ -266,12 +272,43 @@ namespace FlickDom.Gameplay
                     }
 
                     Renderer cellRenderer = cellObject.GetComponent<Renderer>();
-                    cellRenderer.sharedMaterial = emptyMaterial;
-                    cellRenderers[x, y] = cellRenderer;
+                    Renderer[] renderers = CreateCellVisual(cellObject, cellRenderer);
+                    SetSharedMaterial(renderers, emptyMaterial);
+                    cellRendererGroups[GetCellIndex(x, y)] = renderers;
 
                     CreateCandidateMarker(x, y, cellObject.transform.position);
                 }
             }
+        }
+
+        private Renderer[] CreateCellVisual(GameObject cellObject, Renderer fallbackRenderer)
+        {
+            if (cellVisualPrefab == null)
+            {
+                return new[] { fallbackRenderer };
+            }
+
+            GameObject visualObject = InstantiateVisualObject(cellVisualPrefab, cellObject.transform);
+            if (visualObject == null)
+            {
+                return new[] { fallbackRenderer };
+            }
+
+            if (fallbackRenderer != null)
+            {
+                fallbackRenderer.enabled = false;
+            }
+
+            visualObject.name = cellVisualPrefab.name + " Visual";
+            visualObject.transform.localPosition = Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.identity;
+            visualObject.transform.localScale = Vector3.one;
+
+            RemoveVisualColliders(visualObject);
+            FitVisualToSize(visualObject, new Vector3(cellSize, tileHeight, cellSize));
+
+            Renderer[] renderers = visualObject.GetComponentsInChildren<Renderer>(true);
+            return renderers.Length > 0 ? renderers : new[] { fallbackRenderer };
         }
 
         private void CreateCandidateMarker(int x, int y, Vector3 cellPosition)
@@ -314,6 +351,21 @@ namespace FlickDom.Gameplay
             sharedCandidateMaterial = CreateMaterial(shader, "Token Map Shared Candidate", sharedCandidateColor);
             player1OwnedMaterial = CreateMaterial(shader, "Token Map Player1 Owned", player1OwnedColor);
             player2OwnedMaterial = CreateMaterial(shader, "Token Map Player2 Owned", player2OwnedColor);
+
+            if (emptyMaterialOverride != null)
+            {
+                emptyMaterial = emptyMaterialOverride;
+            }
+
+            if (player1OwnedMaterialOverride != null)
+            {
+                player1OwnedMaterial = player1OwnedMaterialOverride;
+            }
+
+            if (player2OwnedMaterialOverride != null)
+            {
+                player2OwnedMaterial = player2OwnedMaterialOverride;
+            }
         }
 
         private Material CreateMaterial(Shader shader, string materialName, Color color)
@@ -326,12 +378,12 @@ namespace FlickDom.Gameplay
 
         private void RepaintCell(Vector2Int cell)
         {
-            if (!IsValidCell(cell) || cellRenderers == null)
+            if (!IsValidCell(cell) || cellRendererGroups == null)
             {
                 return;
             }
 
-            cellRenderers[cell.x, cell.y].sharedMaterial = ResolveBaseMaterial(cell);
+            SetSharedMaterial(cellRendererGroups[GetCellIndex(cell.x, cell.y)], ResolveBaseMaterial(cell));
             RepaintCandidateMarker(cell);
         }
 
@@ -443,6 +495,83 @@ namespace FlickDom.Gameplay
             }
 
             return 0;
+        }
+
+        private int GetCellIndex(int x, int y)
+        {
+            return (y * boardSize) + x;
+        }
+
+        private static void SetSharedMaterial(Renderer[] renderers, Material material)
+        {
+            if (renderers == null || material == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
+                {
+                    renderers[i].sharedMaterial = material;
+                }
+            }
+        }
+
+        private static void RemoveVisualColliders(GameObject rootObject)
+        {
+            Collider[] colliders = rootObject.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Destroy(colliders[i]);
+            }
+        }
+
+        private static void FitVisualToSize(GameObject rootObject, Vector3 targetSize)
+        {
+            Renderer[] renderers = rootObject.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+
+            Vector3 size = bounds.size;
+            if (size.x <= 0f || size.y <= 0f || size.z <= 0f)
+            {
+                return;
+            }
+
+            rootObject.transform.localScale = new Vector3(
+                targetSize.x / size.x,
+                targetSize.y / size.y,
+                targetSize.z / size.z);
+        }
+
+        private static GameObject InstantiateVisualObject(GameObject prefab, Transform parent)
+        {
+            Object instance = Instantiate((Object)prefab, parent);
+            if (instance is GameObject gameObject)
+            {
+                return gameObject;
+            }
+
+            if (instance is Component component)
+            {
+                return component.gameObject;
+            }
+
+            if (instance != null)
+            {
+                Destroy(instance);
+            }
+
+            return null;
         }
     }
 }
