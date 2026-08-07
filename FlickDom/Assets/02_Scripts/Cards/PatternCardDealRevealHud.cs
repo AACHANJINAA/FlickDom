@@ -12,6 +12,8 @@ namespace FlickDom.Gameplay
 {
     public sealed class PatternCardDealRevealHud : MonoBehaviour
     {
+        private const string DefaultBundledFontResourcePath = "Fonts/NotoSansKR-VF";
+
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
         [SerializeField] private GameModeManager gameModeManager;
@@ -48,6 +50,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector2 confirmButtonSize = new Vector2(170f, 48f);
         [SerializeField] private float confirmButtonYOffset = -285f;
         [SerializeField] private int confirmButtonFontSize = 24;
+        [SerializeField] private Font bundledFont;
+        [SerializeField] private string bundledFontResourcePath = DefaultBundledFontResourcePath;
         [SerializeField] private string[] fallbackFontNames =
         {
             "Malgun Gothic",
@@ -899,6 +903,12 @@ namespace FlickDom.Gameplay
                 return resolvedFont;
             }
 
+            Font resourceFont = ResolveBundledFont(sampleText, fontSize);
+            if (resourceFont != null)
+            {
+                return resourceFont;
+            }
+
             Font dynamicFont = CreateDynamicFont(fallbackFontNames, fontSize);
             if (CanRenderText(dynamicFont, sampleText, fontSize))
             {
@@ -921,6 +931,30 @@ namespace FlickDom.Gameplay
             }
 
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private Font ResolveBundledFont(string sampleText, int fontSize)
+        {
+            if (CanRenderText(bundledFont, sampleText, fontSize))
+            {
+                resolvedFont = bundledFont;
+                return resolvedFont;
+            }
+
+            if (string.IsNullOrEmpty(bundledFontResourcePath))
+            {
+                return null;
+            }
+
+            Font loadedFont = Resources.Load<Font>(bundledFontResourcePath);
+            if (!CanRenderText(loadedFont, sampleText, fontSize))
+            {
+                return null;
+            }
+
+            bundledFont = loadedFont;
+            resolvedFont = loadedFont;
+            return resolvedFont;
         }
 
         private static Font CreateDynamicFont(string[] fontNames, int fontSize)

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FlickDom.Networking;
@@ -38,6 +40,9 @@ namespace FlickDom.Gameplay
         [SerializeField] private float sprintSpeed = 4.2f;
         [SerializeField] private float rotationSpeed = 540f;
         [SerializeField] private bool faceCameraDirectionWhenIdle = true;
+        [SerializeField] private bool constrainWebGlMovementToSafeArea = true;
+        [SerializeField] private Vector2 webGlSafeAreaMin = new Vector2(-3.4f, -2.7f);
+        [SerializeField] private Vector2 webGlSafeAreaMax = new Vector2(3.4f, 2.75f);
 
         [Header("Animation")]
         [SerializeField] private Animator animator;
@@ -51,7 +56,10 @@ namespace FlickDom.Gameplay
         [SerializeField] private int idleAnimationValue = 1;
         [SerializeField] private int walkAnimationValue = 21;
         [SerializeField] private int runAnimationValue = 18;
+        [SerializeField] private bool useWebGlMaterialFallback = true;
 
+        private static readonly Dictionary<Material, Material> WebGlMaterialFallbacks =
+            new Dictionary<Material, Material>();
         private Rigidbody cachedRigidbody;
         private Transform cachedTransform;
         private Vector2 movementInput;
@@ -105,7 +113,10 @@ namespace FlickDom.Gameplay
                 animator = GetComponentInChildren<Animator>();
             }
 
+            ConfigureWebGlColliderFallback();
+            ClampWebGlPositionToSafeArea();
             ApplyLegacySuriyunAnimationDefaults();
+            ApplyWebGlCompatibilityOverrides();
             CacheAnimationStates();
             SetupSlingshotPresenter();
         }
@@ -140,6 +151,12 @@ namespace FlickDom.Gameplay
 
             if (cachedRigidbody)
             {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                if (UseWebGlTransformMovement())
+                {
+                    return;
+                }
+#endif
                 Vector3 velocity = cachedRigidbody.linearVelocity;
                 velocity.x = 0f;
                 velocity.z = 0f;
@@ -306,7 +323,11 @@ namespace FlickDom.Gameplay
 
             movementInput.Set(horizontal, vertical);
             movementInput = Vector2.ClampMagnitude(movementInput, 1f);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            sprintHeld = false;
+#else
             sprintHeld = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+#endif
         }
 
         private bool CanReadInput()
@@ -338,6 +359,14 @@ namespace FlickDom.Gameplay
             BuildCameraRelativeDirection();
 
             float speed = sprintHeld ? sprintSpeed : walkSpeed;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (UseWebGlTransformMovement())
+            {
+                ApplyWebGlTransformMovement(speed);
+                return;
+            }
+#endif
+
             Vector3 velocity = cachedRigidbody.linearVelocity;
             targetVelocity.Set(
                 desiredMoveDirection.x * speed,
@@ -362,6 +391,73 @@ namespace FlickDom.Gameplay
                 targetRotation,
                 rotationSpeed * Time.fixedDeltaTime);
             cachedRigidbody.MoveRotation(nextRotation);
+        }
+
+        private bool UseWebGlTransformMovement()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        private void ApplyWebGlTransformMovement(float speed)
+        {
+            if (desiredMoveDirection.sqrMagnitude > MinInputMagnitude)
+            {
+                Vector3 nextPosition =
+                    cachedTransform.position + desiredMoveDirection * speed * Time.fixedDeltaTime;
+                cachedTransform.position = ClampWebGlPosition(nextPosition);
+            }
+
+            Vector3 facingDirection = desiredMoveDirection;
+            if (facingDirection.sqrMagnitude <= MinInputMagnitude && faceCameraDirectionWhenIdle)
+            {
+                facingDirection = cameraForward;
+            }
+
+            if (facingDirection.sqrMagnitude <= MinInputMagnitude)
+            {
+                return;
+            }
+
+            Quaternion targetRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
+            cachedTransform.rotation = Quaternion.RotateTowards(
+                cachedTransform.rotation,
+                targetRotation,
+                rotationSpeed * Time.fixedDeltaTime);
+        }
+
+        private void ClampWebGlPositionToSafeArea()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            cachedTransform.position = ClampWebGlPosition(cachedTransform.position);
+#endif
+        }
+
+        private Vector3 ClampWebGlPosition(Vector3 position)
+        {
+            if (!constrainWebGlMovementToSafeArea || !IsWebGlRuntime())
+            {
+                return position;
+            }
+
+            Vector2 min = Vector2.Min(webGlSafeAreaMin, webGlSafeAreaMax);
+            Vector2 max = Vector2.Max(webGlSafeAreaMin, webGlSafeAreaMax);
+            position.x = Mathf.Clamp(position.x, min.x, max.x);
+            position.z = Mathf.Clamp(position.z, min.y, max.y);
+            return position;
+        }
+
+        private void ConfigureWebGlColliderFallback()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (TryGetComponent(out CapsuleCollider capsuleCollider))
+            {
+                capsuleCollider.enabled = false;
+            }
+#endif
         }
 
         private void BuildCameraRelativeDirection()
@@ -433,7 +529,159 @@ namespace FlickDom.Gameplay
                 return LocomotionAnimationState.Idle;
             }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (sprintHeld)
+            {
+                return LocomotionAnimationState.Walk;
+            }
+#endif
+
             return sprintHeld ? LocomotionAnimationState.Run : LocomotionAnimationState.Walk;
+        }
+
+        private void ApplyWebGlCompatibilityOverrides()
+        {
+            if (ShouldUseWebGlMaterialFallback())
+            {
+                ReplaceUnsupportedWebGlMaterials();
+            }
+        }
+
+        private bool ShouldUseWebGlMaterialFallback()
+        {
+            return useWebGlMaterialFallback && IsWebGlRuntime();
+        }
+
+        private static bool IsWebGlRuntime()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        private void ReplaceUnsupportedWebGlMaterials()
+        {
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            for (int rendererIndex = 0; rendererIndex < renderers.Length; rendererIndex++)
+            {
+                Renderer targetRenderer = renderers[rendererIndex];
+                Material[] materials = targetRenderer.sharedMaterials;
+                bool changed = false;
+
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    Material material = materials[materialIndex];
+                    if (!NeedsWebGlFallbackMaterial(material))
+                    {
+                        continue;
+                    }
+
+                    Material fallback = GetWebGlFallbackMaterial(material);
+                    if (fallback == null || fallback == material)
+                    {
+                        continue;
+                    }
+
+                    materials[materialIndex] = fallback;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    targetRenderer.sharedMaterials = materials;
+                }
+            }
+        }
+
+        private static bool NeedsWebGlFallbackMaterial(Material material)
+        {
+            if (material == null || material.shader == null)
+            {
+                return false;
+            }
+
+            string shaderName = material.shader.name;
+            return material.HasProperty("_isUnityToonshader")
+                || shaderName.IndexOf("Toon", StringComparison.OrdinalIgnoreCase) >= 0
+                || shaderName.IndexOf("UnityChanToonShader", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static Material GetWebGlFallbackMaterial(Material source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            if (WebGlMaterialFallbacks.TryGetValue(source, out Material cachedFallback))
+            {
+                return cachedFallback;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Universal Render Pipeline/Lit");
+            }
+
+            if (shader == null)
+            {
+                WebGlMaterialFallbacks[source] = source;
+                return source;
+            }
+
+            Material fallback = new Material(shader)
+            {
+                name = source.name + " WebGL Fallback"
+            };
+
+            Texture mainTexture = null;
+            if (source.HasProperty("_MainTex"))
+            {
+                mainTexture = source.GetTexture("_MainTex");
+            }
+            else if (source.HasProperty("_BaseMap"))
+            {
+                mainTexture = source.GetTexture("_BaseMap");
+            }
+
+            if (mainTexture != null)
+            {
+                if (fallback.HasProperty("_BaseMap"))
+                {
+                    fallback.SetTexture("_BaseMap", mainTexture);
+                }
+
+                if (fallback.HasProperty("_MainTex"))
+                {
+                    fallback.SetTexture("_MainTex", mainTexture);
+                }
+            }
+
+            Color baseColor = Color.white;
+            if (source.HasProperty("_BaseColor"))
+            {
+                baseColor = source.GetColor("_BaseColor");
+            }
+            else if (source.HasProperty("_Color"))
+            {
+                baseColor = source.GetColor("_Color");
+            }
+
+            if (fallback.HasProperty("_BaseColor"))
+            {
+                fallback.SetColor("_BaseColor", baseColor);
+            }
+
+            if (fallback.HasProperty("_Color"))
+            {
+                fallback.SetColor("_Color", baseColor);
+            }
+
+            WebGlMaterialFallbacks[source] = fallback;
+            return fallback;
         }
 
         private void CacheAnimationStates()
@@ -505,6 +753,14 @@ namespace FlickDom.Gameplay
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            body.useGravity = false;
+            body.isKinematic = true;
+            body.detectCollisions = false;
+            body.interpolation = RigidbodyInterpolation.None;
+            body.collisionDetectionMode = CollisionDetectionMode.Discrete;
+#endif
         }
 
         private static void ConfigureCapsule(CapsuleCollider capsuleCollider)

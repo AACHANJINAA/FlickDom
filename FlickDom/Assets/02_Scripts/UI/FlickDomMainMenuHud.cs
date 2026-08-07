@@ -2,6 +2,7 @@ using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 #endif
 using UnityEngine.SceneManagement;
@@ -13,6 +14,7 @@ namespace FlickDom.Gameplay
     {
         private const string TargetSceneName = "good_Scene";
         private const int MenuCanvasSortingOrder = 300;
+        private const string DefaultBundledFontResourcePath = "Fonts/NotoSansKR-VF";
 
         [Header("Background")]
         [SerializeField] private Texture2D backgroundTexture;
@@ -50,6 +52,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private string addressLabelText = "IP 주소";
         [SerializeField] private string portLabelText = "포트";
         [SerializeField] private string emptyRulesText = "";
+        [SerializeField] private Font bundledFont;
+        [SerializeField] private string bundledFontResourcePath = DefaultBundledFontResourcePath;
         [SerializeField] private string[] fallbackFontNames =
         {
             "Malgun Gothic",
@@ -65,9 +69,14 @@ namespace FlickDom.Gameplay
         private InputField addressInput;
         private InputField portInput;
         private Text multiplayerStatusText;
+        private Button singleModeButton;
+        private Button multiplayerButton;
+        private Button gameRulesButton;
         private Button createRoomButton;
         private Button joinRoomButton;
         private Button startGameButton;
+        private Button multiplayerBackButton;
+        private Button rulesBackButton;
         private Font resolvedFont;
         private FlickDomNetworkBootstrap bootstrap;
 
@@ -121,6 +130,7 @@ namespace FlickDom.Gameplay
                 ShowMainMenu();
             }
 
+            HandleFallbackMenuInput();
             RefreshMultiplayerPanel();
         }
 
@@ -205,9 +215,9 @@ namespace FlickDom.Gameplay
             titleLayout.preferredHeight = 86f;
 
             AddFlexibleSpace(panel.transform, 8f);
-            CreateMenuButton("Single Mode Button", singleModeText, panel.transform, HandleSingleModeClicked);
-            CreateMenuButton("Multiplayer Button", multiplayerText, panel.transform, ShowMultiplayerMenu);
-            CreateMenuButton("Game Rules Button", gameRulesText, panel.transform, ShowRulesMenu);
+            singleModeButton = CreateMenuButton("Single Mode Button", singleModeText, panel.transform, HandleSingleModeClicked);
+            multiplayerButton = CreateMenuButton("Multiplayer Button", multiplayerText, panel.transform, ShowMultiplayerMenu);
+            gameRulesButton = CreateMenuButton("Game Rules Button", gameRulesText, panel.transform, ShowRulesMenu);
 
             layout.childForceExpandHeight = false;
             return panel;
@@ -248,7 +258,7 @@ namespace FlickDom.Gameplay
             LayoutElement statusLayout = multiplayerStatusText.gameObject.AddComponent<LayoutElement>();
             statusLayout.preferredHeight = 74f;
 
-            CreateMenuButton("Multiplayer Back Button", backText, panel.transform, ShowMainMenu);
+            multiplayerBackButton = CreateMenuButton("Multiplayer Back Button", backText, panel.transform, ShowMainMenu);
             return panel;
         }
 
@@ -265,7 +275,7 @@ namespace FlickDom.Gameplay
             LayoutElement bodyLayout = body.gameObject.AddComponent<LayoutElement>();
             bodyLayout.flexibleHeight = 1f;
 
-            CreateMenuButton("Rules Back Button", backText, panel.transform, ShowMainMenu);
+            rulesBackButton = CreateMenuButton("Rules Back Button", backText, panel.transform, ShowMainMenu);
             return panel;
         }
 
@@ -533,6 +543,137 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void HandleFallbackMenuInput()
+        {
+            if (canvas == null || !canvas.gameObject.activeInHierarchy)
+            {
+                return;
+            }
+
+            HandleFallbackKeyboardInput();
+            if (!TryGetPointerDownPosition(out Vector2 screenPosition))
+            {
+                return;
+            }
+
+            if (mainPanel != null && mainPanel.activeSelf)
+            {
+                if (TryInvokeButtonAt(singleModeButton, screenPosition)
+                    || TryInvokeButtonAt(multiplayerButton, screenPosition)
+                    || TryInvokeButtonAt(gameRulesButton, screenPosition))
+                {
+                    return;
+                }
+            }
+
+            if (multiplayerPanel != null && multiplayerPanel.activeSelf)
+            {
+                TryInvokeButtonAt(createRoomButton, screenPosition);
+                TryInvokeButtonAt(joinRoomButton, screenPosition);
+                TryInvokeButtonAt(startGameButton, screenPosition);
+                TryInvokeButtonAt(multiplayerBackButton, screenPosition);
+                return;
+            }
+
+            if (rulesPanel != null && rulesPanel.activeSelf)
+            {
+                TryInvokeButtonAt(rulesBackButton, screenPosition);
+            }
+        }
+
+        private void HandleFallbackKeyboardInput()
+        {
+            if (mainPanel != null && mainPanel.activeSelf)
+            {
+                if (WasKeyPressedThisFrame(KeyCode.Alpha1) || WasKeyPressedThisFrame(KeyCode.Keypad1))
+                {
+                    HandleSingleModeClicked();
+                }
+                else if (WasKeyPressedThisFrame(KeyCode.Alpha2) || WasKeyPressedThisFrame(KeyCode.Keypad2))
+                {
+                    ShowMultiplayerMenu();
+                }
+                else if (WasKeyPressedThisFrame(KeyCode.Alpha3) || WasKeyPressedThisFrame(KeyCode.Keypad3))
+                {
+                    ShowRulesMenu();
+                }
+            }
+            else if ((multiplayerPanel != null && multiplayerPanel.activeSelf)
+                || (rulesPanel != null && rulesPanel.activeSelf))
+            {
+                if (WasKeyPressedThisFrame(KeyCode.Escape))
+                {
+                    ShowMainMenu();
+                }
+            }
+        }
+
+        private static bool TryInvokeButtonAt(Button button, Vector2 screenPosition)
+        {
+            if (button == null || !button.isActiveAndEnabled || !button.interactable)
+            {
+                return false;
+            }
+
+            RectTransform rectTransform = button.GetComponent<RectTransform>();
+            if (rectTransform == null
+                || !RectTransformUtility.RectangleContainsScreenPoint(rectTransform, screenPosition, null))
+            {
+                return false;
+            }
+
+            button.onClick.Invoke();
+            return true;
+        }
+
+        private static bool TryGetPointerDownPosition(out Vector2 screenPosition)
+        {
+#if ENABLE_INPUT_SYSTEM
+            Mouse mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                screenPosition = mouse.position.ReadValue();
+                return true;
+            }
+#else
+            if (Input.GetMouseButtonDown(0))
+            {
+                screenPosition = Input.mousePosition;
+                return true;
+            }
+#endif
+
+            screenPosition = default;
+            return false;
+        }
+
+        private static bool WasKeyPressedThisFrame(KeyCode key)
+        {
+#if ENABLE_INPUT_SYSTEM
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return false;
+            }
+
+            Key inputKey = key switch
+            {
+                KeyCode.Alpha1 => Key.Digit1,
+                KeyCode.Alpha2 => Key.Digit2,
+                KeyCode.Alpha3 => Key.Digit3,
+                KeyCode.Keypad1 => Key.Numpad1,
+                KeyCode.Keypad2 => Key.Numpad2,
+                KeyCode.Keypad3 => Key.Numpad3,
+                KeyCode.Escape => Key.Escape,
+                _ => Key.None
+            };
+
+            return inputKey != Key.None && keyboard[inputKey].wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(key);
+#endif
+        }
+
         private void EnsureBootstrap()
         {
             if (bootstrap != null)
@@ -582,6 +723,12 @@ namespace FlickDom.Gameplay
                 return resolvedFont;
             }
 
+            Font resourceFont = ResolveBundledFont(sampleText, fontSize);
+            if (resourceFont != null)
+            {
+                return resourceFont;
+            }
+
             Font dynamicFont = CreateDynamicFont(fallbackFontNames, fontSize);
             if (CanRenderText(dynamicFont, sampleText, fontSize))
             {
@@ -590,6 +737,30 @@ namespace FlickDom.Gameplay
             }
 
             resolvedFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            return resolvedFont;
+        }
+
+        private Font ResolveBundledFont(string sampleText, int fontSize)
+        {
+            if (CanRenderText(bundledFont, sampleText, fontSize))
+            {
+                resolvedFont = bundledFont;
+                return resolvedFont;
+            }
+
+            if (string.IsNullOrEmpty(bundledFontResourcePath))
+            {
+                return null;
+            }
+
+            Font loadedFont = Resources.Load<Font>(bundledFontResourcePath);
+            if (!CanRenderText(loadedFont, sampleText, fontSize))
+            {
+                return null;
+            }
+
+            bundledFont = loadedFont;
+            resolvedFont = loadedFont;
             return resolvedFont;
         }
 
