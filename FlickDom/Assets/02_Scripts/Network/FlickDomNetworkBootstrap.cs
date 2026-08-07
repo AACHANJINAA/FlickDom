@@ -1815,6 +1815,16 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Game state received from client " + senderClientId + ". State: " + state + ", Active: " + activePlayer + ", Round: " + roundNumber + ", TurnIndex: " + turnIndex + ".", this);
         }
 
+        private bool IsAllowedRemotePlayerRequest(ulong senderClientId, FlickDomPlayerId owner)
+        {
+            if (networkManager == null || senderClientId == networkManager.LocalClientId)
+            {
+                return true;
+            }
+
+            return owner == FlickDomPlayerId.Player2;
+        }
+
         private void HandleFlickRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
             if (networkManager == null || !networkManager.IsHost)
@@ -1830,6 +1840,12 @@ namespace FlickDom.Networking
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
             impulse = ClampNetworkFlickImpulse(impulse);
+
+            if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
+            {
+                Debug.LogWarning("[Network] Rejected flick request from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
 
             ResolveGameModeManager();
             if (gameModeManager == null
@@ -1930,6 +1946,12 @@ namespace FlickDom.Networking
             }
 
             ResolveGameModeManager();
+
+            if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
+            {
+                Debug.LogWarning("[Network] Rejected piece order selection from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
 
             if (gameModeManager == null
                 || gameModeManager.CurrentState != FlickDomGameState.PieceOrderSelection
@@ -2187,11 +2209,12 @@ namespace FlickDom.Networking
             }
 
             IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            int candidateCount = candidates != null ? candidates.Count : 0;
             FastBufferWriter writer = new FastBufferWriter(CalculatePlacementCandidatesCapacity(candidates), Allocator.Temp);
             try
             {
-                writer.WriteValueSafe(candidates.Count);
-                for (int i = 0; i < candidates.Count; i++)
+                writer.WriteValueSafe(candidateCount);
+                for (int i = 0; i < candidateCount; i++)
                 {
                     WritePlacementCandidate(ref writer, candidates[i]);
                 }
@@ -2203,7 +2226,7 @@ namespace FlickDom.Networking
                 writer.Dispose();
             }
 
-            Debug.Log("[Network] Placement candidates broadcast. Count: " + candidates.Count + ".", this);
+            Debug.Log("[Network] Placement candidates broadcast. Count: " + candidateCount + ".", this);
         }
 
         private void HandlePlacementCandidatesMessage(ulong senderClientId, FastBufferReader reader)

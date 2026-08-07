@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using FlickDom.Networking;
 
 namespace FlickDom.Gameplay
 {
@@ -279,6 +280,12 @@ namespace FlickDom.Gameplay
         private bool CanReadInput()
         {
             if (!inputEnabled || Keyboard.current == null)
+            {
+                return false;
+            }
+
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null && !bootstrap.AllowsLocalInputFor(owner))
             {
                 return false;
             }
