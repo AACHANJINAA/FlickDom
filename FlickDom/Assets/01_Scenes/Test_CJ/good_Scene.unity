@@ -1162,6 +1162,7 @@ MonoBehaviour:
   startTrayBoardResolver: {fileID: 1371976853}
   showStartTrays: 1
   alignStartTraysToBoardCells: 1
+  alignGeneratedPieceStartsToBoardCells: 1
   startTrayCellSizeRatio: 0.95
   startTraySideGap: 0.16
   startTrayHeight: 0.04
@@ -1367,11 +1368,15 @@ MonoBehaviour:
     texture: {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
   - cardId: HardCard_4
     texture: {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
-  cardTextureOverride: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  cardTextureOverride: {fileID: 0}
   preferTexture: 1
   preserveTextureAspect: 1
   hideWhenClaimed: 1
+  showAllRemainingCards: 1
   localOffset: {x: 0, y: 0.035, z: 0}
+  displayCardSize: {x: 1, y: 1}
+  cardsPerRow: 3
+  cardSpacing: {x: 1.18, y: 1.18}
   fallbackCardSize: {x: 1.9, y: 2.55}
   fallbackGap: 0.015
   fallbackHeaderRatio: 0.2
@@ -1690,7 +1695,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardSlot
   slotSize: {x: 1, y: 1}
-  showEmptySlot: 1
+  showEmptySlot: 0
   baseThickness: 0.025
   borderThickness: 0.045
   surfaceYOffset: -0.01

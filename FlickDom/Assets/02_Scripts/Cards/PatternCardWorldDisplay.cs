@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FlickDom.Gameplay
@@ -15,7 +16,11 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool preferTexture = true;
         [SerializeField] private bool preserveTextureAspect = true;
         [SerializeField] private bool hideWhenClaimed = true;
+        [SerializeField] private bool showAllRemainingCards = true;
         [SerializeField] private Vector3 localOffset = new Vector3(0f, 0.035f, 0f);
+        [SerializeField] private Vector2 displayCardSize = new Vector2(1f, 1f);
+        [SerializeField] private int cardsPerRow = 3;
+        [SerializeField] private Vector2 cardSpacing = new Vector2(1.18f, 1.18f);
         [SerializeField] private Vector2 fallbackCardSize = new Vector2(1.9f, 2.55f);
 
         [Header("Fallback Generated Card")]
@@ -37,7 +42,8 @@ namespace FlickDom.Gameplay
         private Material baseMaterial;
         private Material lineMaterial;
         private Material fillMaterial;
-        private Mesh textureMesh;
+        private readonly List<Mesh> textureMeshes = new List<Mesh>();
+        private readonly List<Material> textureMaterials = new List<Material>();
 
         private void Awake()
         {
@@ -58,6 +64,7 @@ namespace FlickDom.Gameplay
 
             cardManager.ActiveCardChanged += HandleActiveCardChanged;
             cardManager.CardCompleted += HandleCardCompleted;
+            cardManager.CardsExhausted += HandleCardsExhausted;
         }
 
         private void Start()
@@ -74,6 +81,7 @@ namespace FlickDom.Gameplay
 
             cardManager.ActiveCardChanged -= HandleActiveCardChanged;
             cardManager.CardCompleted -= HandleCardCompleted;
+            cardManager.CardsExhausted -= HandleCardsExhausted;
         }
 
         private void OnDestroy()
@@ -94,9 +102,19 @@ namespace FlickDom.Gameplay
             fallbackPadding = Mathf.Max(0f, fallbackPadding);
             fallbackThickness = Mathf.Max(0.001f, fallbackThickness);
             fallbackLineWidth = Mathf.Max(0.001f, fallbackLineWidth);
+            displayCardSize.x = Mathf.Max(0.1f, displayCardSize.x);
+            displayCardSize.y = Mathf.Max(0.1f, displayCardSize.y);
+            cardsPerRow = Mathf.Max(1, cardsPerRow);
+            cardSpacing.x = Mathf.Max(0.1f, cardSpacing.x);
+            cardSpacing.y = Mathf.Max(0.1f, cardSpacing.y);
         }
 
         private void HandleActiveCardChanged(PatternCardData card)
+        {
+            Rebuild();
+        }
+
+        private void HandleCardsExhausted()
         {
             Rebuild();
         }
@@ -114,17 +132,6 @@ namespace FlickDom.Gameplay
         {
             DestroyGeneratedRoot();
 
-            PatternCardData card = ResolveCard();
-            if (card == null)
-            {
-                return;
-            }
-
-            if (hideWhenClaimed && cardManager != null && cardManager.IsCardClaimed(card))
-            {
-                return;
-            }
-
             Transform rootParent = cardSlot != null ? cardSlot.transform : transform;
             generatedRoot = new GameObject("Generated Pattern Card Display");
             generatedRoot.transform.SetParent(rootParent, false);
@@ -132,14 +139,80 @@ namespace FlickDom.Gameplay
             generatedRoot.transform.localRotation = Quaternion.identity;
             generatedRoot.transform.localScale = Vector3.one;
 
-            Texture2D texture = ResolveTexture(card);
-            if (preferTexture && texture != null)
+            if (showAllRemainingCards && explicitCard == null && cardManager != null)
             {
-                BuildTextureCard(texture);
+                BuildRemainingCards();
+                if (generatedRoot.transform.childCount <= 0)
+                {
+                    DestroyGeneratedRoot();
+                }
+
                 return;
             }
 
-            BuildFallbackCard(card);
+            PatternCardData card = ResolveCard();
+            if (card == null)
+            {
+                DestroyGeneratedRoot();
+                return;
+            }
+
+            if (hideWhenClaimed && cardManager != null && cardManager.IsCardClaimed(card))
+            {
+                DestroyGeneratedRoot();
+                return;
+            }
+
+            BuildCard(card, Vector3.zero);
+        }
+
+        private void BuildRemainingCards()
+        {
+            int remainingCount = cardManager.RemainingCardCount;
+            if (remainingCount <= 0)
+            {
+                return;
+            }
+
+            int columnCount = Mathf.Min(cardsPerRow, remainingCount);
+            int rowCount = Mathf.CeilToInt(remainingCount / (float)columnCount);
+            int cardIndex = 0;
+
+            for (int i = 0; i < remainingCount; i++)
+            {
+                PatternCardData card = cardManager.GetRemainingCard(i);
+                if (card == null)
+                {
+                    continue;
+                }
+
+                int column = cardIndex % columnCount;
+                int row = cardIndex / columnCount;
+                Vector3 cardOffset = new Vector3(
+                    (column - ((columnCount - 1) * 0.5f)) * cardSpacing.x,
+                    0f,
+                    (((rowCount - 1) * 0.5f) - row) * cardSpacing.y);
+                BuildCard(card, cardOffset);
+                cardIndex++;
+            }
+        }
+
+        private void BuildCard(PatternCardData card, Vector3 localPosition)
+        {
+            GameObject cardRoot = new GameObject(card != null ? "Pattern Card " + card.CardId : "Pattern Card");
+            cardRoot.transform.SetParent(generatedRoot.transform, false);
+            cardRoot.transform.localPosition = localPosition;
+            cardRoot.transform.localRotation = Quaternion.identity;
+            cardRoot.transform.localScale = Vector3.one;
+
+            Texture2D texture = ResolveTexture(card);
+            if (preferTexture && texture != null)
+            {
+                BuildTextureCard(cardRoot.transform, texture);
+                return;
+            }
+
+            BuildFallbackCard(cardRoot.transform, card);
         }
 
         private PatternCardData ResolveCard()
@@ -175,7 +248,7 @@ namespace FlickDom.Gameplay
 
         private Vector2 ResolveCardSize(Texture2D texture)
         {
-            Vector2 slotSize = cardSlot != null ? cardSlot.SlotSize : fallbackCardSize;
+            Vector2 slotSize = displayCardSize;
             if (!preserveTextureAspect || texture == null || texture.height <= 0)
             {
                 return slotSize;
@@ -192,10 +265,10 @@ namespace FlickDom.Gameplay
             return new Vector2(slotSize.y * textureAspect, slotSize.y);
         }
 
-        private void BuildTextureCard(Texture2D texture)
+        private void BuildTextureCard(Transform parent, Texture2D texture)
         {
             GameObject cardObject = new GameObject("Pattern Card Texture");
-            cardObject.transform.SetParent(generatedRoot.transform, false);
+            cardObject.transform.SetParent(parent, false);
             cardObject.transform.localPosition = Vector3.zero;
 
             MeshFilter meshFilter = cardObject.AddComponent<MeshFilter>();
@@ -205,34 +278,38 @@ namespace FlickDom.Gameplay
             float halfWidth = size.x * 0.5f;
             float halfHeight = size.y * 0.5f;
 
-            textureMesh = new Mesh();
-            textureMesh.name = "Pattern Card Quad";
-            textureMesh.vertices = new[]
+            Mesh cardMesh = new Mesh();
+            cardMesh.name = "Pattern Card Quad";
+            cardMesh.vertices = new[]
             {
                 new Vector3(-halfWidth, 0f, -halfHeight),
                 new Vector3(-halfWidth, 0f, halfHeight),
                 new Vector3(halfWidth, 0f, halfHeight),
                 new Vector3(halfWidth, 0f, -halfHeight)
             };
-            textureMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
-            textureMesh.uv = new[]
+            cardMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+            cardMesh.uv = new[]
             {
                 new Vector2(0f, 0f),
                 new Vector2(0f, 1f),
                 new Vector2(1f, 1f),
                 new Vector2(1f, 0f)
             };
-            textureMesh.RecalculateNormals();
-            meshFilter.sharedMesh = textureMesh;
+            cardMesh.RecalculateNormals();
+            meshFilter.sharedMesh = cardMesh;
+            textureMeshes.Add(cardMesh);
 
-            SetMaterialTexture(textureMaterial, texture);
-            SetMaterialColor(textureMaterial, cardTint);
-            meshRenderer.sharedMaterial = textureMaterial;
+            Material cardMaterial = new Material(textureMaterial);
+            cardMaterial.name = "Pattern Card Texture Instance Material";
+            SetMaterialTexture(cardMaterial, texture);
+            SetMaterialColor(cardMaterial, cardTint);
+            meshRenderer.sharedMaterial = cardMaterial;
+            textureMaterials.Add(cardMaterial);
         }
 
-        private void BuildFallbackCard(PatternCardData card)
+        private void BuildFallbackCard(Transform parent, PatternCardData card)
         {
-            Vector2 cardSize = cardSlot != null ? cardSlot.SlotSize : fallbackCardSize;
+            Vector2 cardSize = displayCardSize;
             Color accent = GetDifficultyColor(card.Difficulty);
             SetMaterialColor(baseMaterial, cardBaseColor);
             SetMaterialColor(lineMaterial, accent);
@@ -253,6 +330,7 @@ namespace FlickDom.Gameplay
 
             CreateCube(
                 "Pattern Card Base",
+                parent,
                 Vector3.zero,
                 new Vector3(cardSize.x, fallbackThickness, cardSize.y),
                 baseMaterial);
@@ -271,6 +349,7 @@ namespace FlickDom.Gameplay
 
                 CreateCube(
                     "Pattern Card Vertical Line",
+                    parent,
                     new Vector3(lineX, 0.015f, gridBottom + (gridHeight * 0.5f)),
                     new Vector3(fallbackLineWidth, fallbackThickness, gridHeight + fallbackLineWidth),
                     lineMaterial);
@@ -290,6 +369,7 @@ namespace FlickDom.Gameplay
 
                 CreateCube(
                     "Pattern Card Horizontal Line",
+                    parent,
                     new Vector3(0f, 0.015f, lineZ),
                     new Vector3(gridWidth + fallbackLineWidth, fallbackThickness, fallbackLineWidth),
                     lineMaterial);
@@ -306,17 +386,23 @@ namespace FlickDom.Gameplay
 
                 CreateCube(
                     "Pattern Card Filled Cell",
+                    parent,
                     cellCenter,
                     new Vector3(cellSize * 0.9f, fallbackThickness, cellSize * 0.9f),
                     fillMaterial);
             }
         }
 
-        private GameObject CreateCube(string objectName, Vector3 localPosition, Vector3 localScale, Material material)
+        private GameObject CreateCube(
+            string objectName,
+            Transform parent,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Material material)
         {
             GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = objectName;
-            cube.transform.SetParent(generatedRoot.transform, false);
+            cube.transform.SetParent(parent, false);
             cube.transform.localPosition = localPosition;
             cube.transform.localScale = localScale;
 
@@ -377,12 +463,18 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            if (textureMesh != null)
+            for (int i = 0; i < textureMeshes.Count; i++)
             {
-                Destroy(textureMesh);
-                textureMesh = null;
+                Destroy(textureMeshes[i]);
             }
 
+            textureMeshes.Clear();
+            for (int i = 0; i < textureMaterials.Count; i++)
+            {
+                DestroyMaterial(textureMaterials[i]);
+            }
+
+            textureMaterials.Clear();
             generatedRoot.SetActive(false);
             Destroy(generatedRoot);
             generatedRoot = null;

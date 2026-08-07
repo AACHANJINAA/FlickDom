@@ -34,6 +34,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private GridCellCandidateResolver startTrayBoardResolver;
         [SerializeField] private bool showStartTrays = true;
         [SerializeField] private bool alignStartTraysToBoardCells = true;
+        [SerializeField] private bool alignGeneratedPieceStartsToBoardCells = true;
         [SerializeField] private float startTrayCellSizeRatio = 0.95f;
         [SerializeField] private float startTraySideGap = 0.16f;
         [SerializeField] private float startTrayHeight = 0.04f;
@@ -94,8 +95,8 @@ namespace FlickDom.Gameplay
 
             if (autoCreateMissingPieces && !HasSceneAuthoredPieces())
             {
-                player1Pieces = EnsurePieceCount(player1Pieces, "Player1");
-                player2Pieces = EnsurePieceCount(player2Pieces, "Player2");
+                player1Pieces = EnsurePieceCount(player1Pieces, "Player1", FlickDomPlayerId.Player1);
+                player2Pieces = EnsurePieceCount(player2Pieces, "Player2", FlickDomPlayerId.Player2);
             }
 
             RemoveDuplicatePieceComponents(player1Pieces);
@@ -276,7 +277,7 @@ namespace FlickDom.Gameplay
 
                 Vector3 piecePosition = piece.transform.position;
                 trayObject.name = prefix + " Start Tray " + (i + 1);
-                trayObject.transform.position = GetStartTrayPosition(owner, piecePosition);
+                trayObject.transform.position = GetStartTrayPosition(owner, piecePosition, i, pieces.Length);
                 trayObject.transform.rotation = Quaternion.identity;
                 trayObject.transform.localScale = Vector3.one;
                 RemoveVisualColliders(trayObject);
@@ -285,7 +286,11 @@ namespace FlickDom.Gameplay
             }
         }
 
-        private Vector3 GetStartTrayPosition(FlickDomPlayerId owner, Vector3 piecePosition)
+        private Vector3 GetStartTrayPosition(
+            FlickDomPlayerId owner,
+            Vector3 piecePosition,
+            int pieceIndex,
+            int pieceCount)
         {
             if (!alignStartTraysToBoardCells || startTrayBoardResolver == null)
             {
@@ -295,10 +300,7 @@ namespace FlickDom.Gameplay
             float traySize = GetStartTrayCellSize();
             Vector3 boardOrigin = startTrayBoardResolver.BoardOrigin;
             Vector3 boardMax = startTrayBoardResolver.BoardMax;
-            float z = Mathf.Clamp(
-                piecePosition.z,
-                boardOrigin.z + traySize * 0.5f,
-                boardMax.z - traySize * 0.5f);
+            float z = GetBoardAlignedStartLaneZ(pieceIndex, pieceCount);
             float x = owner == FlickDomPlayerId.Player1
                 ? boardOrigin.x - startTraySideGap - traySize * 0.5f
                 : boardMax.x + startTraySideGap + traySize * 0.5f;
@@ -503,7 +505,10 @@ namespace FlickDom.Gameplay
             }
         }
 
-        private TurnBasedFlickPiece[] EnsurePieceCount(TurnBasedFlickPiece[] pieces, string objectNamePrefix)
+        private TurnBasedFlickPiece[] EnsurePieceCount(
+            TurnBasedFlickPiece[] pieces,
+            string objectNamePrefix,
+            FlickDomPlayerId owner)
         {
             TurnBasedFlickPiece template = FindFirstPiece(pieces);
             if (template == null)
@@ -531,7 +536,7 @@ namespace FlickDom.Gameplay
                 result[i] = clone;
             }
 
-            ArrangePieceStarts(result);
+            ArrangePieceStarts(result, owner);
             return result;
         }
 
@@ -570,7 +575,7 @@ namespace FlickDom.Gameplay
             }
         }
 
-        private void ArrangePieceStarts(TurnBasedFlickPiece[] pieces)
+        private void ArrangePieceStarts(TurnBasedFlickPiece[] pieces, FlickDomPlayerId owner)
         {
             TurnBasedFlickPiece template = FindFirstPiece(pieces);
             if (template == null)
@@ -580,7 +585,6 @@ namespace FlickDom.Gameplay
 
             Vector3 centerPosition = template.transform.position;
             Quaternion rotation = template.transform.rotation;
-            float centerIndex = (pieces.Length - 1) * 0.5f;
 
             for (int i = 0; i < pieces.Length; i++)
             {
@@ -590,9 +594,43 @@ namespace FlickDom.Gameplay
                     continue;
                 }
 
-                Vector3 position = centerPosition + (Vector3.forward * ((i - centerIndex) * generatedPieceSpacing));
+                Vector3 position = GetGeneratedPieceStartPosition(owner, centerPosition, i, pieces.Length);
                 piece.SetRoundStartPose(position, rotation);
             }
+        }
+
+        private Vector3 GetGeneratedPieceStartPosition(
+            FlickDomPlayerId owner,
+            Vector3 fallbackCenterPosition,
+            int pieceIndex,
+            int pieceCount)
+        {
+            if (!alignGeneratedPieceStartsToBoardCells || startTrayBoardResolver == null)
+            {
+                float centerIndex = (pieceCount - 1) * 0.5f;
+                return fallbackCenterPosition + (Vector3.forward * ((pieceIndex - centerIndex) * generatedPieceSpacing));
+            }
+
+            float x = owner == FlickDomPlayerId.Player1
+                ? startTrayBoardResolver.BoardOrigin.x - startTraySideGap - GetStartTrayCellSize() * 0.5f
+                : startTrayBoardResolver.BoardMax.x + startTraySideGap + GetStartTrayCellSize() * 0.5f;
+            return new Vector3(x, fallbackCenterPosition.y, GetBoardAlignedStartLaneZ(pieceIndex, pieceCount));
+        }
+
+        private float GetBoardAlignedStartLaneZ(int pieceIndex, int pieceCount)
+        {
+            if (startTrayBoardResolver == null)
+            {
+                return 0f;
+            }
+
+            int count = Mathf.Max(1, pieceCount);
+            int boardSize = Mathf.RoundToInt(
+                (startTrayBoardResolver.BoardMax.z - startTrayBoardResolver.BoardOrigin.z)
+                / startTrayBoardResolver.CellSize);
+            int firstCell = Mathf.Clamp((boardSize - count) / 2, 0, Mathf.Max(0, boardSize - count));
+            int cell = Mathf.Clamp(firstCell + pieceIndex, 0, Mathf.Max(0, boardSize - 1));
+            return startTrayBoardResolver.BoardOrigin.z + ((cell + 0.5f) * startTrayBoardResolver.CellSize);
         }
 
         private static void ApplyTokenDataSequence(TurnBasedFlickPiece[] pieces, TokenData[] tokenDataSequence)
