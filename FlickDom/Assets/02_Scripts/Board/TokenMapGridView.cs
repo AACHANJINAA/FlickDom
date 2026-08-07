@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -46,6 +47,14 @@ namespace FlickDom.Gameplay
         [SerializeField] private float markerTrayYOffset = 0.045f;
         [SerializeField] private float flickBoardStarSize = 0.5f;
         [SerializeField] private float flickBoardStarYOffset = 0.13f;
+        [SerializeField] private GameObject starStampPrefab;
+        [SerializeField] private bool animateStarPlacement = true;
+        [SerializeField] private Vector3 starStampSize = new Vector3(0.72f, 1f, 0.72f);
+        [SerializeField] private float starStampStartYOffset = 1.05f;
+        [SerializeField] private float starStampImpactYOffset = 0.2f;
+        [SerializeField] private float starStampDownDuration = 0.12f;
+        [SerializeField] private float starStampHoldDuration = 0.04f;
+        [SerializeField] private float starStampUpDuration = 0.16f;
 
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
@@ -85,6 +94,8 @@ namespace FlickDom.Gameplay
         private GameObject[] player2FlickBoardStars;
         private Vector2Int?[] player1FlickBoardStarCells;
         private Vector2Int?[] player2FlickBoardStarCells;
+        private GameObject[] starStampPool;
+        private int nextStarStampIndex;
         private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
 
         public Vector3 GridCenter
@@ -114,6 +125,7 @@ namespace FlickDom.Gameplay
             CreateMaterials();
             BuildGrid();
             BuildStarPools();
+            BuildStarStampPool();
         }
 
         private void OnEnable()
@@ -153,6 +165,14 @@ namespace FlickDom.Gameplay
             markerTrayYOffset = Mathf.Max(0f, markerTrayYOffset);
             flickBoardStarSize = Mathf.Max(0.05f, flickBoardStarSize);
             flickBoardStarYOffset = Mathf.Max(0.001f, flickBoardStarYOffset);
+            starStampSize.x = Mathf.Max(0.05f, starStampSize.x);
+            starStampSize.y = Mathf.Max(0.05f, starStampSize.y);
+            starStampSize.z = Mathf.Max(0.05f, starStampSize.z);
+            starStampStartYOffset = Mathf.Max(0f, starStampStartYOffset);
+            starStampImpactYOffset = Mathf.Max(0f, starStampImpactYOffset);
+            starStampDownDuration = Mathf.Max(0.01f, starStampDownDuration);
+            starStampHoldDuration = Mathf.Max(0f, starStampHoldDuration);
+            starStampUpDuration = Mathf.Max(0.01f, starStampUpDuration);
             candidateMarkerSizeRatio = Mathf.Clamp(candidateMarkerSizeRatio, 0.1f, 0.95f);
             candidateMarkerHeight = Mathf.Max(0.001f, candidateMarkerHeight);
             candidateMarkerYOffset = Mathf.Max(0.001f, candidateMarkerYOffset);
@@ -531,7 +551,7 @@ namespace FlickDom.Gameplay
             ownerCells[cell.x, cell.y] = nextOwner;
             RepaintCell(cell);
             ReturnStarToTray(previousOwner, cell);
-            PlaceStarOnCell(nextOwner, cell);
+            PlaceStarOnCell(nextOwner, cell, true);
             ReturnFlickBoardStar(previousOwner, cell);
             PlaceFlickBoardStar(nextOwner, cell);
         }
@@ -555,6 +575,39 @@ namespace FlickDom.Gameplay
 
             ReturnAllStarsToTray();
             ReturnAllFlickBoardStars();
+        }
+
+        private void BuildStarStampPool()
+        {
+            if (starStampPrefab == null)
+            {
+                starStampPool = null;
+                return;
+            }
+
+            int poolSize = tokenMapManager != null
+                ? Mathf.Max(starPoolSize, tokenMapManager.MaxTokensPerPlayer)
+                : starPoolSize;
+            Transform root = new GameObject("Generated Star Stamp Posts").transform;
+            root.SetParent(cachedTransform, false);
+            starStampPool = new GameObject[poolSize];
+            nextStarStampIndex = 0;
+
+            for (int i = 0; i < poolSize; i++)
+            {
+                GameObject stampObject = InstantiateVisualObject(starStampPrefab, root);
+                if (stampObject == null)
+                {
+                    continue;
+                }
+
+                stampObject.name = "Star Stamp Post " + (i + 1);
+                stampObject.transform.localScale = Vector3.one;
+                RemoveVisualColliders(stampObject);
+                FitVisualToSize(stampObject, starStampSize);
+                stampObject.SetActive(false);
+                starStampPool[i] = stampObject;
+            }
         }
 
         private bool IsValidCell(Vector2Int cell)
@@ -839,13 +892,13 @@ namespace FlickDom.Gameplay
                 for (int y = 0; y < boardSize; y++)
                 {
                     Vector2Int cell = new Vector2Int(x, y);
-                    PlaceStarOnCell(ownerCells[x, y], cell);
+                    PlaceStarOnCell(ownerCells[x, y], cell, false);
                     PlaceFlickBoardStar(ownerCells[x, y], cell);
                 }
             }
         }
 
-        private void PlaceStarOnCell(FlickDomPlayerId player, Vector2Int cell)
+        private void PlaceStarOnCell(FlickDomPlayerId player, Vector2Int cell, bool playStamp)
         {
             if (player == FlickDomPlayerId.None)
             {
@@ -872,6 +925,13 @@ namespace FlickDom.Gameplay
 
             starCells[starIndex] = cell;
             stars[starIndex].transform.position = GetStarCellWorldPosition(cell);
+            if (ShouldPlayStarStamp(playStamp))
+            {
+                stars[starIndex].SetActive(false);
+                StartCoroutine(PlayStarStampThenShow(cell, stars[starIndex]));
+                return;
+            }
+
             stars[starIndex].SetActive(placementBoardVisible);
         }
 
@@ -903,6 +963,124 @@ namespace FlickDom.Gameplay
             starCells[starIndex] = cell;
             stars[starIndex].transform.position = GetFlickBoardStarWorldPosition(cell);
             stars[starIndex].SetActive(true);
+        }
+
+        private bool ShouldPlayStarStamp(bool requested)
+        {
+            return requested
+                && animateStarPlacement
+                && placementBoardVisible
+                && starStampPool != null
+                && starStampPool.Length > 0;
+        }
+
+        private IEnumerator PlayStarStampThenShow(Vector2Int cell, GameObject starObject)
+        {
+            GameObject stampObject = GetNextStarStamp();
+            if (stampObject == null)
+            {
+                if (starObject != null)
+                {
+                    starObject.SetActive(placementBoardVisible);
+                }
+
+                yield break;
+            }
+
+            Vector3 starPosition = GetStarCellWorldPosition(cell);
+            Vector3 startPosition = starPosition + Vector3.up * starStampStartYOffset;
+            Vector3 impactPosition = starPosition + Vector3.up * starStampImpactYOffset;
+            stampObject.transform.position = startPosition;
+            stampObject.transform.rotation = Quaternion.identity;
+            stampObject.SetActive(true);
+
+            yield return MoveStamp(stampObject.transform, startPosition, impactPosition, starStampDownDuration);
+
+            if (starObject != null && IsPlacementStarStillAssigned(starObject, cell))
+            {
+                starObject.SetActive(placementBoardVisible);
+            }
+
+            if (starStampHoldDuration > 0f)
+            {
+                yield return new WaitForSeconds(starStampHoldDuration);
+            }
+
+            yield return MoveStamp(stampObject.transform, impactPosition, startPosition, starStampUpDuration);
+            stampObject.SetActive(false);
+        }
+
+        private GameObject GetNextStarStamp()
+        {
+            if (starStampPool == null || starStampPool.Length == 0)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < starStampPool.Length; i++)
+            {
+                int index = (nextStarStampIndex + i) % starStampPool.Length;
+                GameObject stampObject = starStampPool[index];
+                if (stampObject == null || stampObject.activeSelf)
+                {
+                    continue;
+                }
+
+                nextStarStampIndex = (index + 1) % starStampPool.Length;
+                return stampObject;
+            }
+
+            GameObject fallback = starStampPool[nextStarStampIndex];
+            nextStarStampIndex = (nextStarStampIndex + 1) % starStampPool.Length;
+            return fallback;
+        }
+
+        private static IEnumerator MoveStamp(Transform stampTransform, Vector3 from, Vector3 to, float duration)
+        {
+            if (stampTransform == null)
+            {
+                yield break;
+            }
+
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float smoothT = t * t * (3f - (2f * t));
+                stampTransform.position = Vector3.Lerp(from, to, smoothT);
+                yield return null;
+            }
+
+            stampTransform.position = to;
+        }
+
+        private bool IsPlacementStarStillAssigned(GameObject starObject, Vector2Int cell)
+        {
+            return IsPlacementStarStillAssigned(player1Stars, player1StarCells, starObject, cell)
+                || IsPlacementStarStillAssigned(player2Stars, player2StarCells, starObject, cell);
+        }
+
+        private static bool IsPlacementStarStillAssigned(
+            GameObject[] stars,
+            Vector2Int?[] starCells,
+            GameObject starObject,
+            Vector2Int cell)
+        {
+            if (stars == null || starCells == null || starObject == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < stars.Length && i < starCells.Length; i++)
+            {
+                if (stars[i] == starObject && starCells[i].HasValue && starCells[i].Value == cell)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void ReturnStarToTray(FlickDomPlayerId player, Vector2Int cell)

@@ -1224,6 +1224,14 @@ MonoBehaviour:
   markerTrayYOffset: 0.045
   flickBoardStarSize: 0.5
   flickBoardStarYOffset: 0.13
+  starStampPrefab: {fileID: 3244336339763652905, guid: 4df27e2543c61324abac0c45bdf14262, type: 3}
+  animateStarPlacement: 1
+  starStampSize: {x: 0.72, y: 1, z: 0.72}
+  starStampStartYOffset: 1.05
+  starStampImpactYOffset: 0.2
+  starStampDownDuration: 0.12
+  starStampHoldDuration: 0.04
+  starStampUpDuration: 0.16
   emptyColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   player1CandidateColor: {r: 0.05, g: 0.28, b: 1, a: 1}
   player2CandidateColor: {r: 1, g: 0.12, b: 0.08, a: 1}
