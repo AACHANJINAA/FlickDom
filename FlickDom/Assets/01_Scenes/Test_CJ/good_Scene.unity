@@ -239,13 +239,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 203844586}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalRotation: {x: 0.70441604, y: 0.06162845, z: -0.06162845, w: 0.70441604}
+  m_LocalPosition: {x: 0, y: 100, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 10, z: 0}
 --- !u!1 &738081062 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6558351570595821722, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
@@ -565,7 +565,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 789277668}
-  m_Mesh: {fileID: -2497650918596781483, guid: e49cf3b3205d71248a94b5e46acab6c9, type: 3}
+  m_Mesh: {fileID: -6043152560544980575, guid: 01841124d01fa4741a2daed526bbb5b1, type: 3}
 --- !u!4 &789277679
 Transform:
   m_ObjectHideFlags: 0
@@ -1142,9 +1142,9 @@ MonoBehaviour:
   tokenMapGridView: {fileID: 1371976857}
   inputCamera: {fileID: 961739752}
   player1Pieces:
-  - {fileID: 1305843886}
-  player2Pieces:
   - {fileID: 789277670}
+  player2Pieces:
+  - {fileID: 1305843886}
   player1PieceObjects: []
   player2PieceObjects: []
   configureAuthoredPieceComponents: 1
@@ -1156,6 +1156,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
   - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
   - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
+  player1PieceMaterialOverride: {fileID: 2100000, guid: e5fd0ccf0abfe064db017f8af834fffe, type: 2}
+  player2PieceMaterialOverride: {fileID: 2100000, guid: 615519a92c1a8474c8a124080188a5ba, type: 2}
   startGameOnPlay: 1
   autoCreateMissingPieces: 1
   targetPiecesPerPlayer: 3
@@ -1192,8 +1194,23 @@ MonoBehaviour:
   enableCellColliders: 1
   cellVisualPrefab: {fileID: 100100000, guid: c495cc5316267b243888a3f032969825, type: 3}
   emptyMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
-  player1OwnedMaterialOverride: {fileID: 0}
-  player2OwnedMaterialOverride: {fileID: 0}
+  player1OwnedMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
+  player2OwnedMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
+  starMarkerPrefab: {fileID: 0}
+  markerTrayPrefab: {fileID: 100100000, guid: 93b5b76e35d22484cb69b32b24df5941, type: 3}
+  player1PreplacedStars: []
+  player2PreplacedStars: []
+  player1StarMaterial: {fileID: 2100000, guid: ead4f0e983d54c2789675ec4616ce0b9, type: 2}
+  player2StarMaterial: {fileID: 2100000, guid: 6800ddfe924e41bc81f15a76a6feac66, type: 2}
+  starPoolSize: 5
+  player1StarTrayStartOffset: {x: -2.65, y: 0.18, z: -1}
+  player2StarTrayStartOffset: {x: 2.65, y: 0.18, z: -1}
+  starTrayStep: {x: 0, y: 0, z: 0.42}
+  starMarkerSize: 0.55
+  starMarkerHeight: 0.12
+  starCellYOffset: 0.22
+  markerTraySize: {x: 0.7, y: 0.04, z: 2.35}
+  markerTrayYOffset: 0.045
   emptyColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   player1CandidateColor: {r: 0.05, g: 0.28, b: 1, a: 1}
   player2CandidateColor: {r: 1, g: 0.12, b: 0.08, a: 1}
@@ -1545,6 +1562,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 0c2b9259ce04e984ab4f49daae5fef52, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.5
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 0c2b9259ce04e984ab4f49daae5fef52, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.5
+      objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 0c2b9259ce04e984ab4f49daae5fef52, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

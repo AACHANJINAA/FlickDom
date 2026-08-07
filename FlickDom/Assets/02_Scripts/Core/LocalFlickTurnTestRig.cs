@@ -26,6 +26,9 @@ namespace FlickDom.Gameplay
         [Header("Token Data")]
         [SerializeField] private TokenData[] player1TokenDataSequence;
         [SerializeField] private TokenData[] player2TokenDataSequence;
+        [Header("Piece Visual Overrides")]
+        [SerializeField] private Material player1PieceMaterialOverride;
+        [SerializeField] private Material player2PieceMaterialOverride;
         [Header("Startup")]
         [SerializeField] private bool startGameOnPlay = true;
         [Tooltip("Legacy fallback that clones a configured piece. Keep disabled when using scene-authored piece objects.")]
@@ -85,6 +88,8 @@ namespace FlickDom.Gameplay
 
             ApplyTokenDataSequence(player1Pieces, player1TokenDataSequence);
             ApplyTokenDataSequence(player2Pieces, player2TokenDataSequence);
+            ApplyPieceMaterialOverride(player1Pieces, player1PieceMaterialOverride);
+            ApplyPieceMaterialOverride(player2Pieces, player2PieceMaterialOverride);
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
             ConfigurePieces(player2Pieces, FlickDomPlayerId.Player2, "P2");
@@ -510,6 +515,33 @@ namespace FlickDom.Gameplay
 
                 tokenSetup.tokenData = tokenData;
                 tokenSetup.ApplyTokenData();
+            }
+        }
+
+        private static void ApplyPieceMaterialOverride(TurnBasedFlickPiece[] pieces, Material material)
+        {
+            if (pieces == null || material == null)
+            {
+                return;
+            }
+
+            HashSet<GameObject> updatedObjects = new HashSet<GameObject>();
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece == null || !updatedObjects.Add(piece.gameObject))
+                {
+                    continue;
+                }
+
+                Renderer[] renderers = piece.GetComponentsInChildren<Renderer>(true);
+                for (int rendererIndex = 0; rendererIndex < renderers.Length; rendererIndex++)
+                {
+                    if (renderers[rendererIndex] != null)
+                    {
+                        renderers[rendererIndex].sharedMaterial = material;
+                    }
+                }
             }
         }
 

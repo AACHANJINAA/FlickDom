@@ -26,6 +26,23 @@ namespace FlickDom.Gameplay
         [SerializeField] private Material player1OwnedMaterialOverride;
         [SerializeField] private Material player2OwnedMaterialOverride;
 
+        [Header("Occupation Stars")]
+        [SerializeField] private GameObject starMarkerPrefab;
+        [SerializeField] private GameObject markerTrayPrefab;
+        [SerializeField] private GameObject[] player1PreplacedStars;
+        [SerializeField] private GameObject[] player2PreplacedStars;
+        [SerializeField] private Material player1StarMaterial;
+        [SerializeField] private Material player2StarMaterial;
+        [SerializeField] private int starPoolSize = 5;
+        [SerializeField] private Vector3 player1StarTrayStartOffset = new Vector3(-2.65f, 0.18f, -1f);
+        [SerializeField] private Vector3 player2StarTrayStartOffset = new Vector3(2.65f, 0.18f, -1f);
+        [SerializeField] private Vector3 starTrayStep = new Vector3(0f, 0f, 0.42f);
+        [SerializeField] private float starMarkerSize = 0.55f;
+        [SerializeField] private float starMarkerHeight = 0.12f;
+        [SerializeField] private float starCellYOffset = 0.22f;
+        [SerializeField] private Vector3 markerTraySize = new Vector3(0.7f, 0.04f, 2.35f);
+        [SerializeField] private float markerTrayYOffset = 0.045f;
+
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
         [SerializeField] private Color player1CandidateColor = new Color(0.05f, 0.28f, 1f);
@@ -52,6 +69,10 @@ namespace FlickDom.Gameplay
         private Material player1OwnedMaterial;
         private Material player2OwnedMaterial;
         private Transform cachedTransform;
+        private GameObject[] player1Stars;
+        private GameObject[] player2Stars;
+        private Vector2Int?[] player1StarCells;
+        private Vector2Int?[] player2StarCells;
         private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
 
         public Vector3 GridCenter
@@ -75,6 +96,7 @@ namespace FlickDom.Gameplay
 
             CreateMaterials();
             BuildGrid();
+            BuildStarPools();
         }
 
         private void OnEnable()
@@ -105,6 +127,13 @@ namespace FlickDom.Gameplay
             cellSize = Mathf.Max(0.05f, cellSize);
             gap = Mathf.Max(0f, gap);
             tileHeight = Mathf.Max(0.01f, tileHeight);
+            starPoolSize = Mathf.Max(1, starPoolSize);
+            starMarkerSize = Mathf.Max(0.05f, starMarkerSize);
+            starMarkerHeight = Mathf.Max(0.01f, starMarkerHeight);
+            markerTraySize.x = Mathf.Max(0.05f, markerTraySize.x);
+            markerTraySize.y = Mathf.Max(0.01f, markerTraySize.y);
+            markerTraySize.z = Mathf.Max(0.05f, markerTraySize.z);
+            markerTrayYOffset = Mathf.Max(0f, markerTrayYOffset);
             candidateMarkerSizeRatio = Mathf.Clamp(candidateMarkerSizeRatio, 0.1f, 0.95f);
             candidateMarkerHeight = Mathf.Max(0.001f, candidateMarkerHeight);
             candidateMarkerYOffset = Mathf.Max(0.001f, candidateMarkerYOffset);
@@ -216,6 +245,8 @@ namespace FlickDom.Gameplay
                     RepaintCell(cell);
                 }
             }
+
+            RefreshAllStarsFromOwnerCells();
         }
 
         public bool TryGetCell(Collider cellCollider, out Vector2Int cell)
@@ -457,6 +488,8 @@ namespace FlickDom.Gameplay
 
             ownerCells[cell.x, cell.y] = nextOwner;
             RepaintCell(cell);
+            ReturnStarToTray(previousOwner, cell);
+            PlaceStarOnCell(nextOwner, cell);
         }
 
         private void HandleMapCleared()
@@ -475,6 +508,8 @@ namespace FlickDom.Gameplay
                     RepaintCell(new Vector2Int(x, y));
                 }
             }
+
+            ReturnAllStarsToTray();
         }
 
         private bool IsValidCell(Vector2Int cell)
@@ -500,6 +535,396 @@ namespace FlickDom.Gameplay
         private int GetCellIndex(int x, int y)
         {
             return (y * boardSize) + x;
+        }
+
+        private void BuildStarPools()
+        {
+            int poolSize = tokenMapManager != null
+                ? Mathf.Max(starPoolSize, tokenMapManager.MaxTokensPerPlayer)
+                : starPoolSize;
+
+            player1Stars = ResolveStarPool(FlickDomPlayerId.Player1, player1PreplacedStars, poolSize);
+            player2Stars = ResolveStarPool(FlickDomPlayerId.Player2, player2PreplacedStars, poolSize);
+            player1StarCells = new Vector2Int?[player1Stars.Length];
+            player2StarCells = new Vector2Int?[player2Stars.Length];
+            ReturnAllStarsToTray();
+        }
+
+        private GameObject[] ResolveStarPool(FlickDomPlayerId player, GameObject[] preplacedStars, int fallbackPoolSize)
+        {
+            if (HasAnyStar(preplacedStars))
+            {
+                GameObject[] stars = new GameObject[preplacedStars.Length];
+                for (int i = 0; i < preplacedStars.Length; i++)
+                {
+                    GameObject starObject = preplacedStars[i];
+                    if (starObject == null)
+                    {
+                        continue;
+                    }
+
+                    PrepareStarObject(player, starObject);
+                    stars[i] = starObject;
+                }
+
+                return stars;
+            }
+
+            if (starMarkerPrefab == null)
+            {
+                return CreateStarPool(player, fallbackPoolSize);
+            }
+
+            return CreateStarPool(player, fallbackPoolSize);
+        }
+
+        private GameObject[] CreateStarPool(FlickDomPlayerId player, int poolSize)
+        {
+            GameObject[] stars = new GameObject[poolSize];
+            Transform root = new GameObject(player + " Occupation Stars").transform;
+            root.SetParent(cachedTransform, false);
+            CreateMarkerTray(player, root, poolSize);
+
+            for (int i = 0; i < poolSize; i++)
+            {
+                GameObject starObject = starMarkerPrefab != null
+                    ? InstantiateVisualObject(starMarkerPrefab, root)
+                    : CreateProceduralStarObject(player, root);
+                if (starObject == null)
+                {
+                    continue;
+                }
+
+                starObject.name = player + " Star " + (i + 1);
+                starObject.transform.localScale = Vector3.one;
+                if (starMarkerPrefab != null)
+                {
+                    FitVisualToSize(starObject, new Vector3(starMarkerSize, starMarkerHeight, starMarkerSize));
+                }
+
+                PrepareStarObject(player, starObject);
+                stars[i] = starObject;
+            }
+
+            return stars;
+        }
+
+        private void CreateMarkerTray(FlickDomPlayerId player, Transform parent, int starCount)
+        {
+            GameObject trayObject = markerTrayPrefab != null
+                ? InstantiateVisualObject(markerTrayPrefab, parent)
+                : GameObject.CreatePrimitive(PrimitiveType.Cube);
+            if (trayObject == null)
+            {
+                return;
+            }
+
+            if (markerTrayPrefab == null)
+            {
+                trayObject.transform.SetParent(parent, false);
+                Renderer trayRenderer = trayObject.GetComponent<Renderer>();
+                if (trayRenderer != null)
+                {
+                    trayRenderer.sharedMaterial = emptyMaterial;
+                }
+            }
+
+            trayObject.name = player + " Marker Tray";
+            trayObject.transform.position = GetStarTrayCenterWorldPosition(player, starCount);
+            trayObject.transform.localRotation = Quaternion.identity;
+            trayObject.transform.localScale = Vector3.one;
+            RemoveVisualColliders(trayObject);
+            FitVisualToSize(trayObject, markerTraySize);
+        }
+
+        private GameObject CreateProceduralStarObject(FlickDomPlayerId player, Transform parent)
+        {
+            GameObject starObject = new GameObject(player + " Occupation Star Visual");
+            starObject.transform.SetParent(parent, false);
+
+            MeshFilter meshFilter = starObject.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = CreateStarMesh(starMarkerSize);
+
+            MeshRenderer meshRenderer = starObject.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterial = ResolveStarMaterial(player);
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            meshRenderer.receiveShadows = true;
+            return starObject;
+        }
+
+        private static Mesh CreateStarMesh(float size)
+        {
+            const int PointCount = 5;
+            const int VertexCount = (PointCount * 2) + 1;
+            float outerRadius = Mathf.Max(0.05f, size) * 0.5f;
+            float innerRadius = outerRadius * 0.48f;
+
+            Vector3[] vertices = new Vector3[VertexCount];
+            Vector3[] normals = new Vector3[VertexCount];
+            Vector2[] uvs = new Vector2[VertexCount];
+            int[] triangles = new int[PointCount * 2 * 3 * 2];
+
+            vertices[0] = Vector3.zero;
+            normals[0] = Vector3.up;
+            uvs[0] = new Vector2(0.5f, 0.5f);
+
+            for (int i = 0; i < VertexCount - 1; i++)
+            {
+                float radius = i % 2 == 0 ? outerRadius : innerRadius;
+                float angle = (Mathf.PI * 0.5f) + (i * Mathf.PI / PointCount);
+                float x = Mathf.Cos(angle) * radius;
+                float z = Mathf.Sin(angle) * radius;
+                vertices[i + 1] = new Vector3(x, 0f, z);
+                normals[i + 1] = Vector3.up;
+                uvs[i + 1] = new Vector2(
+                    0.5f + (x / (outerRadius * 2f)),
+                    0.5f + (z / (outerRadius * 2f)));
+            }
+
+            int triangleIndex = 0;
+            for (int i = 1; i < VertexCount; i++)
+            {
+                int next = i == VertexCount - 1 ? 1 : i + 1;
+                triangles[triangleIndex++] = 0;
+                triangles[triangleIndex++] = i;
+                triangles[triangleIndex++] = next;
+                triangles[triangleIndex++] = 0;
+                triangles[triangleIndex++] = next;
+                triangles[triangleIndex++] = i;
+            }
+
+            Mesh mesh = new Mesh();
+            mesh.name = "Generated Occupation Star";
+            mesh.vertices = vertices;
+            mesh.normals = normals;
+            mesh.uv = uvs;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private void PrepareStarObject(FlickDomPlayerId player, GameObject starObject)
+        {
+            RemoveVisualColliders(starObject);
+            SetSharedMaterial(starObject.GetComponentsInChildren<Renderer>(true), ResolveStarMaterial(player));
+        }
+
+        private static bool HasAnyStar(GameObject[] stars)
+        {
+            if (stars == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < stars.Length; i++)
+            {
+                if (stars[i] != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void RefreshAllStarsFromOwnerCells()
+        {
+            ReturnAllStarsToTray();
+
+            if (ownerCells == null)
+            {
+                return;
+            }
+
+            for (int x = 0; x < boardSize; x++)
+            {
+                for (int y = 0; y < boardSize; y++)
+                {
+                    Vector2Int cell = new Vector2Int(x, y);
+                    PlaceStarOnCell(ownerCells[x, y], cell);
+                }
+            }
+        }
+
+        private void PlaceStarOnCell(FlickDomPlayerId player, Vector2Int cell)
+        {
+            if (player == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            GameObject[] stars = GetStars(player);
+            Vector2Int?[] starCells = GetStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            int starIndex = FindStarIndex(starCells, cell);
+            if (starIndex < 0)
+            {
+                starIndex = FindStarIndex(starCells, null);
+            }
+
+            if (starIndex < 0 || starIndex >= stars.Length || stars[starIndex] == null)
+            {
+                return;
+            }
+
+            starCells[starIndex] = cell;
+            stars[starIndex].transform.position = GetStarCellWorldPosition(cell);
+            stars[starIndex].SetActive(true);
+        }
+
+        private void ReturnStarToTray(FlickDomPlayerId player, Vector2Int cell)
+        {
+            if (player == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            GameObject[] stars = GetStars(player);
+            Vector2Int?[] starCells = GetStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            int starIndex = FindStarIndex(starCells, cell);
+            if (starIndex < 0 || starIndex >= stars.Length || stars[starIndex] == null)
+            {
+                return;
+            }
+
+            starCells[starIndex] = null;
+            MoveStarToTray(player, stars[starIndex], starIndex);
+        }
+
+        private void ReturnAllStarsToTray()
+        {
+            ReturnPlayerStarsToTray(FlickDomPlayerId.Player1);
+            ReturnPlayerStarsToTray(FlickDomPlayerId.Player2);
+        }
+
+        private void ReturnPlayerStarsToTray(FlickDomPlayerId player)
+        {
+            GameObject[] stars = GetStars(player);
+            Vector2Int?[] starCells = GetStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < stars.Length; i++)
+            {
+                starCells[i] = null;
+                if (stars[i] != null)
+                {
+                    MoveStarToTray(player, stars[i], i);
+                }
+            }
+        }
+
+        private void MoveStarToTray(FlickDomPlayerId player, GameObject starObject, int index)
+        {
+            starObject.transform.position = GetStarTrayWorldPosition(player, index);
+            starObject.SetActive(true);
+        }
+
+        private Vector3 GetStarCellWorldPosition(Vector2Int cell)
+        {
+            float step = cellSize + gap;
+            float offset = (boardSize - 1) * step * 0.5f;
+            return new Vector3(
+                gridCenter.x + (cell.x * step) - offset,
+                gridCenter.y + (tileHeight * 0.5f) + starCellYOffset,
+                gridCenter.z + (cell.y * step) - offset);
+        }
+
+        private Vector3 GetStarTrayWorldPosition(FlickDomPlayerId player, int index)
+        {
+            Vector3 startOffset = player == FlickDomPlayerId.Player1
+                ? player1StarTrayStartOffset
+                : player2StarTrayStartOffset;
+            return GetStarTrayAnchor() + startOffset + (starTrayStep * index);
+        }
+
+        private Vector3 GetStarTrayCenterWorldPosition(FlickDomPlayerId player, int starCount)
+        {
+            int lastIndex = Mathf.Max(0, starCount - 1);
+            Vector3 center = GetStarTrayWorldPosition(player, lastIndex) + (GetStarTrayWorldPosition(player, 0) - GetStarTrayWorldPosition(player, lastIndex)) * 0.5f;
+            center.y -= markerTrayYOffset;
+            return center;
+        }
+
+        private Vector3 GetStarTrayAnchor()
+        {
+            return gridCenter;
+        }
+
+        private Material ResolveStarMaterial(FlickDomPlayerId player)
+        {
+            if (player == FlickDomPlayerId.Player1 && player1StarMaterial != null)
+            {
+                return player1StarMaterial;
+            }
+
+            if (player == FlickDomPlayerId.Player2 && player2StarMaterial != null)
+            {
+                return player2StarMaterial;
+            }
+
+            return player == FlickDomPlayerId.Player1 ? player1OwnedMaterial : player2OwnedMaterial;
+        }
+
+        private GameObject[] GetStars(FlickDomPlayerId player)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                return player1Stars;
+            }
+
+            if (player == FlickDomPlayerId.Player2)
+            {
+                return player2Stars;
+            }
+
+            return null;
+        }
+
+        private Vector2Int?[] GetStarCells(FlickDomPlayerId player)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                return player1StarCells;
+            }
+
+            if (player == FlickDomPlayerId.Player2)
+            {
+                return player2StarCells;
+            }
+
+            return null;
+        }
+
+        private static int FindStarIndex(Vector2Int?[] starCells, Vector2Int? targetCell)
+        {
+            for (int i = 0; i < starCells.Length; i++)
+            {
+                if (!starCells[i].HasValue && !targetCell.HasValue)
+                {
+                    return i;
+                }
+
+                if (starCells[i].HasValue
+                    && targetCell.HasValue
+                    && starCells[i].Value == targetCell.Value)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private static void SetSharedMaterial(Renderer[] renderers, Material material)
