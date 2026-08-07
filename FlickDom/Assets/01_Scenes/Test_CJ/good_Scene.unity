@@ -1198,6 +1198,8 @@ MonoBehaviour:
   player2OwnedMaterialOverride: {fileID: 2100000, guid: 32bb55b6d7d31bd438cf52b89134ca67, type: 2}
   starMarkerPrefab: {fileID: 0}
   markerTrayPrefab: {fileID: 100100000, guid: 93b5b76e35d22484cb69b32b24df5941, type: 3}
+  flickBoardStarResolver: {fileID: 1371976853}
+  showFlickBoardStars: 1
   player1PreplacedStars: []
   player2PreplacedStars: []
   player1StarMaterial: {fileID: 2100000, guid: ead4f0e983d54c2789675ec4616ce0b9, type: 2}
@@ -1211,6 +1213,8 @@ MonoBehaviour:
   starCellYOffset: 0.22
   markerTraySize: {x: 0.7, y: 0.04, z: 2.35}
   markerTrayYOffset: 0.045
+  flickBoardStarSize: 0.5
+  flickBoardStarYOffset: 0.13
   emptyColor: {r: 0.45, g: 0.48, b: 0.5, a: 1}
   player1CandidateColor: {r: 0.05, g: 0.28, b: 1, a: 1}
   player2CandidateColor: {r: 1, g: 0.12, b: 0.08, a: 1}

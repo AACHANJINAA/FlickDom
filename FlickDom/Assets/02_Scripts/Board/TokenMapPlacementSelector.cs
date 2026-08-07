@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FlickDom.Networking;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -120,6 +121,11 @@ namespace FlickDom.Gameplay
 
             Mouse mouse = Mouse.current;
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            if (IsPointerOverUi())
             {
                 return;
             }
@@ -652,6 +658,12 @@ namespace FlickDom.Gameplay
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
             return bootstrap == null || bootstrap.AllowsLocalStateControl();
+        }
+
+        private static bool IsPointerOverUi()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
         }
 
         private bool NeedsRelocationSource(FlickDomPlayerId owner, Vector2Int destination)

@@ -29,6 +29,8 @@ namespace FlickDom.Gameplay
         [Header("Occupation Stars")]
         [SerializeField] private GameObject starMarkerPrefab;
         [SerializeField] private GameObject markerTrayPrefab;
+        [SerializeField] private GridCellCandidateResolver flickBoardStarResolver;
+        [SerializeField] private bool showFlickBoardStars = true;
         [SerializeField] private GameObject[] player1PreplacedStars;
         [SerializeField] private GameObject[] player2PreplacedStars;
         [SerializeField] private Material player1StarMaterial;
@@ -42,6 +44,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private float starCellYOffset = 0.22f;
         [SerializeField] private Vector3 markerTraySize = new Vector3(0.7f, 0.04f, 2.35f);
         [SerializeField] private float markerTrayYOffset = 0.045f;
+        [SerializeField] private float flickBoardStarSize = 0.5f;
+        [SerializeField] private float flickBoardStarYOffset = 0.13f;
 
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
@@ -73,6 +77,10 @@ namespace FlickDom.Gameplay
         private GameObject[] player2Stars;
         private Vector2Int?[] player1StarCells;
         private Vector2Int?[] player2StarCells;
+        private GameObject[] player1FlickBoardStars;
+        private GameObject[] player2FlickBoardStars;
+        private Vector2Int?[] player1FlickBoardStarCells;
+        private Vector2Int?[] player2FlickBoardStarCells;
         private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
 
         public Vector3 GridCenter
@@ -87,6 +95,11 @@ namespace FlickDom.Gameplay
             if (tokenMapManager == null)
             {
                 tokenMapManager = GetComponent<TokenMapManager>();
+            }
+
+            if (flickBoardStarResolver == null)
+            {
+                flickBoardStarResolver = GetComponent<GridCellCandidateResolver>();
             }
 
             if (syncBoardSizeFromTokenMap && tokenMapManager != null)
@@ -134,6 +147,8 @@ namespace FlickDom.Gameplay
             markerTraySize.y = Mathf.Max(0.01f, markerTraySize.y);
             markerTraySize.z = Mathf.Max(0.05f, markerTraySize.z);
             markerTrayYOffset = Mathf.Max(0f, markerTrayYOffset);
+            flickBoardStarSize = Mathf.Max(0.05f, flickBoardStarSize);
+            flickBoardStarYOffset = Mathf.Max(0.001f, flickBoardStarYOffset);
             candidateMarkerSizeRatio = Mathf.Clamp(candidateMarkerSizeRatio, 0.1f, 0.95f);
             candidateMarkerHeight = Mathf.Max(0.001f, candidateMarkerHeight);
             candidateMarkerYOffset = Mathf.Max(0.001f, candidateMarkerYOffset);
@@ -490,6 +505,8 @@ namespace FlickDom.Gameplay
             RepaintCell(cell);
             ReturnStarToTray(previousOwner, cell);
             PlaceStarOnCell(nextOwner, cell);
+            ReturnFlickBoardStar(previousOwner, cell);
+            PlaceFlickBoardStar(nextOwner, cell);
         }
 
         private void HandleMapCleared()
@@ -510,6 +527,7 @@ namespace FlickDom.Gameplay
             }
 
             ReturnAllStarsToTray();
+            ReturnAllFlickBoardStars();
         }
 
         private bool IsValidCell(Vector2Int cell)
@@ -547,7 +565,9 @@ namespace FlickDom.Gameplay
             player2Stars = ResolveStarPool(FlickDomPlayerId.Player2, player2PreplacedStars, poolSize);
             player1StarCells = new Vector2Int?[player1Stars.Length];
             player2StarCells = new Vector2Int?[player2Stars.Length];
+            BuildFlickBoardStarPools(poolSize);
             ReturnAllStarsToTray();
+            ReturnAllFlickBoardStars();
         }
 
         private GameObject[] ResolveStarPool(FlickDomPlayerId player, GameObject[] preplacedStars, int fallbackPoolSize)
@@ -589,7 +609,7 @@ namespace FlickDom.Gameplay
             {
                 GameObject starObject = starMarkerPrefab != null
                     ? InstantiateVisualObject(starMarkerPrefab, root)
-                    : CreateProceduralStarObject(player, root);
+                    : CreateProceduralStarObject(player, root, starMarkerSize);
                 if (starObject == null)
                 {
                     continue;
@@ -603,6 +623,54 @@ namespace FlickDom.Gameplay
                 }
 
                 PrepareStarObject(player, starObject);
+                stars[i] = starObject;
+            }
+
+            return stars;
+        }
+
+        private void BuildFlickBoardStarPools(int poolSize)
+        {
+            if (!showFlickBoardStars || flickBoardStarResolver == null)
+            {
+                player1FlickBoardStars = null;
+                player2FlickBoardStars = null;
+                player1FlickBoardStarCells = null;
+                player2FlickBoardStarCells = null;
+                return;
+            }
+
+            player1FlickBoardStars = CreateFlickBoardStarPool(FlickDomPlayerId.Player1, poolSize);
+            player2FlickBoardStars = CreateFlickBoardStarPool(FlickDomPlayerId.Player2, poolSize);
+            player1FlickBoardStarCells = new Vector2Int?[player1FlickBoardStars.Length];
+            player2FlickBoardStarCells = new Vector2Int?[player2FlickBoardStars.Length];
+        }
+
+        private GameObject[] CreateFlickBoardStarPool(FlickDomPlayerId player, int poolSize)
+        {
+            GameObject[] stars = new GameObject[poolSize];
+            Transform root = new GameObject(player + " Flick Board Occupation Stars").transform;
+            root.SetParent(cachedTransform, false);
+
+            for (int i = 0; i < poolSize; i++)
+            {
+                GameObject starObject = starMarkerPrefab != null
+                    ? InstantiateVisualObject(starMarkerPrefab, root)
+                    : CreateProceduralStarObject(player, root, flickBoardStarSize);
+                if (starObject == null)
+                {
+                    continue;
+                }
+
+                starObject.name = player + " Flick Board Star " + (i + 1);
+                starObject.transform.localScale = Vector3.one;
+                if (starMarkerPrefab != null)
+                {
+                    FitVisualToSize(starObject, new Vector3(flickBoardStarSize, starMarkerHeight, flickBoardStarSize));
+                }
+
+                PrepareStarObject(player, starObject);
+                starObject.SetActive(false);
                 stars[i] = starObject;
             }
 
@@ -637,13 +705,13 @@ namespace FlickDom.Gameplay
             FitVisualToSize(trayObject, markerTraySize);
         }
 
-        private GameObject CreateProceduralStarObject(FlickDomPlayerId player, Transform parent)
+        private GameObject CreateProceduralStarObject(FlickDomPlayerId player, Transform parent, float size)
         {
             GameObject starObject = new GameObject(player + " Occupation Star Visual");
             starObject.transform.SetParent(parent, false);
 
             MeshFilter meshFilter = starObject.AddComponent<MeshFilter>();
-            meshFilter.sharedMesh = CreateStarMesh(starMarkerSize);
+            meshFilter.sharedMesh = CreateStarMesh(size);
 
             MeshRenderer meshRenderer = starObject.AddComponent<MeshRenderer>();
             meshRenderer.sharedMaterial = ResolveStarMaterial(player);
@@ -730,6 +798,7 @@ namespace FlickDom.Gameplay
         private void RefreshAllStarsFromOwnerCells()
         {
             ReturnAllStarsToTray();
+            ReturnAllFlickBoardStars();
 
             if (ownerCells == null)
             {
@@ -742,6 +811,7 @@ namespace FlickDom.Gameplay
                 {
                     Vector2Int cell = new Vector2Int(x, y);
                     PlaceStarOnCell(ownerCells[x, y], cell);
+                    PlaceFlickBoardStar(ownerCells[x, y], cell);
                 }
             }
         }
@@ -776,6 +846,36 @@ namespace FlickDom.Gameplay
             stars[starIndex].SetActive(true);
         }
 
+        private void PlaceFlickBoardStar(FlickDomPlayerId player, Vector2Int cell)
+        {
+            if (player == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            GameObject[] stars = GetFlickBoardStars(player);
+            Vector2Int?[] starCells = GetFlickBoardStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            int starIndex = FindStarIndex(starCells, cell);
+            if (starIndex < 0)
+            {
+                starIndex = FindStarIndex(starCells, null);
+            }
+
+            if (starIndex < 0 || starIndex >= stars.Length || stars[starIndex] == null)
+            {
+                return;
+            }
+
+            starCells[starIndex] = cell;
+            stars[starIndex].transform.position = GetFlickBoardStarWorldPosition(cell);
+            stars[starIndex].SetActive(true);
+        }
+
         private void ReturnStarToTray(FlickDomPlayerId player, Vector2Int cell)
         {
             if (player == FlickDomPlayerId.None)
@@ -800,10 +900,40 @@ namespace FlickDom.Gameplay
             MoveStarToTray(player, stars[starIndex], starIndex);
         }
 
+        private void ReturnFlickBoardStar(FlickDomPlayerId player, Vector2Int cell)
+        {
+            if (player == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            GameObject[] stars = GetFlickBoardStars(player);
+            Vector2Int?[] starCells = GetFlickBoardStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            int starIndex = FindStarIndex(starCells, cell);
+            if (starIndex < 0 || starIndex >= stars.Length || stars[starIndex] == null)
+            {
+                return;
+            }
+
+            starCells[starIndex] = null;
+            stars[starIndex].SetActive(false);
+        }
+
         private void ReturnAllStarsToTray()
         {
             ReturnPlayerStarsToTray(FlickDomPlayerId.Player1);
             ReturnPlayerStarsToTray(FlickDomPlayerId.Player2);
+        }
+
+        private void ReturnAllFlickBoardStars()
+        {
+            ReturnPlayerFlickBoardStars(FlickDomPlayerId.Player1);
+            ReturnPlayerFlickBoardStars(FlickDomPlayerId.Player2);
         }
 
         private void ReturnPlayerStarsToTray(FlickDomPlayerId player)
@@ -825,6 +955,25 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void ReturnPlayerFlickBoardStars(FlickDomPlayerId player)
+        {
+            GameObject[] stars = GetFlickBoardStars(player);
+            Vector2Int?[] starCells = GetFlickBoardStarCells(player);
+            if (stars == null || starCells == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < stars.Length; i++)
+            {
+                starCells[i] = null;
+                if (stars[i] != null)
+                {
+                    stars[i].SetActive(false);
+                }
+            }
+        }
+
         private void MoveStarToTray(FlickDomPlayerId player, GameObject starObject, int index)
         {
             starObject.transform.position = GetStarTrayWorldPosition(player, index);
@@ -839,6 +988,17 @@ namespace FlickDom.Gameplay
                 gridCenter.x + (cell.x * step) - offset,
                 gridCenter.y + (tileHeight * 0.5f) + starCellYOffset,
                 gridCenter.z + (cell.y * step) - offset);
+        }
+
+        private Vector3 GetFlickBoardStarWorldPosition(Vector2Int cell)
+        {
+            if (flickBoardStarResolver == null)
+            {
+                return GetStarCellWorldPosition(cell);
+            }
+
+            Vector3 center = flickBoardStarResolver.GetCellCenter(cell);
+            return new Vector3(center.x, center.y + flickBoardStarYOffset, center.z);
         }
 
         private Vector3 GetStarTrayWorldPosition(FlickDomPlayerId player, int index)
@@ -902,6 +1062,36 @@ namespace FlickDom.Gameplay
             if (player == FlickDomPlayerId.Player2)
             {
                 return player2StarCells;
+            }
+
+            return null;
+        }
+
+        private GameObject[] GetFlickBoardStars(FlickDomPlayerId player)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                return player1FlickBoardStars;
+            }
+
+            if (player == FlickDomPlayerId.Player2)
+            {
+                return player2FlickBoardStars;
+            }
+
+            return null;
+        }
+
+        private Vector2Int?[] GetFlickBoardStarCells(FlickDomPlayerId player)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                return player1FlickBoardStarCells;
+            }
+
+            if (player == FlickDomPlayerId.Player2)
+            {
+                return player2FlickBoardStarCells;
             }
 
             return null;
