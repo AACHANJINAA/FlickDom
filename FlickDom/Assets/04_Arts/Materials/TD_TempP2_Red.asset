@@ -16,4 +16,4 @@ MonoBehaviour:
   renderMaterial: {fileID: 2100000, guid: 615519a92c1a8474c8a124080188a5ba, type: 2}
   mass: 1
   drag: 1
-  physicMaterial: {fileID: 13400000, guid: 44d99ac33ff920743b54d59e628b2ee1, type: 2}
+  physicMaterial: {fileID: 0}
