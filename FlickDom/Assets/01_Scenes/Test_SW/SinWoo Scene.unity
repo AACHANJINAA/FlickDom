@@ -2263,6 +2263,7 @@ GameObject:
   - component: {fileID: 1371976861}
   - component: {fileID: 1371976862}
   - component: {fileID: 1371976863}
+  - component: {fileID: 1371976864}
   m_Layer: 0
   m_Name: Game Systems
   m_TagString: Untagged
@@ -2688,6 +2689,83 @@ MonoBehaviour:
   emptyCardTextColor: {r: 0.94, g: 0.96, b: 0.98, a: 1}
   roundChangePanelColor: {r: 0.05, g: 0.06, b: 0.07, a: 0.9}
   roundChangeTextColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!114 &1371976864
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1371976851}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a87c68f3c4134adfbfbd3c8f07e59b6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardDealRevealHud
+  cardManager: {fileID: 1371976860}
+  deckTransform: {fileID: 1800000002}
+  worldCamera: {fileID: 961739752}
+  cardTextureBindings:
+  - cardId: EasyCard_1
+    texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  - cardId: EasyCard_2
+    texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  - cardId: NormalCard_1
+    texture: {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
+  - cardId: NormalCard_2
+    texture: {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
+  - cardId: NormalCard_3
+    texture: {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
+  - cardId: HardCard_1
+    texture: {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
+  - cardId: HardCard_2
+    texture: {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
+  - cardId: HardCard_3
+    texture: {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
+  - cardId: HardCard_4
+    texture: {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
+  fallbackCardTextures:
+  - {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
+  - {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
+  - {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
+  - {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
+  - {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
+  - {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
+  - {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
+  - {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
+  - {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
+  maxDisplayedCards: 3
+  showOnStart: 1
+  replayOnCardSetChanged: 1
+  canvasSortingOrder: 130
+  startRevealDelay: 0.35
+  dealDuration: 0.42
+  dealStagger: 0.08
+  fadeOutSeconds: 0.28
+  revealCardSize: {x: 190, y: 260}
+  targetSpacing: 34
+  targetYOffset: 35
+  startScale: 0.18
+  framePadding: 8
+  confirmButtonText: "\uD655\uC778"
+  confirmButtonSize: {x: 170, y: 48}
+  confirmButtonYOffset: -285
+  confirmButtonFontSize: 24
+  fallbackFontNames:
+  - Malgun Gothic
+  - Segoe UI
+  - Arial Unicode MS
+  - Arial
+  dimmerColor: {r: 0, g: 0, b: 0, a: 0.42}
+  frameColor: {r: 1, g: 1, b: 1, a: 0.98}
+  confirmButtonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.98}
+  confirmButtonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
+  confirmButtonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
+  confirmButtonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
+  fallbackBaseColor: {r: 0.96, g: 0.94, b: 0.88, a: 1}
+  easyColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
+  normalColor: {r: 0.95, g: 0.72, b: 0.12, a: 1}
+  hardColor: {r: 0.82, g: 0.16, b: 0.16, a: 1}
+  emptyCellColor: {r: 0.8, g: 0.78, b: 0.7, a: 1}
 --- !u!1001 &1516929560
 PrefabInstance:
   m_ObjectHideFlags: 0
