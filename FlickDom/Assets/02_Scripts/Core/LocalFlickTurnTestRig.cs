@@ -48,6 +48,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float generatedPieceSpacing = 1.1f;
         [SerializeField] private float pieceSelectionRaycastDistance = 1000f;
         [SerializeField] private bool logStateChanges = true;
+        [SerializeField] private bool autoStartNextRoundWhenNoPlacementCandidates = true;
         [Header("Order UI")]
         [SerializeField] private Font orderLabelFont;
         [SerializeField] private Vector2 orderLabelSize = new Vector2(72f, 72f);
@@ -65,6 +66,7 @@ namespace FlickDom.Gameplay
         private int player1NextOrderIndex;
         private int player2NextOrderIndex;
         private Coroutine physicsCompletionRoutine;
+        private Coroutine noPlacementAdvanceRoutine;
         private Canvas orderLabelCanvas;
         private readonly List<Text> orderLabels = new List<Text>(3);
 
@@ -152,6 +154,7 @@ namespace FlickDom.Gameplay
             }
 
             StopPendingPhysicsCompletion();
+            StopPendingNoPlacementAdvance();
             SubscribePieces(player1Pieces, false);
             SubscribePieces(player2Pieces, false);
             HideAllOrderLabels();
@@ -1064,15 +1067,75 @@ namespace FlickDom.Gameplay
 
             if (nextState == FlickDomGameState.PieceOrderSelection)
             {
+                StopPendingNoPlacementAdvance();
                 CompleteOrderSelectionIfNoPieces();
             }
             else if (nextState == FlickDomGameState.PlayerFlicking)
             {
+                StopPendingNoPlacementAdvance();
                 EnsureDefaultOrderForPlayer(gameModeManager.ActivePlayer);
+            }
+            else if (nextState == FlickDomGameState.CardMatch)
+            {
+                BeginNoPlacementAdvanceIfNeeded();
+            }
+            else if (nextState != FlickDomGameState.RoundEnd)
+            {
+                StopPendingNoPlacementAdvance();
             }
 
             RefreshPieceHighlights();
             RefreshOrderLabels();
+        }
+
+        private void BeginNoPlacementAdvanceIfNeeded()
+        {
+            if (!autoStartNextRoundWhenNoPlacementCandidates
+                || gameModeManager == null
+                || gameModeManager.PendingPlacementCandidates.Count > 0
+                || !CanControlLocalGameState())
+            {
+                return;
+            }
+
+            StopPendingNoPlacementAdvance();
+            noPlacementAdvanceRoutine = StartCoroutine(AdvanceRoundAfterNoPlacementCandidates());
+        }
+
+        private IEnumerator AdvanceRoundAfterNoPlacementCandidates()
+        {
+            yield return null;
+
+            noPlacementAdvanceRoutine = null;
+            if (gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.CardMatch
+                || gameModeManager.PendingPlacementCandidates.Count > 0
+                || !CanControlLocalGameState())
+            {
+                yield break;
+            }
+
+            if (logStateChanges)
+            {
+                Debug.Log("[TurnTest] No placement candidates remain. Skipping placement and starting next round.", this);
+            }
+
+            gameModeManager.CompleteCardMatch();
+            if (gameModeManager.CurrentState == FlickDomGameState.RoundEnd)
+            {
+                gameModeManager.FinishRoundAndStartNext();
+            }
+        }
+
+        private void StopPendingNoPlacementAdvance()
+        {
+            if (noPlacementAdvanceRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(noPlacementAdvanceRoutine);
+            noPlacementAdvanceRoutine = null;
         }
 
         private void HandleBeforePlacementSelectionStarted()
