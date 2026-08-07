@@ -496,6 +496,11 @@ namespace FlickDom.Gameplay
             if (portInput != null)
             {
                 portInput.interactable = canEditConnection;
+                string currentPortText = bootstrap != null ? bootstrap.CurrentPort.ToString() : "7777";
+                if (!portInput.isFocused && !string.Equals(portInput.text, currentPortText, System.StringComparison.Ordinal))
+                {
+                    portInput.text = currentPortText;
+                }
             }
 
             if (createRoomButton != null)

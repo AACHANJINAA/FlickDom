@@ -57,6 +57,7 @@ namespace FlickDom.Networking
         private const string ReturnToLobbyMessageName = "FlickDom.ReturnToLobby";
         private const string LoopbackAddress = "127.0.0.1";
         private const string AnyListenAddress = "0.0.0.0";
+        private const int MaxHostPortSearchAttempts = 64;
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
@@ -90,6 +91,7 @@ namespace FlickDom.Networking
         private bool networkGameStarted;
         private bool localGameStartedFromNetwork;
         private bool localSinglePlayerModeActive;
+        private bool networkStartInProgress;
         private int lobbyPlayerCount;
         private float nextTransformBroadcastTime;
         private const float TransformBroadcastInterval = 0.05f;
@@ -287,8 +289,8 @@ namespace FlickDom.Networking
 
             GUI.Box(new Rect(16f, 16f, 320f, 92f), "FlickDom Network");
             GUI.Label(new Rect(28f, 42f, 296f, 22f), "Mode: " + mode + " / LocalRole: " + LocalPlayerId);
-            GUI.Label(new Rect(28f, 64f, 296f, 22f), "Join Target: " + connectAddress + ":" + port);
-            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Host Listen: " + GetHostListenAddress() + "   S: Host   C: Client   X: Shutdown");
+            GUI.Label(new Rect(28f, 64f, 296f, 22f), "Target: " + connectAddress + ":" + port);
+            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Listen: " + hostListenAddress + "   S: Host   C: Client   X: Shutdown");
 
             if (showLobbyUi && !networkGameStarted && !localSinglePlayerModeActive)
             {
@@ -312,13 +314,13 @@ namespace FlickDom.Networking
             GUILayout.Label("Players: " + GetVisiblePlayerCount() + " / " + maxPlayers);
 
             GUILayout.Space(8f);
-            GUILayout.Label("Join IP");
+            GUILayout.Label("Host IP / Join IP");
             addressInput = GUILayout.TextField(addressInput);
 
-            string shareableHostAddresses = GetShareableHostAddresses();
-            if (!string.IsNullOrEmpty(shareableHostAddresses))
+            string shareableHostAddress = GetShareableHostAddress();
+            if (!string.IsNullOrEmpty(shareableHostAddress))
             {
-                GUILayout.Label("Host Share IPs: " + shareableHostAddresses);
+                GUILayout.Label("LAN Share IP: " + shareableHostAddress);
             }
 
             GUILayout.Label("Port");
@@ -386,22 +388,46 @@ namespace FlickDom.Networking
                 return;
             }
 
+            networkStartInProgress = true;
             string listenAddress = GetHostListenAddress();
-            Debug.Log("[Network] Starting Host. Local client address: " + LoopbackAddress
-                + ":" + port + ", Listen: " + listenAddress + ":" + port
-                + ", Share IPs: " + GetShareableHostAddresses() + ".", this);
-            ConfigureTransportForHost(port);
-            bool started = networkManager.StartHost();
-            if (!started)
-            {
-                Debug.LogError("[Network] Failed to start Host.", this);
-                return;
-            }
+            Debug.Log("[Network] Preparing Host. Requested port: " + port
+                + ", Listen: " + listenAddress + ", Share IPs: " + GetShareableHostAddresses() + ".", this);
 
-            RegisterNetworkMessageHandlersIfReady();
-            SetLocalPlayerRole(FlickDomPlayerId.Player1);
-            BroadcastLobbyState();
-            Debug.Log("[Network] Host started. Local role is Player1.", this);
+            try
+            {
+                if (!TryPrepareHostPort())
+                {
+                    CleanupFailedNetworkStart();
+                    return;
+                }
+
+                listenAddress = GetHostListenAddress();
+                Debug.Log("[Network] Host will use port " + port + ". Local client address: " + LoopbackAddress
+                    + ":" + port + ", Listen: " + listenAddress + ":" + port + ".", this);
+
+                ConfigureTransportForHost(port);
+                bool started = networkManager.StartHost();
+                if (!started)
+                {
+                    Debug.LogError("[Network] Failed to start Host.", this);
+                    CleanupFailedNetworkStart();
+                    return;
+                }
+
+                RegisterNetworkMessageHandlersIfReady();
+                SetLocalPlayerRole(FlickDomPlayerId.Player1);
+                BroadcastLobbyState();
+                Debug.Log("[Network] Host started. Local role is Player1.", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[Network] Host start threw an exception: " + exception.Message, this);
+                CleanupFailedNetworkStart();
+            }
+            finally
+            {
+                networkStartInProgress = false;
+            }
         }
 
         [ContextMenu("Start Client")]
@@ -412,23 +438,39 @@ namespace FlickDom.Networking
                 return;
             }
 
+            networkStartInProgress = true;
             Debug.Log("[Network] Starting Client. Target is " + connectAddress + ":" + port + ".", this);
-            ConfigureTransportForClient(connectAddress, port);
-            bool started = networkManager.StartClient();
-            if (!started)
-            {
-                Debug.LogError("[Network] Failed to start Client.", this);
-                return;
-            }
 
-            RegisterNetworkMessageHandlersIfReady();
-            SetLocalPlayerRole(FlickDomPlayerId.Player2);
-            Debug.Log("[Network] Client start requested. Local role is Player2.", this);
+            try
+            {
+                ConfigureTransportForClient(connectAddress, port);
+                bool started = networkManager.StartClient();
+                if (!started)
+                {
+                    Debug.LogError("[Network] Failed to start Client.", this);
+                    CleanupFailedNetworkStart();
+                    return;
+                }
+
+                RegisterNetworkMessageHandlersIfReady();
+                SetLocalPlayerRole(FlickDomPlayerId.Player2);
+                Debug.Log("[Network] Client start requested. Local role is Player2.", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[Network] Client start threw an exception: " + exception.Message, this);
+                CleanupFailedNetworkStart();
+            }
+            finally
+            {
+                networkStartInProgress = false;
+            }
         }
 
         [ContextMenu("Shutdown")]
         public void Shutdown()
         {
+            networkStartInProgress = false;
             UnregisterNetworkMessageHandlers();
 
             if (networkManager != null && networkManager.IsListening)
@@ -766,6 +808,12 @@ namespace FlickDom.Networking
                 return false;
             }
 
+            if (networkStartInProgress)
+            {
+                Debug.LogWarning("[Network] Network start is already in progress.", this);
+                return false;
+            }
+
             if (networkManager.IsListening)
             {
                 Debug.LogWarning("[Network] NetworkManager is already running.", this);
@@ -777,13 +825,75 @@ namespace FlickDom.Networking
 
         private void ConfigureTransportForHost(ushort targetPort)
         {
-            string listenAddress = GetHostListenAddress();
-            unityTransport.SetConnectionData(LoopbackAddress, targetPort, listenAddress);
+            unityTransport.SetConnectionData(LoopbackAddress, targetPort, GetHostListenAddress());
         }
 
         private void ConfigureTransportForClient(string address, ushort targetPort)
         {
             unityTransport.SetConnectionData(address, targetPort);
+        }
+
+        private bool TryPrepareHostPort()
+        {
+            ushort requestedPort = port;
+            int firstPort = requestedPort;
+            int maxPort = ushort.MaxValue;
+
+            for (int i = 0; i < MaxHostPortSearchAttempts && firstPort + i <= maxPort; i++)
+            {
+                ushort candidatePort = (ushort)(firstPort + i);
+                if (!IsUdpPortAvailable(candidatePort))
+                {
+                    continue;
+                }
+
+                if (candidatePort != requestedPort)
+                {
+                    Debug.LogWarning("[Network] UDP port " + requestedPort
+                        + " is already in use. Falling back to " + candidatePort + ".", this);
+                    port = candidatePort;
+                }
+
+                return true;
+            }
+
+            Debug.LogError("[Network] No available UDP host port found from " + requestedPort
+                + " to " + Mathf.Min(maxPort, firstPort + MaxHostPortSearchAttempts - 1) + ".", this);
+            return false;
+        }
+
+        private static bool IsUdpPortAvailable(ushort targetPort)
+        {
+            try
+            {
+                IPEndPoint[] listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners();
+                for (int i = 0; i < listeners.Length; i++)
+                {
+                    if (listeners[i].Port == targetPort)
+                    {
+                        return false;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("[Network] Could not inspect active UDP listeners: " + exception.Message, null);
+            }
+
+            try
+            {
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+                {
+                    socket.ExclusiveAddressUse = true;
+                    socket.Bind(new IPEndPoint(IPAddress.Any, targetPort));
+                }
+
+                return true;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
         }
 
         private string GetHostListenAddress()
@@ -877,6 +987,35 @@ namespace FlickDom.Networking
                 || value.StartsWith("127.", StringComparison.Ordinal)
                 || value.StartsWith("169.254.", StringComparison.Ordinal)
                 || string.Equals(value, AnyListenAddress, StringComparison.Ordinal);
+        }
+
+        private static string GetShareableHostAddress()
+        {
+            string addresses = GetShareableHostAddresses();
+            int separatorIndex = addresses.IndexOf(",", StringComparison.Ordinal);
+            return separatorIndex >= 0 ? addresses.Substring(0, separatorIndex) : addresses;
+        }
+
+        private void CleanupFailedNetworkStart()
+        {
+            UnregisterNetworkMessageHandlers();
+
+            if (networkManager != null)
+            {
+                try
+                {
+                    networkManager.Shutdown();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("[Network] Failed-start cleanup hit an exception: " + exception.Message, this);
+                }
+            }
+
+            SetLocalPlayerRole(FlickDomPlayerId.None);
+            networkGameStarted = false;
+            localGameStartedFromNetwork = false;
+            lobbyPlayerCount = 0;
         }
 
         private void SubscribeNetworkEvents(bool subscribe)
@@ -984,7 +1123,7 @@ namespace FlickDom.Networking
 
         private void ApplyLobbyConnectionInput()
         {
-            string trimmedAddress = string.IsNullOrWhiteSpace(addressInput) ? LoopbackAddress : addressInput.Trim();
+            string trimmedAddress = string.IsNullOrWhiteSpace(addressInput) ? "127.0.0.1" : addressInput.Trim();
             if (!ushort.TryParse(portInput, out ushort parsedPort))
             {
                 parsedPort = 7777;
@@ -1676,6 +1815,16 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Game state received from client " + senderClientId + ". State: " + state + ", Active: " + activePlayer + ", Round: " + roundNumber + ", TurnIndex: " + turnIndex + ".", this);
         }
 
+        private bool IsAllowedRemotePlayerRequest(ulong senderClientId, FlickDomPlayerId owner)
+        {
+            if (networkManager == null || senderClientId == networkManager.LocalClientId)
+            {
+                return true;
+            }
+
+            return owner == FlickDomPlayerId.Player2;
+        }
+
         private void HandleFlickRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
             if (networkManager == null || !networkManager.IsHost)
@@ -1691,6 +1840,12 @@ namespace FlickDom.Networking
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
             impulse = ClampNetworkFlickImpulse(impulse);
+
+            if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
+            {
+                Debug.LogWarning("[Network] Rejected flick request from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
 
             ResolveGameModeManager();
             if (gameModeManager == null
@@ -1791,6 +1946,12 @@ namespace FlickDom.Networking
             }
 
             ResolveGameModeManager();
+
+            if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
+            {
+                Debug.LogWarning("[Network] Rejected piece order selection from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
 
             if (gameModeManager == null
                 || gameModeManager.CurrentState != FlickDomGameState.PieceOrderSelection
@@ -2048,11 +2209,12 @@ namespace FlickDom.Networking
             }
 
             IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            int candidateCount = candidates != null ? candidates.Count : 0;
             FastBufferWriter writer = new FastBufferWriter(CalculatePlacementCandidatesCapacity(candidates), Allocator.Temp);
             try
             {
-                writer.WriteValueSafe(candidates.Count);
-                for (int i = 0; i < candidates.Count; i++)
+                writer.WriteValueSafe(candidateCount);
+                for (int i = 0; i < candidateCount; i++)
                 {
                     WritePlacementCandidate(ref writer, candidates[i]);
                 }
@@ -2064,7 +2226,7 @@ namespace FlickDom.Networking
                 writer.Dispose();
             }
 
-            Debug.Log("[Network] Placement candidates broadcast. Count: " + candidates.Count + ".", this);
+            Debug.Log("[Network] Placement candidates broadcast. Count: " + candidateCount + ".", this);
         }
 
         private void HandlePlacementCandidatesMessage(ulong senderClientId, FastBufferReader reader)
