@@ -87,6 +87,14 @@ namespace FlickDom.Gameplay
         private float activeIndicatorDiameterMultiplierRuntime;
         private int selectionOrderNumber;
 
+        private const string HitSoundResourcePath = "Audio/Hit";
+        private const string PieceAudioObjectName = "Flick Piece Audio";
+        private const float HitSoundCooldownSeconds = 0.03f;
+
+        private static AudioSource sharedAudioSource;
+        private static AudioClip hitSoundClip;
+        private static float nextHitSoundTime;
+
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
         private static readonly int EmissionColorPropertyId = Shader.PropertyToID("_EmissionColor");
@@ -157,6 +165,7 @@ namespace FlickDom.Gameplay
             }
 
             ApplyBaseColor();
+            PreloadHitSound();
         }
 
         private void OnValidate()
@@ -194,7 +203,9 @@ namespace FlickDom.Gameplay
 
         private void OnCollisionEnter(Collision collision)
         {
-            RegisterRequiredContact(collision != null ? collision.collider : null);
+            Collider other = collision != null ? collision.collider : null;
+            RegisterRequiredContact(other);
+            PlayHitSoundIfNeeded(other);
         }
 
         private void OnCollisionStay(Collision collision)
@@ -573,6 +584,88 @@ namespace FlickDom.Gameplay
             }
 
             return false;
+        }
+
+        private void PlayHitSoundIfNeeded(Collider other)
+        {
+            if (other == null || isDead)
+            {
+                return;
+            }
+
+            bool hitPiece = other.GetComponentInParent<TurnBasedFlickPiece>() != null;
+            if (!hitPiece && !IsWallCollider(other))
+            {
+                return;
+            }
+
+            PlaySharedSound(ref hitSoundClip, HitSoundResourcePath, true);
+        }
+
+        private static void PlaySharedSound(ref AudioClip clip, string resourcePath, bool useHitCooldown)
+        {
+            if (useHitCooldown)
+            {
+                if (Time.unscaledTime < nextHitSoundTime)
+                {
+                    return;
+                }
+
+                nextHitSoundTime = Time.unscaledTime + HitSoundCooldownSeconds;
+            }
+
+            EnsureSharedAudioSource();
+            EnsureAudioClip(ref clip, resourcePath);
+            if (sharedAudioSource == null || clip == null)
+            {
+                return;
+            }
+
+            sharedAudioSource.PlayOneShot(clip);
+        }
+
+        private static void PreloadHitSound()
+        {
+            EnsureSharedAudioSource();
+            EnsureAudioClip(ref hitSoundClip, HitSoundResourcePath);
+        }
+
+        private static void EnsureSharedAudioSource()
+        {
+            if (sharedAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(PieceAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(PieceAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out sharedAudioSource))
+            {
+                sharedAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            sharedAudioSource.playOnAwake = false;
+            sharedAudioSource.loop = false;
+            sharedAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureAudioClip(ref AudioClip clip, string resourcePath)
+        {
+            if (clip != null)
+            {
+                return;
+            }
+
+            clip = Resources.Load<AudioClip>(resourcePath);
+            if (clip == null)
+            {
+                Debug.LogWarning("[Piece Audio] Could not load sound at Resources/" + resourcePath + ".", null);
+            }
         }
 
         public void BlockInputUntilPointerReleased()

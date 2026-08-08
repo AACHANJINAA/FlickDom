@@ -70,6 +70,13 @@ namespace FlickDom.Gameplay
         private Canvas orderLabelCanvas;
         private readonly List<Text> orderLabels = new List<Text>(3);
 
+        private const string SelectSoundResourcePath = "Audio/Select";
+        private const string SelectAudioObjectName = "Flick Selection Audio";
+        private const float SelectSoundVolumeScale = 0.45f;
+
+        private static AudioSource selectAudioSource;
+        private static AudioClip selectSoundClip;
+
         private void Awake()
         {
             if (gameModeManager == null)
@@ -114,6 +121,7 @@ namespace FlickDom.Gameplay
             BuildStartTrayVisuals();
             EnsureOrderLabelUi();
             HideAllOrderLabels();
+            PreloadSelectSound();
         }
 
         private void OnValidate()
@@ -520,6 +528,7 @@ namespace FlickDom.Gameplay
             }
 
             order.Add(piece);
+            PlaySelectSound();
             BlockFlickInputUntilPointerReleased();
 
             if (logStateChanges)
@@ -535,6 +544,62 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.CompleteCurrentPlayerPieceOrderSelection();
                 RefreshPieceHighlights();
+            }
+        }
+
+        private static void PlaySelectSound()
+        {
+            EnsureSelectAudioSource();
+            EnsureSelectSoundClip();
+            if (selectAudioSource == null || selectSoundClip == null)
+            {
+                return;
+            }
+
+            selectAudioSource.PlayOneShot(selectSoundClip, SelectSoundVolumeScale);
+        }
+
+        private static void PreloadSelectSound()
+        {
+            EnsureSelectAudioSource();
+            EnsureSelectSoundClip();
+        }
+
+        private static void EnsureSelectAudioSource()
+        {
+            if (selectAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(SelectAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(SelectAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out selectAudioSource))
+            {
+                selectAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            selectAudioSource.playOnAwake = false;
+            selectAudioSource.loop = false;
+            selectAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureSelectSoundClip()
+        {
+            if (selectSoundClip != null)
+            {
+                return;
+            }
+
+            selectSoundClip = Resources.Load<AudioClip>(SelectSoundResourcePath);
+            if (selectSoundClip == null)
+            {
+                Debug.LogWarning("[Select Audio] Could not load sound at Resources/" + SelectSoundResourcePath + ".", null);
             }
         }
 
