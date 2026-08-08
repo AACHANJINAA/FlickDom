@@ -196,3 +196,7 @@
   - 움직이는 알만 주기적으로 `PieceTransform` 상태를 보내고, 모든 알이 정지하면 `PhysicsSettled` reliable final snapshot으로 Host 상태에 완전히 맞추도록 했다.
   - P2 클라이언트 예측 중 로컬 PhysX 결과만으로 알을 사망 처리해 숨기지 않고 Host의 최종 dead/alive 상태를 따르도록 보정했다.
   - Client-only에서 상대 원숭이 Rigidbody를 kinematic 프레젠테이션 모드로 전환해 snapshot pose와 로컬 물리 시뮬레이션이 서로 충돌하지 않도록 했다.
+
+- [2026-08-08 17시]
+  - P2 원숭이가 방향 전환 중 Host의 지연된 회전 보정값으로 되돌아가며 버벅이던 문제를 줄이기 위해, owner 클라이언트가 이동 입력 중일 때는 위치만 보정하고 로컬 회전 프레젠테이션을 유지하도록 수정했다.
+  - P2 디스크 발사 시 클라이언트 로컬 PhysX 발사와 Host 권위 PhysX 발사가 서로 다른 궤적으로 겹쳐 두 번 날아가는 것처럼 보이던 문제를 막기 위해, client-only에서는 발사 요청 후 로컬 AddForce를 실행하지 않고 Host 물리 스냅샷을 따라가도록 변경했다.

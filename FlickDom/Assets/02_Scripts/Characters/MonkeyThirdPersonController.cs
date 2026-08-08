@@ -550,11 +550,15 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            bool preserveLocalRotation = ShouldPreserveOwningPredictedRotation();
+            Quaternion currentRotation = cachedRigidbody.rotation;
+            Quaternion targetRotation = preserveLocalRotation ? currentRotation : rotation;
+
             if (error >= owningPredictionSnapDistance)
             {
-                cachedTransform.SetPositionAndRotation(position, rotation);
+                cachedTransform.SetPositionAndRotation(position, targetRotation);
                 cachedRigidbody.position = position;
-                cachedRigidbody.rotation = rotation;
+                cachedRigidbody.rotation = targetRotation;
                 cachedRigidbody.linearVelocity = Vector3.zero;
                 cachedRigidbody.angularVelocity = Vector3.zero;
                 return;
@@ -564,13 +568,21 @@ namespace FlickDom.Gameplay
                 cachedRigidbody.position,
                 position,
                 owningPredictionCorrectionBlend);
-            Quaternion correctedRotation = Quaternion.Slerp(
-                cachedRigidbody.rotation,
-                rotation,
-                owningPredictionCorrectionBlend);
+            Quaternion correctedRotation = preserveLocalRotation
+                ? currentRotation
+                : Quaternion.Slerp(
+                    currentRotation,
+                    rotation,
+                    owningPredictionCorrectionBlend);
             cachedTransform.SetPositionAndRotation(correctedPosition, correctedRotation);
             cachedRigidbody.position = correctedPosition;
             cachedRigidbody.rotation = correctedRotation;
+        }
+
+        private bool ShouldPreserveOwningPredictedRotation()
+        {
+            return desiredMoveDirection.sqrMagnitude > MinInputMagnitude
+                || movementInput.sqrMagnitude > MinInputMagnitude;
         }
 
         private void AddNetworkPoseSnapshot(uint tick, double timestamp, Vector3 position, Quaternion rotation)

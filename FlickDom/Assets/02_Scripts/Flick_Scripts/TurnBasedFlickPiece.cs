@@ -76,6 +76,7 @@ namespace FlickDom.Gameplay
         private bool isDragging;
         private bool characterAimActive;
         private bool launchQueued;
+        private bool awaitingNetworkFlickAcceptance;
         private bool waitingForStop;
         private bool launchedThisTurn;
         private bool isDead;
@@ -505,6 +506,7 @@ namespace FlickDom.Gameplay
             ResetToFlickStartPose();
             CancelDragPresentation();
             launchQueued = false;
+            awaitingNetworkFlickAcceptance = false;
             waitingForStop = false;
             launchedThisTurn = false;
             isDead = false;
@@ -755,6 +757,7 @@ namespace FlickDom.Gameplay
             waitForPointerReleaseBeforeInput = true;
             CancelDragPresentation();
             launchQueued = false;
+            awaitingNetworkFlickAcceptance = false;
             HideFlickPreview();
         }
 
@@ -931,6 +934,20 @@ namespace FlickDom.Gameplay
             launchQueued = true;
         }
 
+        private void BeginPendingNetworkFlick(Vector3 launchPosition)
+        {
+            awaitingNetworkFlickAcceptance = true;
+            launchedThisTurn = true;
+            launchQueued = false;
+            waitingForStop = false;
+            stoppedTimer = 0f;
+            pieceSnapshotCount = 0;
+
+            cachedRigidbody.position = launchPosition;
+            transform.position = launchPosition;
+            ParkWithoutCollision();
+        }
+
         private void CancelDragPresentation()
         {
             if (!isDragging)
@@ -1059,6 +1076,20 @@ namespace FlickDom.Gameplay
 
         public void MarkNetworkFlickAccepted()
         {
+            if (awaitingNetworkFlickAcceptance)
+            {
+                awaitingNetworkFlickAcceptance = false;
+                launchedThisTurn = true;
+                launchQueued = false;
+                waitingForStop = false;
+                isDragging = false;
+                characterAimActive = false;
+                characterAimVector = Vector3.zero;
+                HideFlickPreview();
+                ParkWithoutCollision();
+                return;
+            }
+
             if (ShouldReconcilePredictedPhysics())
             {
                 launchedThisTurn = true;
@@ -1098,7 +1129,8 @@ namespace FlickDom.Gameplay
             }
 
             bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition);
-            return false;
+            BeginPendingNetworkFlick(launchPosition);
+            return true;
         }
 
         private bool ShouldReconcilePredictedPhysics()
@@ -1107,7 +1139,7 @@ namespace FlickDom.Gameplay
             return bootstrap != null
                 && bootstrap.IsClientOnly
                 && bootstrap.LocalPlayerId == owner
-                && (waitingForStop || launchQueued || launchedThisTurn);
+                && (awaitingNetworkFlickAcceptance || waitingForStop || launchQueued || launchedThisTurn);
         }
 
         private void ReconcilePredictedPhysics(
@@ -1342,6 +1374,7 @@ namespace FlickDom.Gameplay
             characterAimActive = false;
             characterAimVector = Vector3.zero;
             launchQueued = false;
+            awaitingNetworkFlickAcceptance = false;
             waitingForStop = false;
             invalidatedThisTurn = true;
             stoppedTimer = 0f;
@@ -1383,6 +1416,7 @@ namespace FlickDom.Gameplay
             characterAimActive = false;
             characterAimVector = Vector3.zero;
             launchQueued = false;
+            awaitingNetworkFlickAcceptance = false;
             waitingForStop = false;
             stoppedTimer = 0f;
             HideFlickPreview();
