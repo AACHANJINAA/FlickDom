@@ -18,7 +18,7 @@ namespace FlickDom.Gameplay
         }
 
         private const float MinInputMagnitude = 0.01f;
-        private const float NetworkInputSendInterval = 0.05f;
+        private const float NetworkInputSendInterval = 0.02f;
         private const float NetworkInputTimeoutSeconds = 0.25f;
         private const float NetworkInputChangeSqrThreshold = 0.0004f;
         private static readonly int AnimationParameterHash = Animator.StringToHash("animation");

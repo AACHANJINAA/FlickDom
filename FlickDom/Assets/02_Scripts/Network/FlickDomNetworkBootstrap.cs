@@ -34,6 +34,8 @@ namespace FlickDom.Networking
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
         [SerializeField] private float maxNetworkFlickImpulseMagnitude = 30f;
+        [SerializeField, Min(1)] private int networkTickRate = 60;
+        [SerializeField, Min(0.01f)] private float transformBroadcastInterval = 1f / 30f;
 
         [Header("Local Test Controls")]
         [SerializeField] private bool showRuntimeStatus;
@@ -110,7 +112,6 @@ namespace FlickDom.Networking
         private bool networkStartInProgress;
         private int lobbyPlayerCount;
         private float nextTransformBroadcastTime;
-        private const float TransformBroadcastInterval = 0.1f;
 
         public NetworkManager NetworkManager
         {
@@ -619,7 +620,11 @@ namespace FlickDom.Networking
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(safeMoveDirection);
                 writer.WriteValueSafe(sprint);
-                networkManager.CustomMessagingManager.SendNamedMessage(MonkeyInputMessageName, NetworkManager.ServerClientId, writer);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    MonkeyInputMessageName,
+                    NetworkManager.ServerClientId,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
             }
         }
 
@@ -907,6 +912,7 @@ namespace FlickDom.Networking
             EnsureNetworkConfig();
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
             networkManager.NetworkConfig.ConnectionApproval = true;
+            networkManager.NetworkConfig.TickRate = (uint)Mathf.Clamp(networkTickRate, 1, 120);
             ConfigureTransportProtocol();
         }
 
@@ -2515,7 +2521,7 @@ namespace FlickDom.Networking
                 return;
             }
 
-            nextTransformBroadcastTime = Time.unscaledTime + TransformBroadcastInterval;
+            nextTransformBroadcastTime = Time.unscaledTime + Mathf.Max(0.01f, transformBroadcastInterval);
             SendAllPieceTransformsToClients();
             SendAllMonkeyPosesToClients();
         }
@@ -2561,7 +2567,11 @@ namespace FlickDom.Networking
                 writer.WriteValueSafe(piece.transform.position);
                 writer.WriteValueSafe(piece.transform.rotation);
                 writer.WriteValueSafe(piece.IsDead);
-                networkManager.CustomMessagingManager.SendNamedMessage(PieceTransformMessageName, clients, writer);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    PieceTransformMessageName,
+                    clients,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
             }
         }
 
@@ -2610,7 +2620,11 @@ namespace FlickDom.Networking
                 writer.WriteValueSafe((int)monkey.Owner);
                 writer.WriteValueSafe(monkey.transform.position);
                 writer.WriteValueSafe(monkey.transform.rotation);
-                networkManager.CustomMessagingManager.SendNamedMessage(MonkeyPoseMessageName, clients, writer);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    MonkeyPoseMessageName,
+                    clients,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
             }
         }
 

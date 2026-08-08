@@ -8,7 +8,7 @@ namespace FlickDom.Gameplay
     {
         [SerializeField] private Transform target;
         [SerializeField] private GameModeManager gameModeManager;
-        [SerializeField] private bool followLocalNetworkPlayer = true;
+        [SerializeField] private bool followLocalNetworkPlayer;
         [SerializeField] private Vector3 targetOffset = new Vector3(0f, 0.75f, 0f);
         [SerializeField] private bool useTopView = true;
         [SerializeField] private float topViewDistance = 8.5f;
@@ -51,15 +51,11 @@ namespace FlickDom.Gameplay
             }
 
             cachedTransform = transform;
-            RefreshLocalNetworkTarget();
             SnapToTarget();
         }
 
         private void OnEnable()
         {
-            SubscribeNetworkRoleChanged(true);
-            RefreshLocalNetworkTarget();
-
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged += HandleStateChanged;
@@ -69,8 +65,6 @@ namespace FlickDom.Gameplay
 
         private void OnDisable()
         {
-            SubscribeNetworkRoleChanged(false);
-
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged -= HandleStateChanged;
@@ -98,9 +92,6 @@ namespace FlickDom.Gameplay
 
         private void LateUpdate()
         {
-            EnsureNetworkRoleSubscription();
-            RefreshLocalNetworkTarget();
-
             if (!followEnabled || !target)
             {
                 return;
@@ -249,7 +240,6 @@ namespace FlickDom.Gameplay
             followEnabled = !UsesBoardView(nextState);
             if (followEnabled)
             {
-                RefreshLocalNetworkTarget();
                 SnapToTarget();
             }
         }
