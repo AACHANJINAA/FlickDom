@@ -405,7 +405,7 @@ MonoBehaviour:
   resourcesBackgroundPath: UI/FlickDom_main
   menuPanelSize: {x: 620, y: 470}
   menuPanelOffset: {x: 60, y: 0}
-  buttonSize: {x: 250, y: 66}
+  buttonSize: {x: 250, y: 58}
   titleFontSize: 52
   buttonFontSize: 19
   bodyFontSize: 17
@@ -421,9 +421,9 @@ MonoBehaviour:
   focusedInputColor: {r: 1, g: 0.95, b: 0.58, a: 0.98}
   panelSprite: {fileID: 0}
   dialogPanelSprite: {fileID: 21300000, guid: 363851b00df18364daed29a43965b617, type: 3}
-  dialogPanelSize: {x: 680, y: 460}
+  dialogPanelSize: {x: 680, y: 464}
+  rulesPanelSize: {x: 880, y: 601}
   dialogPanelColor: {r: 1, g: 1, b: 1, a: 1}
-  dialogPanelBorderScale: 1.8
   buttonSprite: {fileID: 21300000, guid: 4762aaf2befaa65459d4ddfa424f95db, type: 3}
   singleModeButtonSprite: {fileID: 21300000, guid: e152f22eaf3ac7d4aaff6f356b277f3b, type: 3}
   multiplayerButtonSprite: {fileID: 21300000, guid: df1cb0dba9c537a488aa6fc1ce5066ea, type: 3}
@@ -431,7 +431,7 @@ MonoBehaviour:
   inputSlotSprite: {fileID: 21300000, guid: 8fdb5c505a5b45448816c96e7a113272, type: 3}
   logoSprite: {fileID: 21300000, guid: 0573184e9a24e7a4695b79b530edb6e5, type: 3}
   logoSize: {x: 560, y: 166}
-  rulesImageSprite: {fileID: 21300000, guid: 1ab71636c9074b9498f0316b2f0bf131, type: 3}
+  rulesImageSprite: {fileID: 21300000, guid: 4c0a8471e1c52d44384074eec446a1f8, type: 3}
   rulesImageSize: {x: 660, y: 372}
   titleText: FlickDom
   singleModeText: Single Play
@@ -548,6 +548,11 @@ MonoBehaviour:
   sprintSpeed: 4.2
   rotationSpeed: 540
   faceCameraDirectionWhenIdle: 1
+  snapshotInterpolationBackTime: 0.1
+  owningPredictionIgnoreDistance: 0.08
+  owningPredictionSnapDistance: 1.5
+  owningPredictionCorrectionBlend: 0.25
+  remoteInterpolationSnapDistance: 2
   animator: {fileID: 738081066}
   driveAnimator: 1
   useAnimationStates: 0
@@ -670,6 +675,12 @@ MonoBehaviour:
   fallYThreshold: -1
   hideDeadPiece: 1
   deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  networkCorrectionIgnoreDistance: 0.03
+  networkCorrectionSnapDistance: 0.75
+  networkPositionCorrectionBlend: 0.35
+  networkVelocityCorrectionBlend: 0.5
+  snapshotInterpolationBackTime: 0.1
+  movingStateVelocityThreshold: 0.02
   player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
   player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -1164,6 +1175,12 @@ MonoBehaviour:
   fallYThreshold: -1
   hideDeadPiece: 1
   deadTint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  networkCorrectionIgnoreDistance: 0.03
+  networkCorrectionSnapDistance: 0.75
+  networkPositionCorrectionBlend: 0.35
+  networkVelocityCorrectionBlend: 0.5
+  snapshotInterpolationBackTime: 0.1
+  movingStateVelocityThreshold: 0.02
   player1Color: {r: 0.1, g: 0.35, b: 1, a: 1}
   player2Color: {r: 1, g: 0.2, b: 0.15, a: 1}
   inactiveTint: {r: 0.45, g: 0.45, b: 0.45, a: 1}
@@ -1425,9 +1442,9 @@ GameObject:
   - component: {fileID: 1371976858}
   - component: {fileID: 1371976860}
   - component: {fileID: 1371976861}
-  - component: {fileID: 1371976862}
-  - component: {fileID: 1371976863}
   - component: {fileID: 1371976864}
+  - component: {fileID: 1371976863}
+  - component: {fileID: 1371976862}
   m_Layer: 0
   m_Name: Game Systems
   m_TagString: Untagged
@@ -1686,6 +1703,7 @@ MonoBehaviour:
   raycastDistance: 100
   autoCompleteWhenAllCandidatesPlaced: 1
   autoStartNextRoundAfterPlacement: 1
+  placementCompletionDelay: 1
   showOnlyCurrentCandidate: 1
   logSelections: 1
   showSelectionMessages: 1
@@ -1790,44 +1808,62 @@ MonoBehaviour:
   m_GameObject: {fileID: 1371976851}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b786d5b9f0949d2a88f196cb103ef84, type: 3}
+  m_Script: {fileID: 11500000, guid: 923071c285ac355439be9551c0684c43, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PlayerScoreHud
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.InSeongPatternCardDealRevealHud
   cardManager: {fileID: 1371976860}
   gameModeManager: {fileID: 0}
-  font: {fileID: 0}
-  fontSize: 34
-  labelSize: {x: 260, y: 72}
-  turnLabelSize: {x: 260, y: 42}
-  orderLabelSize: {x: 260, y: 42}
-  winLabelSize: {x: 520, y: 120}
-  restartButtonSize: {x: 220, y: 56}
-  returnToMenuButtonSize: {x: 220, y: 56}
-  player1Offset: {x: 28, y: -24}
-  player2Offset: {x: -28, y: -24}
-  turnOffset: {x: 0, y: -34}
-  orderOffset: {x: 0, y: -72}
-  restartButtonOffset: {x: 0, y: -88}
-  returnToMenuButtonOffset: {x: 0, y: -142}
-  player1Prefix: P1
-  player2Prefix: P2
-  yourTurnText: Your Turn
-  orderSeparatorText: '  '
-  player1WinText: P1 WIN!!
-  player2WinText: P2 WIN!!
-  restartButtonText: RESTART
-  returnToMenuButtonText: MENU
-  player1Color: {r: 0.18, g: 0.42, b: 1, a: 1}
-  player2Color: {r: 1, g: 0.22, b: 0.18, a: 1}
-  firstOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
-  secondOrderColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
-  thirdOrderColor: {r: 0.15, g: 0.68, b: 1, a: 1}
-  outlineColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.8}
-  outlineDistance: {x: 2, y: -2}
-  restartButtonColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
-  restartButtonHighlightedColor: {r: 0.96862745, g: 0.7372549, b: 0.3882353, a: 1}
-  restartButtonPressedColor: {r: 0.7882353, g: 0.49803922, b: 0.16470589, a: 1}
-  restartButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  gameStartGate: {fileID: 0}
+  deckTransform: {fileID: 1800000002}
+  worldCamera: {fileID: 961739752}
+  cardTextureBindings: []
+  fallbackCardTextures: []
+  maxDisplayedCards: 3
+  useGeneratedCardVisuals: 1
+  showOnStart: 1
+  replayOnCardSetChanged: 1
+  canvasSortingOrder: 130
+  startRevealDelay: 0.35
+  dealDuration: 0.42
+  dealStagger: 0.08
+  fadeOutSeconds: 0.28
+  revealCardSize: {x: 200, y: 259}
+  targetSpacing: 30
+  targetYOffset: 20
+  startScale: 0.18
+  cardContentPadding: {x: 22, y: 24}
+  difficultyStripHeight: 30
+  difficultyStripGap: 8
+  stageTextFormat: Stage {0}
+  stageLabelSize: {x: 300, y: 68}
+  stageLabelYOffset: 220
+  stageLabelFontSize: 32
+  confirmButtonText: "\uD655\uC778"
+  confirmButtonSize: {x: 144, y: 90}
+  confirmButtonYOffset: -207
+  confirmButtonFontSize: 22
+  bundledFont: {fileID: 0}
+  bundledFontResourcePath: Fonts/NotoSansKR-VF
+  fallbackFontNames:
+  - Malgun Gothic
+  - Segoe UI
+  - Arial Unicode MS
+  - Arial
+  dimmerColor: {r: 0.08, g: 0.09, b: 0.05, a: 0.52}
+  frameColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
+  stageTextColor: {r: 0.24, g: 0.13, b: 0.055, a: 1}
+  confirmButtonColor: {r: 0.5647059, g: 0.63529414, b: 0.15294118, a: 1}
+  confirmButtonHighlightedColor: {r: 0.65882355, g: 0.74509805, b: 0.2, a: 1}
+  confirmButtonPressedColor: {r: 0.43137255, g: 0.4862745, b: 0.10980392, a: 1}
+  confirmButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  fallbackBaseColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  easyColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
+  normalColor: {r: 0.95, g: 0.72, b: 0.12, a: 1}
+  hardColor: {r: 0.82, g: 0.16, b: 0.16, a: 1}
+  emptyCellColor: {r: 0.89411765, g: 0.827451, b: 0.68235296, a: 1}
+  cardFrameSprite: {fileID: 21300000, guid: 347d33565f355f14b9d089b0e46baba4, type: 3}
+  confirmButtonSprite: {fileID: 21300000, guid: 215dd4dd5a35a2a42b15870f1f16df4e, type: 3}
+  stripSprite: {fileID: 21300000, guid: 5825e402ce7ff4748abf4c9634c6b7e5, type: 3}
 --- !u!114 &1371976863
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1837,58 +1873,32 @@ MonoBehaviour:
   m_GameObject: {fileID: 1371976851}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6ddc8f51602c4984bfbd9e74f96d9e5a, type: 3}
+  m_Script: {fileID: 11500000, guid: f3de09cea0bb2c149801b901a8c88486, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.GameViewMenuHud
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.InSeongGameViewMenuHud
   cardManager: {fileID: 1371976860}
   placementCameraController: {fileID: 1371976858}
   font: {fileID: 0}
+  bundledFontResourcePath: Fonts/NotoSansKR-VF
   fallbackFontNames:
   - Malgun Gothic
   - Segoe UI
   - Arial Unicode MS
   - Arial
-  cardTextureBindings:
-  - cardId: EasyCard_1
-    texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
-  - cardId: EasyCard_2
-    texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
-  - cardId: NormalCard_1
-    texture: {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
-  - cardId: NormalCard_2
-    texture: {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
-  - cardId: NormalCard_3
-    texture: {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
-  - cardId: HardCard_1
-    texture: {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
-  - cardId: HardCard_2
-    texture: {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
-  - cardId: HardCard_3
-    texture: {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
-  - cardId: HardCard_4
-    texture: {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
-  cardTextures:
-  - {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
-  - {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
-  - {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
-  - {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
-  - {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
-  - {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
-  - {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
-  - {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
-  - {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
-  cardPanelSize: {x: 680, y: 520}
-  cardImageSize: {x: 260, y: 360}
+  cardTextureBindings: []
+  cardTextures: []
+  cardPanelSize: {x: 680, y: 464}
+  cardImageSize: {x: 260, y: 337}
   cardImageSpacing: 28
-  menuButtonSize: {x: 140, y: 46}
-  menuButtonOffset: {x: 0, y: -22}
-  menuPanelSize: {x: 280, y: 210}
+  menuButtonSize: {x: 116, y: 38}
+  menuButtonOffset: {x: 0, y: -10}
+  menuPanelSize: {x: 380, y: 260}
   menuPanelOffset: {x: 0, y: -82}
-  returnButtonSize: {x: 160, y: 48}
+  returnButtonSize: {x: 120, y: 57}
   returnButtonOffset: {x: 0, y: -22}
-  buttonFontSize: 24
+  buttonFontSize: 22
   emptyCardFontSize: 28
-  roundChangePanelSize: {x: 420, y: 110}
+  roundChangePanelSize: {x: 420, y: 95}
   roundChangeFontSize: 42
   roundChangeMessageSeconds: 1.6
   menuText: "\uBA54\uB274"
@@ -1906,6 +1916,10 @@ MonoBehaviour:
   emptyCardTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
   roundChangePanelColor: {r: 0.3529412, g: 0.20392157, b: 0.09411765, a: 0.9019608}
   roundChangeTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  panelSprite: {fileID: 21300000, guid: 363851b00df18364daed29a43965b617, type: 3}
+  buttonSprite: {fileID: 21300000, guid: 4762aaf2befaa65459d4ddfa424f95db, type: 3}
+  cardFrameSprite: {fileID: 21300000, guid: 347d33565f355f14b9d089b0e46baba4, type: 3}
+  ribbonSprite: {fileID: 21300000, guid: 5825e402ce7ff4748abf4c9634c6b7e5, type: 3}
 --- !u!114 &1371976864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1915,83 +1929,52 @@ MonoBehaviour:
   m_GameObject: {fileID: 1371976851}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a87c68f3c4134adfbfbd3c8f07e59b6d, type: 3}
+  m_Script: {fileID: 11500000, guid: 6665b55d7226d8b40b421b86b057b686, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.PatternCardDealRevealHud
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.InSeongPlayerScoreHud
   cardManager: {fileID: 1371976860}
   gameModeManager: {fileID: 0}
-  gameStartGate: {fileID: 0}
-  deckTransform: {fileID: 1800000002}
-  worldCamera: {fileID: 961739752}
-  cardTextureBindings:
-  - cardId: EasyCard_1
-    texture: {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
-  - cardId: EasyCard_2
-    texture: {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
-  - cardId: NormalCard_1
-    texture: {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
-  - cardId: NormalCard_2
-    texture: {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
-  - cardId: NormalCard_3
-    texture: {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
-  - cardId: HardCard_1
-    texture: {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
-  - cardId: HardCard_2
-    texture: {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
-  - cardId: HardCard_3
-    texture: {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
-  - cardId: HardCard_4
-    texture: {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
-  fallbackCardTextures:
-  - {fileID: 2800000, guid: ff9cb698c1eed16488e081b2a0988191, type: 3}
-  - {fileID: 2800000, guid: f13e61efc24326343821cae8749a25b9, type: 3}
-  - {fileID: 2800000, guid: bdae1edf3f05a1f479df70d7927bddb9, type: 3}
-  - {fileID: 2800000, guid: 6303cee0ca52f1040a44282e40e58daf, type: 3}
-  - {fileID: 2800000, guid: e52b1df8a96d3bd49ab6e66cad78e374, type: 3}
-  - {fileID: 2800000, guid: 42df1503ae557a74f94f82642c038641, type: 3}
-  - {fileID: 2800000, guid: d6c46f68dd8b80b4c92885723b3f03f9, type: 3}
-  - {fileID: 2800000, guid: 5d7c4b4026b74f74aa97027f2f96a4f2, type: 3}
-  - {fileID: 2800000, guid: 46640843c8e3a7043823662fca893a17, type: 3}
-  maxDisplayedCards: 3
-  showOnStart: 1
-  replayOnCardSetChanged: 1
-  canvasSortingOrder: 130
-  startRevealDelay: 0.35
-  dealDuration: 0.42
-  dealStagger: 0.08
-  fadeOutSeconds: 0.28
-  revealCardSize: {x: 190, y: 260}
-  targetSpacing: 34
-  targetYOffset: 35
-  startScale: 0.18
-  framePadding: 8
-  stageTextFormat: Stage {0}
-  stageLabelSize: {x: 420, y: 64}
-  stageLabelYOffset: 260
-  stageLabelFontSize: 42
-  confirmButtonText: "\uD655\uC778"
-  confirmButtonSize: {x: 170, y: 48}
-  confirmButtonYOffset: -285
-  confirmButtonFontSize: 24
-  bundledFont: {fileID: 0}
+  font: {fileID: 0}
   bundledFontResourcePath: Fonts/NotoSansKR-VF
-  fallbackFontNames:
-  - Malgun Gothic
-  - Segoe UI
-  - Arial Unicode MS
-  - Arial
-  dimmerColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.65882355}
-  frameColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
-  stageTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
-  confirmButtonColor: {r: 0.5647059, g: 0.63529414, b: 0.15294118, a: 1}
-  confirmButtonHighlightedColor: {r: 0.65882355, g: 0.74509805, b: 0.2, a: 1}
-  confirmButtonPressedColor: {r: 0.43137255, g: 0.4862745, b: 0.10980392, a: 1}
-  confirmButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
-  fallbackBaseColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
-  easyColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
-  normalColor: {r: 0.95, g: 0.72, b: 0.12, a: 1}
-  hardColor: {r: 0.82, g: 0.16, b: 0.16, a: 1}
-  emptyCellColor: {r: 0.89411765, g: 0.827451, b: 0.68235296, a: 1}
+  fontSize: 28
+  labelSize: {x: 160, y: 46}
+  turnLabelSize: {x: 260, y: 44}
+  orderLabelSize: {x: 260, y: 42}
+  winLabelSize: {x: 520, y: 120}
+  restartButtonSize: {x: 220, y: 56}
+  returnToMenuButtonSize: {x: 220, y: 56}
+  player1Offset: {x: 168, y: -28}
+  player2Offset: {x: -168, y: -28}
+  turnOffset: {x: -120, y: -76}
+  orderOffset: {x: -24, y: -108}
+  restartButtonOffset: {x: 0, y: -88}
+  returnToMenuButtonOffset: {x: 0, y: -142}
+  player1Prefix: P1
+  player2Prefix: P2
+  yourTurnText: Your Turn
+  orderSeparatorText: '  '
+  player1WinText: P1 WIN!!
+  player2WinText: P2 WIN!!
+  restartButtonText: RESTART
+  returnToMenuButtonText: MENU
+  player1Color: {r: 0.18, g: 0.42, b: 1, a: 1}
+  player2Color: {r: 1, g: 0.22, b: 0.18, a: 1}
+  scoreTextColor: {r: 1, g: 0.94, b: 0.78, a: 1}
+  turnTextColor: {r: 0.24, g: 0.13, b: 0.055, a: 1}
+  firstOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
+  secondOrderColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
+  thirdOrderColor: {r: 0.15, g: 0.68, b: 1, a: 1}
+  outlineColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.8}
+  outlineDistance: {x: 1, y: -1}
+  restartButtonColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
+  restartButtonHighlightedColor: {r: 0.96862745, g: 0.7372549, b: 0.3882353, a: 1}
+  restartButtonPressedColor: {r: 0.7882353, g: 0.49803922, b: 0.16470589, a: 1}
+  restartButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  scoreCardP1Sprite: {fileID: 21300000, guid: 030590b475f06e14d928dd8751644e0b, type: 3}
+  scoreCardP2Sprite: {fileID: 21300000, guid: e2514670cb6536a4bbe1d47c015f6c8d, type: 3}
+  buttonSprite: {fileID: 21300000, guid: 4762aaf2befaa65459d4ddfa424f95db, type: 3}
+  scoreCardSize: {x: 320, y: 167}
+  scoreCardOffset: {x: 18, y: -16}
 --- !u!1001 &1660593428
 PrefabInstance:
   m_ObjectHideFlags: 0
