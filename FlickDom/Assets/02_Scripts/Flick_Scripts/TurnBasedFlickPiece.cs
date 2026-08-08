@@ -100,12 +100,14 @@ namespace FlickDom.Gameplay
         private bool hasLatestNetworkStateTick;
 
         private const string HitSoundResourcePath = "Audio/Hit";
+        private const string FlickFailedSoundResourcePath = "Audio/Flick_Failed";
         private const string PieceAudioObjectName = "Flick Piece Audio";
         private const float HitSoundCooldownSeconds = 0.03f;
         private const int SnapshotBufferSize = 4;
 
         private static AudioSource sharedAudioSource;
         private static AudioClip hitSoundClip;
+        private static AudioClip flickFailedSoundClip;
         private static float nextHitSoundTime;
 
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
@@ -179,6 +181,7 @@ namespace FlickDom.Gameplay
 
             ApplyBaseColor();
             PreloadHitSound();
+            PreloadFlickFailedSound();
         }
 
         private void OnValidate()
@@ -686,6 +689,22 @@ namespace FlickDom.Gameplay
         {
             EnsureSharedAudioSource();
             EnsureAudioClip(ref hitSoundClip, HitSoundResourcePath);
+        }
+
+        private void PlayFlickFailedSoundIfNeeded()
+        {
+            if (!launchedThisTurn || touchedRequiredTargetThisFlick)
+            {
+                return;
+            }
+
+            PlaySharedSound(ref flickFailedSoundClip, FlickFailedSoundResourcePath, false);
+        }
+
+        private static void PreloadFlickFailedSound()
+        {
+            EnsureSharedAudioSource();
+            EnsureAudioClip(ref flickFailedSoundClip, FlickFailedSoundResourcePath);
         }
 
         private static void EnsureSharedAudioSource()
@@ -1297,6 +1316,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            PlayFlickFailedSoundIfNeeded();
             isDead = true;
             StopDeadPieceSimulation();
 
