@@ -1025,6 +1025,35 @@ namespace FlickDom.Gameplay
             if (networkIsDead)
             {
                 MarkDeadAfterExternalBoardExit();
+                return;
+            }
+
+            RestoreAliveFromNetworkState();
+        }
+
+        private void RestoreAliveFromNetworkState()
+        {
+            if (!isDead)
+            {
+                return;
+            }
+
+            isDead = false;
+            invalidatedThisTurn = false;
+
+            if (cachedRenderer != null)
+            {
+                cachedRenderer.enabled = originalRendererEnabled;
+            }
+
+            RestorePieceVisual();
+            if (launchedThisTurn || waitingForStop || ShouldReconcilePredictedPhysics())
+            {
+                EnableDynamicFlickPhysics();
+            }
+            else
+            {
+                UpdateCollisionForTurnState(canInteractThisTurn);
             }
         }
 
@@ -1255,6 +1284,12 @@ namespace FlickDom.Gameplay
         {
             if (transform.position.y <= fallYThreshold || HasExitedBoardAfterLaunch())
             {
+                if (ShouldDeferAuthoritativeFlickOutcomeToHost())
+                {
+                    stoppedTimer = 0f;
+                    return;
+                }
+
                 InvalidateCurrentFlick();
                 return;
             }
@@ -1288,6 +1323,12 @@ namespace FlickDom.Gameplay
             }
 
             return enteredPlayableBoardAfterLaunch;
+        }
+
+        private static bool ShouldDeferAuthoritativeFlickOutcomeToHost()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap != null && bootstrap.IsClientOnly;
         }
 
         private void InvalidateCurrentFlick()

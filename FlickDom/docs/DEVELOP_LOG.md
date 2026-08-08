@@ -194,3 +194,5 @@
   - 원격 원숭이와 비소유 알은 수신 Transform을 즉시 덮어쓰지 않고 2~3개 snapshot을 기준으로 약간 과거 시점을 보간해 렌더링하도록 변경했다.
   - P2 알 발사 요청 후 클라이언트도 즉시 같은 impulse로 물리 발사를 시작하고, Host의 위치·회전·속도·각속도 상태로 작은 오차는 부드럽게 보정하고 큰 오차는 snap하도록 했다.
   - 움직이는 알만 주기적으로 `PieceTransform` 상태를 보내고, 모든 알이 정지하면 `PhysicsSettled` reliable final snapshot으로 Host 상태에 완전히 맞추도록 했다.
+  - P2 클라이언트 예측 중 로컬 PhysX 결과만으로 알을 사망 처리해 숨기지 않고 Host의 최종 dead/alive 상태를 따르도록 보정했다.
+  - Client-only에서 상대 원숭이 Rigidbody를 kinematic 프레젠테이션 모드로 전환해 snapshot pose와 로컬 물리 시뮬레이션이 서로 충돌하지 않도록 했다.

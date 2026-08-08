@@ -1,0 +1,12 @@
+/*
+  X-Content-Type-Options: nosniff
+  Cache-Control: no-store
+
+/Build/*.wasm
+  Content-Type: application/wasm
+
+/Build/*.js
+  Content-Type: application/javascript
+
+/Build/*.data
+  Content-Type: application/octet-stream

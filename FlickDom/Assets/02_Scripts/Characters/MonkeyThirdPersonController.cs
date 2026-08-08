@@ -95,6 +95,7 @@ namespace FlickDom.Gameplay
         private int networkPoseSnapshotCount;
         private uint latestNetworkPoseTick;
         private bool hasLatestNetworkPoseTick;
+        private bool networkPosePresentationActive;
 
         private const int SnapshotBufferSize = 4;
 
@@ -448,10 +449,11 @@ namespace FlickDom.Gameplay
         {
             if (ShouldUseNetworkPoseOnly())
             {
-                StopHorizontalMovement();
+                EnterNetworkPosePresentationMode();
                 return;
             }
 
+            ExitNetworkPosePresentationMode();
             if (HasActiveNetworkMovementInput())
             {
                 desiredMoveDirection = networkMoveDirection;
@@ -696,6 +698,34 @@ namespace FlickDom.Gameplay
                 cachedRigidbody.linearVelocity = Vector3.zero;
                 cachedRigidbody.angularVelocity = Vector3.zero;
             }
+        }
+
+        private void EnterNetworkPosePresentationMode()
+        {
+            if (networkPosePresentationActive || cachedRigidbody == null)
+            {
+                return;
+            }
+
+            cachedRigidbody.linearVelocity = Vector3.zero;
+            cachedRigidbody.angularVelocity = Vector3.zero;
+            cachedRigidbody.useGravity = false;
+            cachedRigidbody.isKinematic = true;
+            cachedRigidbody.interpolation = RigidbodyInterpolation.None;
+            networkPosePresentationActive = true;
+        }
+
+        private void ExitNetworkPosePresentationMode()
+        {
+            if (!networkPosePresentationActive || cachedRigidbody == null)
+            {
+                return;
+            }
+
+            cachedRigidbody.isKinematic = false;
+            cachedRigidbody.useGravity = true;
+            cachedRigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            networkPosePresentationActive = false;
         }
 
         private void StopHorizontalMovement()
