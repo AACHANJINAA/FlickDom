@@ -102,6 +102,7 @@ namespace FlickDom.Gameplay
         private const string HitSoundResourcePath = "Audio/Hit";
         private const string FlickFailedSoundResourcePath = "Audio/Flick_Failed";
         private const string PieceAudioObjectName = "Flick Piece Audio";
+        private const float HitSoundVolumeScale = 1.8f;
         private const float HitSoundCooldownSeconds = 0.03f;
         private const int SnapshotBufferSize = 4;
 
@@ -660,10 +661,14 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            PlaySharedSound(ref hitSoundClip, HitSoundResourcePath, true);
+            PlaySharedSound(ref hitSoundClip, HitSoundResourcePath, true, HitSoundVolumeScale);
         }
 
-        private static void PlaySharedSound(ref AudioClip clip, string resourcePath, bool useHitCooldown)
+        private static void PlaySharedSound(
+            ref AudioClip clip,
+            string resourcePath,
+            bool useHitCooldown,
+            float volumeScale = 1f)
         {
             if (useHitCooldown)
             {
@@ -682,7 +687,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            sharedAudioSource.PlayOneShot(clip);
+            sharedAudioSource.PlayOneShot(clip, volumeScale);
         }
 
         private static void PreloadHitSound()

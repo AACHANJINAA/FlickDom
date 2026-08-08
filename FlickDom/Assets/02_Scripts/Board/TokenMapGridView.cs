@@ -10,6 +10,7 @@ namespace FlickDom.Gameplay
         private const int Player2CandidateFlag = 2;
         private const string MarkingSoundResourcePath = "Audio/Marking";
         private const string MarkingAudioObjectName = "Token Map Marking Audio";
+        private const float MarkingSoundVolumeScale = 2.0f;
 
         [Header("References")]
         [SerializeField] private TokenMapManager tokenMapManager;
@@ -1074,7 +1075,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            markingAudioSource.PlayOneShot(markingSoundClip);
+            markingAudioSource.PlayOneShot(markingSoundClip, MarkingSoundVolumeScale);
         }
 
         private static void PreloadMarkingSound()

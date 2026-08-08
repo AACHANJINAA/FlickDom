@@ -13,6 +13,8 @@ namespace FlickDom.Gameplay
     public sealed class PatternCardDealRevealHud : MonoBehaviour
     {
         private const string DefaultBundledFontResourcePath = "Fonts/NotoSansKR-VF";
+        private const string CardSwapSoundResourcePath = "Audio/Card_Swap";
+        private const string CardSwapAudioObjectName = "Pattern Card Swap Audio";
 
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
@@ -90,6 +92,8 @@ namespace FlickDom.Gameplay
         private bool confirmRequested;
         private int lastShownDeckIndex = int.MinValue;
         private int lastShownDrawSeed = int.MinValue;
+        private static AudioSource cardSwapAudioSource;
+        private static AudioClip cardSwapSoundClip;
 
         private sealed class RevealCardView
         {
@@ -121,6 +125,7 @@ namespace FlickDom.Gameplay
             }
 
             BuildCanvas();
+            PreloadCardSwapSound();
         }
 
         private void OnEnable()
@@ -379,13 +384,16 @@ namespace FlickDom.Gameplay
 
             float totalDealSeconds = dealDuration + (dealStagger * Mathf.Max(0, activeCardViews.Count - 1));
             float elapsed = 0f;
+            bool[] playedCardSwapSounds = new bool[activeCardViews.Count];
             while (elapsed < totalDealSeconds)
             {
                 elapsed += Time.unscaledDeltaTime;
+                PlayCardSwapSoundsForElapsedCards(elapsed, playedCardSwapSounds);
                 ApplyDealFrame(elapsed, startPosition, targetPositions);
                 yield return null;
             }
 
+            PlayCardSwapSoundsForElapsedCards(totalDealSeconds, playedCardSwapSounds);
             ApplyDealFrame(totalDealSeconds, startPosition, targetPositions);
             SetConfirmButtonVisible(true);
 
@@ -434,6 +442,81 @@ namespace FlickDom.Gameplay
                 view.RectTransform.localScale = Vector3.one * Mathf.Lerp(startScale, 1f, eased);
                 view.RectTransform.localRotation = Quaternion.identity;
                 view.CanvasGroup.alpha = eased;
+            }
+        }
+
+        private void PlayCardSwapSoundsForElapsedCards(float elapsed, bool[] playedCardSwapSounds)
+        {
+            if (playedCardSwapSounds == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < playedCardSwapSounds.Length; i++)
+            {
+                if (playedCardSwapSounds[i] || elapsed < dealStagger * i)
+                {
+                    continue;
+                }
+
+                playedCardSwapSounds[i] = true;
+                PlayCardSwapSound();
+            }
+        }
+
+        private static void PlayCardSwapSound()
+        {
+            EnsureCardSwapAudioSource();
+            EnsureCardSwapSoundClip();
+            if (cardSwapAudioSource == null || cardSwapSoundClip == null)
+            {
+                return;
+            }
+
+            cardSwapAudioSource.PlayOneShot(cardSwapSoundClip);
+        }
+
+        private static void PreloadCardSwapSound()
+        {
+            EnsureCardSwapAudioSource();
+            EnsureCardSwapSoundClip();
+        }
+
+        private static void EnsureCardSwapAudioSource()
+        {
+            if (cardSwapAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(CardSwapAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(CardSwapAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out cardSwapAudioSource))
+            {
+                cardSwapAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            cardSwapAudioSource.playOnAwake = false;
+            cardSwapAudioSource.loop = false;
+            cardSwapAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureCardSwapSoundClip()
+        {
+            if (cardSwapSoundClip != null)
+            {
+                return;
+            }
+
+            cardSwapSoundClip = Resources.Load<AudioClip>(CardSwapSoundResourcePath);
+            if (cardSwapSoundClip == null)
+            {
+                Debug.LogWarning("[Card Swap Audio] Could not load sound at Resources/" + CardSwapSoundResourcePath + ".", null);
             }
         }
 
