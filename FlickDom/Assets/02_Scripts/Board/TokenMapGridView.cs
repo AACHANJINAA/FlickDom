@@ -8,6 +8,8 @@ namespace FlickDom.Gameplay
     {
         private const int Player1CandidateFlag = 1;
         private const int Player2CandidateFlag = 2;
+        private const string StampSoundResourcePath = "Audio/Stamp";
+        private const string StampAudioObjectName = "Token Map Stamp Audio";
 
         [Header("References")]
         [SerializeField] private TokenMapManager tokenMapManager;
@@ -98,6 +100,8 @@ namespace FlickDom.Gameplay
         private GameObject[] starStampPool;
         private int nextStarStampIndex;
         private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
+        private static AudioSource stampAudioSource;
+        private static AudioClip stampSoundClip;
 
         public Vector3 GridCenter
         {
@@ -127,6 +131,7 @@ namespace FlickDom.Gameplay
             BuildGrid();
             BuildStarPools();
             BuildStarStampPool();
+            PreloadStampSound();
         }
 
         private void OnEnable()
@@ -975,6 +980,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (playStamp)
+            {
+                PlayStampSound();
+            }
+
             stars[starIndex].SetActive(placementBoardVisible);
         }
 
@@ -1039,6 +1049,8 @@ namespace FlickDom.Gameplay
 
             yield return MoveStamp(stampObject.transform, startPosition, impactPosition, starStampDownDuration);
 
+            PlayStampSound();
+
             if (starObject != null && IsPlacementStarStillAssigned(starObject, cell))
             {
                 starObject.SetActive(placementBoardVisible);
@@ -1051,6 +1063,62 @@ namespace FlickDom.Gameplay
 
             yield return MoveStamp(stampObject.transform, impactPosition, startPosition, starStampUpDuration);
             stampObject.SetActive(false);
+        }
+
+        private static void PlayStampSound()
+        {
+            EnsureStampAudioSource();
+            EnsureStampSoundClip();
+            if (stampAudioSource == null || stampSoundClip == null)
+            {
+                return;
+            }
+
+            stampAudioSource.PlayOneShot(stampSoundClip);
+        }
+
+        private static void PreloadStampSound()
+        {
+            EnsureStampAudioSource();
+            EnsureStampSoundClip();
+        }
+
+        private static void EnsureStampAudioSource()
+        {
+            if (stampAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(StampAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(StampAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out stampAudioSource))
+            {
+                stampAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            stampAudioSource.playOnAwake = false;
+            stampAudioSource.loop = false;
+            stampAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureStampSoundClip()
+        {
+            if (stampSoundClip != null)
+            {
+                return;
+            }
+
+            stampSoundClip = Resources.Load<AudioClip>(StampSoundResourcePath);
+            if (stampSoundClip == null)
+            {
+                Debug.LogWarning("[Stamp Audio] Could not load sound at Resources/" + StampSoundResourcePath + ".", null);
+            }
         }
 
         private GameObject GetNextStarStamp()
