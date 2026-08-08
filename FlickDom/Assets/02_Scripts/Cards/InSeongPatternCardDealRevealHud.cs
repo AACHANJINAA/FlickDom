@@ -611,8 +611,8 @@ namespace FlickDom.Gameplay
             RectTransform textRect = textObject.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(30f, 9f);
-            textRect.offsetMax = new Vector2(-30f, -7f);
+            textRect.offsetMin = new Vector2(30f, 16f);
+            textRect.offsetMax = new Vector2(-30f, 0.0f);
 
             stageLabelText = textObject.AddComponent<Text>();
             stageLabelText.font = ResolveFont(stageTextFormat, stageLabelFontSize);

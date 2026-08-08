@@ -1943,8 +1943,8 @@ MonoBehaviour:
   winLabelSize: {x: 520, y: 120}
   restartButtonSize: {x: 220, y: 56}
   returnToMenuButtonSize: {x: 220, y: 56}
-  player1Offset: {x: 168, y: -28}
-  player2Offset: {x: -168, y: -28}
+  player1Offset: {x: 168, y: -34}
+  player2Offset: {x: -140, y: -34}
   turnOffset: {x: -120, y: -76}
   orderOffset: {x: -24, y: -108}
   restartButtonOffset: {x: 0, y: -88}
