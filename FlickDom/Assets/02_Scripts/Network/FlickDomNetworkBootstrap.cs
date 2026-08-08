@@ -3,10 +3,16 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using FlickDom.Gameplay;
 using Unity.Collections;
+using Unity.Networking.Transport.Relay;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using Unity.Services.Authentication;
+using Unity.Services.Core;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -22,6 +28,8 @@ namespace FlickDom.Networking
         [SerializeField] private string hostListenAddress = "0.0.0.0";
         [SerializeField] private bool forceHostListenOnAllInterfaces = true;
         [SerializeField] private bool useWebSocketTransport = true;
+        [SerializeField] private bool useUnityRelay = true;
+        [SerializeField] private string relayConnectionType = "wss";
         [SerializeField] private ushort port = 7777;
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
@@ -57,6 +65,7 @@ namespace FlickDom.Networking
         private const string LoopbackAddress = "127.0.0.1";
         private const string AnyListenAddress = "0.0.0.0";
         private const int MaxHostPortSearchAttempts = 64;
+        private const string DefaultRelayConnectionType = "wss";
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
@@ -68,6 +77,9 @@ namespace FlickDom.Networking
         private PatternCardManager patternCardManager;
         private string addressInput = "127.0.0.1";
         private string portInput = "7777";
+        private string relayJoinCodeInput = string.Empty;
+        private string relayJoinCode = string.Empty;
+        private string networkStatusMessage = string.Empty;
         private bool startGameMessageHandlerRegistered;
         private bool lobbyStateMessageHandlerRegistered;
         private bool gameStateMessageHandlerRegistered;
@@ -130,6 +142,11 @@ namespace FlickDom.Networking
             get { return networkGameStarted || localSinglePlayerModeActive; }
         }
 
+        public bool IsNetworkStartInProgress
+        {
+            get { return networkStartInProgress; }
+        }
+
         public int VisiblePlayerCount
         {
             get { return GetVisiblePlayerCount(); }
@@ -159,6 +176,21 @@ namespace FlickDom.Networking
         public string LobbyStatusText
         {
             get { return GetLobbyHint(CanStartNetworkGame); }
+        }
+
+        public bool UsesUnityRelay
+        {
+            get { return useUnityRelay; }
+        }
+
+        public string RelayJoinCode
+        {
+            get { return relayJoinCode; }
+        }
+
+        public string RelayJoinCodeInput
+        {
+            get { return relayJoinCodeInput; }
         }
 
         public string CurrentConnectAddress
@@ -364,6 +396,12 @@ namespace FlickDom.Networking
         [ContextMenu("Start Host")]
         public void StartHost()
         {
+            if (useUnityRelay)
+            {
+                _ = StartHostWithRelayAsync();
+                return;
+            }
+
             if (!CanStartNetwork())
             {
                 return;
@@ -420,6 +458,12 @@ namespace FlickDom.Networking
         [ContextMenu("Start Client")]
         public void StartClient()
         {
+            if (useUnityRelay)
+            {
+                _ = StartClientWithRelayAsync(relayJoinCodeInput);
+                return;
+            }
+
             if (!CanStartNetwork())
             {
                 return;
@@ -474,6 +518,8 @@ namespace FlickDom.Networking
             networkGameStarted = false;
             localGameStartedFromNetwork = false;
             lobbyPlayerCount = 0;
+            relayJoinCode = string.Empty;
+            networkStatusMessage = string.Empty;
         }
 
         public void SetConnectionTarget(string address, ushort targetPort)
@@ -486,6 +532,17 @@ namespace FlickDom.Networking
 
             connectAddress = string.IsNullOrWhiteSpace(address) ? LoopbackAddress : address.Trim();
             port = targetPort;
+        }
+
+        public void SetRelayJoinCodeInput(string joinCode)
+        {
+            if (networkManager != null && networkManager.IsListening)
+            {
+                Debug.LogWarning("[Network] Cannot change Relay join code while networking is running.", this);
+                return;
+            }
+
+            relayJoinCodeInput = NormalizeRelayJoinCode(joinCode);
         }
 
         public bool AllowsLocalInputFor(FlickDomPlayerId playerId)
@@ -558,6 +615,104 @@ namespace FlickDom.Networking
                 writer.WriteValueSafe(safeMoveDirection);
                 writer.WriteValueSafe(sprint);
                 networkManager.CustomMessagingManager.SendNamedMessage(MonkeyInputMessageName, NetworkManager.ServerClientId, writer);
+            }
+        }
+
+        private async Task StartHostWithRelayAsync()
+        {
+            if (!CanStartNetwork())
+            {
+                return;
+            }
+
+            networkStartInProgress = true;
+            networkStatusMessage = "Creating Relay room...";
+            relayJoinCode = string.Empty;
+
+            try
+            {
+                await EnsureUnityServicesSignedInAsync();
+
+                int maxConnections = Mathf.Max(1, maxPlayers - 1);
+                Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
+                relayJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+
+                ConfigureTransportForRelay(allocation.ToRelayServerData(GetRelayConnectionType()));
+                bool started = networkManager.StartHost();
+                if (!started)
+                {
+                    Debug.LogError("[Network] Failed to start Relay Host.", this);
+                    networkStatusMessage = "Failed to start Relay Host.";
+                    CleanupFailedNetworkStart();
+                    return;
+                }
+
+                RegisterNetworkMessageHandlersIfReady();
+                SetLocalPlayerRole(FlickDomPlayerId.Player1);
+                BroadcastLobbyState();
+                networkStatusMessage = "Relay room created. Join Code: " + relayJoinCode;
+                Debug.Log("[Network] Relay Host started. Join Code: " + relayJoinCode + ".", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[Network] Relay Host start failed: " + exception.Message, this);
+                networkStatusMessage = "Relay Host failed: " + exception.Message;
+                CleanupFailedNetworkStart();
+            }
+            finally
+            {
+                networkStartInProgress = false;
+            }
+        }
+
+        private async Task StartClientWithRelayAsync(string joinCode)
+        {
+            if (!CanStartNetwork())
+            {
+                return;
+            }
+
+            string safeJoinCode = NormalizeRelayJoinCode(joinCode);
+            if (string.IsNullOrEmpty(safeJoinCode))
+            {
+                networkStatusMessage = "Enter a Relay join code.";
+                Debug.LogWarning("[Network] Cannot join Relay room without a join code.", this);
+                return;
+            }
+
+            networkStartInProgress = true;
+            networkStatusMessage = "Joining Relay room...";
+
+            try
+            {
+                await EnsureUnityServicesSignedInAsync();
+
+                JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(safeJoinCode);
+                ConfigureTransportForRelay(allocation.ToRelayServerData(GetRelayConnectionType()));
+                bool started = networkManager.StartClient();
+                if (!started)
+                {
+                    Debug.LogError("[Network] Failed to start Relay Client.", this);
+                    networkStatusMessage = "Failed to start Relay Client.";
+                    CleanupFailedNetworkStart();
+                    return;
+                }
+
+                relayJoinCodeInput = safeJoinCode;
+                RegisterNetworkMessageHandlersIfReady();
+                SetLocalPlayerRole(FlickDomPlayerId.Player2);
+                networkStatusMessage = "Relay Client started. Waiting for connection...";
+                Debug.Log("[Network] Relay Client start requested. Join Code: " + safeJoinCode + ".", this);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("[Network] Relay Client start failed: " + exception.Message, this);
+                networkStatusMessage = "Relay join failed: " + exception.Message;
+                CleanupFailedNetworkStart();
+            }
+            finally
+            {
+                networkStartInProgress = false;
             }
         }
 
@@ -846,6 +1001,13 @@ namespace FlickDom.Networking
             unityTransport.SetConnectionData(address, targetPort);
         }
 
+        private void ConfigureTransportForRelay(RelayServerData relayServerData)
+        {
+            ConfigureTransportProtocol();
+            unityTransport.UseWebSockets = true;
+            unityTransport.SetRelayServerData(relayServerData);
+        }
+
         private void ConfigureTransportProtocol()
         {
             if (unityTransport == null)
@@ -854,6 +1016,33 @@ namespace FlickDom.Networking
             }
 
             unityTransport.UseWebSockets = useWebSocketTransport || IsWebGlRuntime();
+        }
+
+        private string GetRelayConnectionType()
+        {
+            return string.IsNullOrWhiteSpace(relayConnectionType)
+                ? DefaultRelayConnectionType
+                : relayConnectionType.Trim().ToLowerInvariant();
+        }
+
+        private static async Task EnsureUnityServicesSignedInAsync()
+        {
+            if (UnityServices.State != ServicesInitializationState.Initialized)
+            {
+                await UnityServices.InitializeAsync();
+            }
+
+            if (!AuthenticationService.Instance.IsSignedIn)
+            {
+                await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            }
+        }
+
+        private static string NormalizeRelayJoinCode(string joinCode)
+        {
+            return string.IsNullOrWhiteSpace(joinCode)
+                ? string.Empty
+                : joinCode.Trim().Replace(" ", string.Empty).ToUpperInvariant();
         }
 
         private bool TryPrepareHostPort()
@@ -1082,6 +1271,7 @@ namespace FlickDom.Networking
             networkGameStarted = false;
             localGameStartedFromNetwork = false;
             lobbyPlayerCount = 0;
+            relayJoinCode = string.Empty;
         }
 
         private void SubscribeNetworkEvents(bool subscribe)
@@ -1134,6 +1324,12 @@ namespace FlickDom.Networking
             else if (networkManager.IsClient && clientId == networkManager.LocalClientId)
             {
                 SetLocalPlayerRole(FlickDomPlayerId.Player2);
+                networkStatusMessage = string.Empty;
+            }
+
+            if (networkManager.IsHost && clientId != networkManager.LocalClientId)
+            {
+                networkStatusMessage = string.Empty;
             }
 
             Debug.Log("[Network] Client connected: " + clientId + ".", this);
@@ -1228,11 +1424,23 @@ namespace FlickDom.Networking
 
         private string GetLobbyHint(bool canStartGame)
         {
+            if (!string.IsNullOrEmpty(networkStatusMessage))
+            {
+                if (!string.IsNullOrEmpty(relayJoinCode) && IsRunning && networkManager != null && networkManager.IsHost)
+                {
+                    return networkStatusMessage + "\nShare this code: " + relayJoinCode;
+                }
+
+                return networkStatusMessage;
+            }
+
             if (!IsRunning)
             {
                 return localSinglePlayerModeActive
                     ? "Single-player match is running."
-                    : "Create a room, join a room, or start Single Mode.";
+                    : useUnityRelay
+                        ? "Create a Relay room, or enter a join code."
+                        : "Create a room, join a room, or start Single Mode.";
             }
 
             if (networkGameStarted)
@@ -1242,7 +1450,10 @@ namespace FlickDom.Networking
 
             if (networkManager != null && networkManager.IsHost)
             {
-                return canStartGame ? "Two players connected. Start Game is ready." : "Waiting for Player 2.";
+                string hostHint = canStartGame ? "Two players connected. Start Game is ready." : "Waiting for Player 2.";
+                return !string.IsNullOrEmpty(relayJoinCode)
+                    ? hostHint + "\nJoin Code: " + relayJoinCode
+                    : hostHint;
             }
 
             return "Connected. Waiting for Host to start.";

@@ -17,6 +17,7 @@ namespace FlickDom.Gameplay
         private const int MenuCanvasSortingOrder = 300;
         private const string DefaultBundledFontResourcePath = "Fonts/NotoSansKR-VF";
         private const int MaxAddressLength = 64;
+        private const int MaxJoinCodeLength = 16;
         private const int MaxPortLength = 5;
 
         [Header("Background")]
@@ -51,6 +52,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private string gameRulesText = "Rules";
         [SerializeField] private string createRoomText = "Create Room";
         [SerializeField] private string joinRoomText = "Join Room";
+        [SerializeField] private string copyCodeText = "Copy Code";
         [SerializeField] private string startGameText = "Start Game";
         [SerializeField] private string backText = "Back";
         [SerializeField] private string addressLabelText = "IP Address";
@@ -72,12 +74,14 @@ namespace FlickDom.Gameplay
         private GameObject rulesPanel;
         private InputField addressInput;
         private InputField portInput;
+        private Text portLabelTextComponent;
         private Text multiplayerStatusText;
         private Button singleModeButton;
         private Button multiplayerButton;
         private Button gameRulesButton;
         private Button createRoomButton;
         private Button joinRoomButton;
+        private Button copyCodeButton;
         private Button startGameButton;
         private Button multiplayerBackButton;
         private Button rulesBackButton;
@@ -124,9 +128,10 @@ namespace FlickDom.Gameplay
             gameRulesText = "Rules";
             createRoomText = "Create Room";
             joinRoomText = "Join Room";
+            copyCodeText = "Copy Code";
             startGameText = "Start Game";
             backText = "Back";
-            addressLabelText = "IP Address";
+            addressLabelText = "Join Code";
             portLabelText = "Port";
         }
 
@@ -258,15 +263,21 @@ namespace FlickDom.Gameplay
             LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
             titleLayout.preferredHeight = 40f;
 
-            Text addressLabel = CreateText("Address Label", addressLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
+            bool useRelay = bootstrap == null || bootstrap.UsesUnityRelay;
+            Text addressLabel = CreateText("Address Label", useRelay ? "Join Code" : addressLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
             LayoutElement addressLabelLayout = addressLabel.gameObject.AddComponent<LayoutElement>();
             addressLabelLayout.preferredHeight = 22f;
-            addressInput = CreateInputField("Address Input", panel.transform, bootstrap != null ? bootstrap.CurrentConnectAddress : "127.0.0.1");
+            addressInput = CreateInputField("Address Input", panel.transform, useRelay ? string.Empty : bootstrap != null ? bootstrap.CurrentConnectAddress : "127.0.0.1");
 
-            Text portLabel = CreateText("Port Label", portLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
-            LayoutElement portLabelLayout = portLabel.gameObject.AddComponent<LayoutElement>();
+            portLabelTextComponent = CreateText("Port Label", portLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
+            LayoutElement portLabelLayout = portLabelTextComponent.gameObject.AddComponent<LayoutElement>();
             portLabelLayout.preferredHeight = 22f;
             portInput = CreateInputField("Port Input", panel.transform, bootstrap != null ? bootstrap.CurrentPort.ToString() : "7777");
+            SetPortInputVisible(!useRelay);
+
+            copyCodeButton = CreateMenuButton("Copy Code Button", copyCodeText, panel.transform, HandleCopyCodeClicked);
+            SetButtonPreferredHeight(copyCodeButton, 32f);
+            SetCopyCodeButtonVisible(useRelay);
 
             GameObject row = new GameObject("Room Button Row");
             row.transform.SetParent(panel.transform, false);
@@ -286,7 +297,7 @@ namespace FlickDom.Gameplay
             startGameButton = CreateMenuButton("Start Game Button", startGameText, panel.transform, HandleStartGameClicked);
             multiplayerStatusText = CreateText("Multiplayer Status", string.Empty, panel.transform, 18, lightTextColor, TextAnchor.UpperLeft);
             LayoutElement statusLayout = multiplayerStatusText.gameObject.AddComponent<LayoutElement>();
-            statusLayout.preferredHeight = 58f;
+            statusLayout.preferredHeight = 50f;
 
             multiplayerBackButton = CreateMenuButton("Multiplayer Back Button", backText, panel.transform, ShowMainMenu);
             return panel;
@@ -375,6 +386,20 @@ namespace FlickDom.Gameplay
             textRect.offsetMax = new Vector2(-10f, -3f);
 
             return button;
+        }
+
+        private static void SetButtonPreferredHeight(Button button, float height)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            LayoutElement layoutElement = button.GetComponent<LayoutElement>();
+            if (layoutElement != null)
+            {
+                layoutElement.preferredHeight = height;
+            }
         }
 
         private InputField CreateInputField(string objectName, Transform parent, string value)
@@ -508,8 +533,40 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void HandleCopyCodeClicked()
+        {
+            EnsureBootstrap();
+
+            string joinCode = bootstrap != null && !string.IsNullOrEmpty(bootstrap.RelayJoinCode)
+                ? bootstrap.RelayJoinCode
+                : addressInput != null
+                    ? addressInput.text
+                    : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(joinCode))
+            {
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = joinCode.Trim();
+            Debug.Log("[Network] Relay join code copied to clipboard.", this);
+        }
+
         private void ApplyConnectionInput()
         {
+            if (bootstrap != null && bootstrap.UsesUnityRelay)
+            {
+                string joinCode = addressInput != null ? addressInput.text : string.Empty;
+                bootstrap.SetRelayJoinCodeInput(joinCode);
+                if (addressInput != null)
+                {
+                    addressInput.text = bootstrap.RelayJoinCodeInput;
+                    ForceInputLabelUpdate(addressInput);
+                }
+
+                return;
+            }
+
             string address = addressInput != null && !string.IsNullOrWhiteSpace(addressInput.text)
                 ? addressInput.text.Trim()
                 : "127.0.0.1";
@@ -532,14 +589,29 @@ namespace FlickDom.Gameplay
             }
 
             bool hasBootstrap = bootstrap != null;
-            bool canEditConnection = hasBootstrap && !bootstrap.IsRunning;
+            bool useRelay = hasBootstrap && bootstrap.UsesUnityRelay;
+            bool canEditConnection = hasBootstrap && !bootstrap.IsRunning && !bootstrap.IsNetworkStartInProgress;
             bool canStartGame = hasBootstrap && bootstrap.CanStartNetworkGame;
+            bool hasRelayJoinCode = useRelay && !string.IsNullOrEmpty(bootstrap.RelayJoinCode);
 
             if (addressInput != null)
             {
                 addressInput.interactable = canEditConnection;
+                if (useRelay && !addressInput.isFocused)
+                {
+                    string relayCodeText = !string.IsNullOrEmpty(bootstrap.RelayJoinCode)
+                        ? bootstrap.RelayJoinCode
+                        : bootstrap.RelayJoinCodeInput;
+                    if (!string.Equals(addressInput.text, relayCodeText, System.StringComparison.Ordinal))
+                    {
+                        addressInput.text = relayCodeText;
+                        ForceInputLabelUpdate(addressInput);
+                    }
+                }
             }
 
+            SetPortInputVisible(!useRelay);
+            SetCopyCodeButtonVisible(useRelay);
             if (portInput != null)
             {
                 portInput.interactable = canEditConnection;
@@ -565,6 +637,11 @@ namespace FlickDom.Gameplay
                 joinRoomButton.interactable = canEditConnection;
             }
 
+            if (copyCodeButton != null)
+            {
+                copyCodeButton.interactable = hasRelayJoinCode;
+            }
+
             if (startGameButton != null)
             {
                 startGameButton.interactable = canStartGame;
@@ -573,10 +650,10 @@ namespace FlickDom.Gameplay
             if (multiplayerStatusText != null)
             {
                 multiplayerStatusText.text = hasBootstrap
-                    ? "상태: " + bootstrap.CurrentNetworkModeText
-                        + "\n플레이어: " + bootstrap.VisiblePlayerCount + " / " + bootstrap.MaxPlayers
+                    ? "Status: " + bootstrap.CurrentNetworkModeText
+                        + "\nPlayers: " + bootstrap.VisiblePlayerCount + " / " + bootstrap.MaxPlayers
                         + "\n" + bootstrap.LobbyStatusText
-                    : "상태: 초기화 중";
+                    : "Status: Initializing";
             }
         }
 
@@ -618,6 +695,7 @@ namespace FlickDom.Gameplay
                 ClearFocusedConnectionInput();
                 TryInvokeButtonAt(createRoomButton, screenPosition);
                 TryInvokeButtonAt(joinRoomButton, screenPosition);
+                TryInvokeButtonAt(copyCodeButton, screenPosition);
                 TryInvokeButtonAt(startGameButton, screenPosition);
                 TryInvokeButtonAt(multiplayerBackButton, screenPosition);
                 return;
@@ -672,7 +750,10 @@ namespace FlickDom.Gameplay
 
             if (keyboard.tabKey.wasPressedThisFrame)
             {
-                FocusConnectionInput(focusedConnectionInput == addressInput ? portInput : addressInput);
+                InputField nextInput = focusedConnectionInput == addressInput && IsInputAvailable(portInput)
+                    ? portInput
+                    : addressInput;
+                FocusConnectionInput(nextInput);
                 return true;
             }
 
@@ -954,12 +1035,22 @@ namespace FlickDom.Gameplay
                 replaceFocusedInputOnNextCharacter = false;
             }
 
+            bool relayJoinCodeInput = IsRelayJoinCodeInput(focusedConnectionInput);
             if (focusedConnectionInput == portInput)
             {
                 if (!char.IsDigit(character) || currentText.Length >= MaxPortLength)
                 {
                     return;
                 }
+            }
+            else if (relayJoinCodeInput)
+            {
+                if (!char.IsLetterOrDigit(character) || currentText.Length >= MaxJoinCodeLength)
+                {
+                    return;
+                }
+
+                character = char.ToUpperInvariant(character);
             }
             else if (!IsAllowedAddressCharacter(character) || currentText.Length >= MaxAddressLength)
             {
@@ -987,7 +1078,12 @@ namespace FlickDom.Gameplay
                 : focusedConnectionInput.text ?? string.Empty;
             replaceFocusedInputOnNextCharacter = false;
 
-            int maxLength = focusedConnectionInput == portInput ? MaxPortLength : MaxAddressLength;
+            bool relayJoinCodeInput = IsRelayJoinCodeInput(focusedConnectionInput);
+            int maxLength = focusedConnectionInput == portInput
+                ? MaxPortLength
+                : relayJoinCodeInput
+                    ? MaxJoinCodeLength
+                    : MaxAddressLength;
             System.Text.StringBuilder builder = new System.Text.StringBuilder(currentText, maxLength);
             for (int i = 0; i < clipboardText.Length && builder.Length < maxLength; i++)
             {
@@ -997,6 +1093,16 @@ namespace FlickDom.Gameplay
                     if (char.IsDigit(character))
                     {
                         builder.Append(character);
+                    }
+
+                    continue;
+                }
+
+                if (relayJoinCodeInput)
+                {
+                    if (char.IsLetterOrDigit(character))
+                    {
+                        builder.Append(char.ToUpperInvariant(character));
                     }
 
                     continue;
@@ -1021,6 +1127,45 @@ namespace FlickDom.Gameplay
             focusedConnectionInput.text = text ?? string.Empty;
             focusedConnectionInput.MoveTextEnd(false);
             ForceInputLabelUpdate(focusedConnectionInput);
+        }
+
+        private void SetPortInputVisible(bool visible)
+        {
+            if (portLabelTextComponent != null)
+            {
+                portLabelTextComponent.gameObject.SetActive(visible);
+            }
+
+            if (portInput != null)
+            {
+                portInput.gameObject.SetActive(visible);
+                if (!visible && focusedConnectionInput == portInput)
+                {
+                    ClearFocusedConnectionInput();
+                }
+            }
+        }
+
+        private void SetCopyCodeButtonVisible(bool visible)
+        {
+            if (copyCodeButton != null)
+            {
+                copyCodeButton.gameObject.SetActive(visible);
+            }
+        }
+
+        private bool IsRelayJoinCodeInput(InputField inputField)
+        {
+            return inputField == addressInput
+                && bootstrap != null
+                && bootstrap.UsesUnityRelay;
+        }
+
+        private static bool IsInputAvailable(InputField inputField)
+        {
+            return inputField != null
+                && inputField.isActiveAndEnabled
+                && inputField.interactable;
         }
 
         private static bool IsAllowedAddressCharacter(char character)
