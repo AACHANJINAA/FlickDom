@@ -50,6 +50,8 @@ namespace FlickDom.Gameplay
 
         private const string DefaultOrderMarkup =
             "<color=#FFAD0D>1</color>  <color=#2ED17A>2</color>  <color=#26ADFF>3</color>";
+        private const string GetPointSoundResourcePath = "Audio/GetPoint";
+        private const string GetPointAudioObjectName = "Player Score Get Point Audio";
         private static readonly Vector2 RuntimeRestartButtonOffset = new Vector2(0f, -78f);
         private static readonly Vector2 RuntimeReturnToMenuButtonOffset = new Vector2(0f, -142f);
 
@@ -64,6 +66,11 @@ namespace FlickDom.Gameplay
         private Button restartButton;
         private Button returnToMenuButton;
         private LocalFlickTurnTestRig turnTestRig;
+        private int lastPlayer1Score;
+        private int lastPlayer2Score;
+        private bool hasScoreSnapshot;
+        private static AudioSource getPointAudioSource;
+        private static AudioClip getPointSoundClip;
 
         private void Awake()
         {
@@ -79,6 +86,7 @@ namespace FlickDom.Gameplay
 
             turnTestRig = GetComponent<LocalFlickTurnTestRig>();
             BuildHud();
+            PreloadGetPointSound();
         }
 
         private void OnEnable()
@@ -160,8 +168,10 @@ namespace FlickDom.Gameplay
             int player1Score,
             int player2Score)
         {
+            PlayGetPointSoundIfScoreIncreased(player1Score, player2Score);
             SetScoreText(player1Text, player1Prefix, player1Score);
             SetScoreText(player2Text, player2Prefix, player2Score);
+            StoreScoreSnapshot(player1Score, player2Score);
 
             if (cardManager == null || cardManager.Winner == FlickDomPlayerId.None)
             {
@@ -175,12 +185,14 @@ namespace FlickDom.Gameplay
             int p2 = cardManager != null ? cardManager.Player2Score : 0;
             SetScoreText(player1Text, player1Prefix, p1);
             SetScoreText(player2Text, player2Prefix, p2);
+            StoreScoreSnapshot(p1, p2);
         }
 
         private void HandleMatchWon(FlickDomPlayerId winner, int player1Score, int player2Score)
         {
             SetScoreText(player1Text, player1Prefix, player1Score);
             SetScoreText(player2Text, player2Prefix, player2Score);
+            StoreScoreSnapshot(player1Score, player2Score);
             RefreshTurnIndicator();
             ShowWinText(winner);
             SetRestartButtonVisible(true);
@@ -553,6 +565,82 @@ namespace FlickDom.Gameplay
             }
 
             text.text = prefix + "  " + score;
+        }
+
+        private void PlayGetPointSoundIfScoreIncreased(int player1Score, int player2Score)
+        {
+            if (!hasScoreSnapshot)
+            {
+                return;
+            }
+
+            if (player1Score > lastPlayer1Score || player2Score > lastPlayer2Score)
+            {
+                PlayGetPointSound();
+            }
+        }
+
+        private void StoreScoreSnapshot(int player1Score, int player2Score)
+        {
+            lastPlayer1Score = player1Score;
+            lastPlayer2Score = player2Score;
+            hasScoreSnapshot = true;
+        }
+
+        private static void PlayGetPointSound()
+        {
+            EnsureGetPointAudioSource();
+            EnsureGetPointSoundClip();
+            if (getPointAudioSource == null || getPointSoundClip == null)
+            {
+                return;
+            }
+
+            getPointAudioSource.PlayOneShot(getPointSoundClip);
+        }
+
+        private static void PreloadGetPointSound()
+        {
+            EnsureGetPointAudioSource();
+            EnsureGetPointSoundClip();
+        }
+
+        private static void EnsureGetPointAudioSource()
+        {
+            if (getPointAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(GetPointAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(GetPointAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out getPointAudioSource))
+            {
+                getPointAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            getPointAudioSource.playOnAwake = false;
+            getPointAudioSource.loop = false;
+            getPointAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureGetPointSoundClip()
+        {
+            if (getPointSoundClip != null)
+            {
+                return;
+            }
+
+            getPointSoundClip = Resources.Load<AudioClip>(GetPointSoundResourcePath);
+            if (getPointSoundClip == null)
+            {
+                Debug.LogWarning("[GetPoint Audio] Could not load sound at Resources/" + GetPointSoundResourcePath + ".", null);
+            }
         }
 
         private static void SetTurnText(Text text, bool isActive, string turnText)
