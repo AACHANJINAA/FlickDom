@@ -52,6 +52,8 @@ namespace FlickDom.Gameplay
             "<color=#FFAD0D>1</color>  <color=#2ED17A>2</color>  <color=#26ADFF>3</color>";
         private const string GetPointSoundResourcePath = "Audio/GetPoint";
         private const string GetPointAudioObjectName = "Player Score Get Point Audio";
+        private const string YouWinSoundResourcePath = "Audio/YouWin";
+        private const string YouWinAudioObjectName = "Player Score You Win Audio";
         private static readonly Vector2 RuntimeRestartButtonOffset = new Vector2(0f, -78f);
         private static readonly Vector2 RuntimeReturnToMenuButtonOffset = new Vector2(0f, -142f);
 
@@ -71,6 +73,8 @@ namespace FlickDom.Gameplay
         private bool hasScoreSnapshot;
         private static AudioSource getPointAudioSource;
         private static AudioClip getPointSoundClip;
+        private static AudioSource youWinAudioSource;
+        private static AudioClip youWinSoundClip;
 
         private void Awake()
         {
@@ -87,6 +91,7 @@ namespace FlickDom.Gameplay
             turnTestRig = GetComponent<LocalFlickTurnTestRig>();
             BuildHud();
             PreloadGetPointSound();
+            PreloadYouWinSound();
         }
 
         private void OnEnable()
@@ -190,6 +195,7 @@ namespace FlickDom.Gameplay
 
         private void HandleMatchWon(FlickDomPlayerId winner, int player1Score, int player2Score)
         {
+            PlayYouWinSound();
             SetScoreText(player1Text, player1Prefix, player1Score);
             SetScoreText(player2Text, player2Prefix, player2Score);
             StoreScoreSnapshot(player1Score, player2Score);
@@ -640,6 +646,62 @@ namespace FlickDom.Gameplay
             if (getPointSoundClip == null)
             {
                 Debug.LogWarning("[GetPoint Audio] Could not load sound at Resources/" + GetPointSoundResourcePath + ".", null);
+            }
+        }
+
+        private static void PlayYouWinSound()
+        {
+            EnsureYouWinAudioSource();
+            EnsureYouWinSoundClip();
+            if (youWinAudioSource == null || youWinSoundClip == null)
+            {
+                return;
+            }
+
+            youWinAudioSource.PlayOneShot(youWinSoundClip);
+        }
+
+        private static void PreloadYouWinSound()
+        {
+            EnsureYouWinAudioSource();
+            EnsureYouWinSoundClip();
+        }
+
+        private static void EnsureYouWinAudioSource()
+        {
+            if (youWinAudioSource != null)
+            {
+                return;
+            }
+
+            GameObject audioObject = GameObject.Find(YouWinAudioObjectName);
+            if (audioObject == null)
+            {
+                audioObject = new GameObject(YouWinAudioObjectName);
+                DontDestroyOnLoad(audioObject);
+            }
+
+            if (!audioObject.TryGetComponent(out youWinAudioSource))
+            {
+                youWinAudioSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            youWinAudioSource.playOnAwake = false;
+            youWinAudioSource.loop = false;
+            youWinAudioSource.spatialBlend = 0f;
+        }
+
+        private static void EnsureYouWinSoundClip()
+        {
+            if (youWinSoundClip != null)
+            {
+                return;
+            }
+
+            youWinSoundClip = Resources.Load<AudioClip>(YouWinSoundResourcePath);
+            if (youWinSoundClip == null)
+            {
+                Debug.LogWarning("[YouWin Audio] Could not load sound at Resources/" + YouWinSoundResourcePath + ".", null);
             }
         }
 
