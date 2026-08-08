@@ -185,3 +185,12 @@
   - 선택한 `LaunchRig`를 씬의 원숭이 컨트롤러 런처로 연결하고 원본 프리뷰를 숨기는 에디터 메뉴를 추가했다.
   - 포스트형 `LaunchRig`의 줄이 돌 한 점에 모이지 않고 돌 양옆과 뒤쪽을 감싸는 주머니 형태로 당겨졌다가 반동하도록 보강했다.
   - 보드가 런타임에 생성되는 `good_Scene`에서도 바로 적용할 수 있도록 `PF_LaunchPost` 두 개로 `LaunchRig`를 자동 생성하고 원숭이 런처로 연결하는 에디터 메뉴를 추가했다.
+
+## 2026-08-08
+
+- [2026-08-08 16시]
+  - P2 클라이언트의 원숭이 이동이 Host pose 왕복을 기다리지 않고 로컬 Rigidbody 이동을 먼저 실행한 뒤 Host 권위 위치로 보정되도록 client prediction을 추가했다.
+  - 원숭이 pose 메시지에 server tick과 timestamp, 입력 메시지에 sequence number를 포함해 오래된 입력과 오래된 pose를 무시하도록 했다.
+  - 원격 원숭이와 비소유 알은 수신 Transform을 즉시 덮어쓰지 않고 2~3개 snapshot을 기준으로 약간 과거 시점을 보간해 렌더링하도록 변경했다.
+  - P2 알 발사 요청 후 클라이언트도 즉시 같은 impulse로 물리 발사를 시작하고, Host의 위치·회전·속도·각속도 상태로 작은 오차는 부드럽게 보정하고 큰 오차는 snap하도록 했다.
+  - 움직이는 알만 주기적으로 `PieceTransform` 상태를 보내고, 모든 알이 정지하면 `PhysicsSettled` reliable final snapshot으로 Host 상태에 완전히 맞추도록 했다.

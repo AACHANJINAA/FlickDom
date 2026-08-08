@@ -44,6 +44,13 @@ namespace FlickDom.Gameplay
         [SerializeField] private float rotationSpeed = 540f;
         [SerializeField] private bool faceCameraDirectionWhenIdle = true;
 
+        [Header("Network Smoothing")]
+        [SerializeField, Min(0.02f)] private float snapshotInterpolationBackTime = 0.1f;
+        [SerializeField, Min(0f)] private float owningPredictionIgnoreDistance = 0.08f;
+        [SerializeField, Min(0.01f)] private float owningPredictionSnapDistance = 1.5f;
+        [SerializeField, Range(0.01f, 1f)] private float owningPredictionCorrectionBlend = 0.25f;
+        [SerializeField, Min(0.01f)] private float remoteInterpolationSnapDistance = 2f;
+
         [Header("Animation")]
         [SerializeField] private Animator animator;
         [SerializeField] private bool driveAnimator = true;
@@ -83,6 +90,13 @@ namespace FlickDom.Gameplay
         private bool lastSubmittedNetworkSprintHeld;
         private float nextNetworkInputSubmitTime;
         private bool allowLocalStandaloneInput = true;
+        private uint nextNetworkInputSequence;
+        private readonly NetworkPoseSnapshot[] networkPoseSnapshots = new NetworkPoseSnapshot[SnapshotBufferSize];
+        private int networkPoseSnapshotCount;
+        private uint latestNetworkPoseTick;
+        private bool hasLatestNetworkPoseTick;
+
+        private const int SnapshotBufferSize = 4;
 
         public FlickDomPlayerId Owner
         {
@@ -134,6 +148,11 @@ namespace FlickDom.Gameplay
             walkSpeed = Mathf.Max(0f, walkSpeed);
             sprintSpeed = Mathf.Max(walkSpeed, sprintSpeed);
             rotationSpeed = Mathf.Max(0f, rotationSpeed);
+            snapshotInterpolationBackTime = Mathf.Max(0.02f, snapshotInterpolationBackTime);
+            owningPredictionIgnoreDistance = Mathf.Max(0f, owningPredictionIgnoreDistance);
+            owningPredictionSnapDistance = Mathf.Max(owningPredictionIgnoreDistance + 0.01f, owningPredictionSnapDistance);
+            owningPredictionCorrectionBlend = Mathf.Clamp01(owningPredictionCorrectionBlend);
+            remoteInterpolationSnapDistance = Mathf.Max(0.01f, remoteInterpolationSnapDistance);
             animationCrossFadeSeconds = Mathf.Max(0f, animationCrossFadeSeconds);
             slingshotLauncherScale.x = Mathf.Max(0.001f, slingshotLauncherScale.x);
             slingshotLauncherScale.y = Mathf.Max(0.001f, slingshotLauncherScale.y);
@@ -145,6 +164,7 @@ namespace FlickDom.Gameplay
         {
             ReadMovementInput();
             SubmitNetworkMovementInputIfNeeded();
+            RenderNetworkPoseIfNeeded();
             UpdateAnimationState();
         }
 
@@ -203,6 +223,16 @@ namespace FlickDom.Gameplay
 
         public void ApplyNetworkPose(Vector3 position, Quaternion rotation)
         {
+            ApplyNetworkPose(position, rotation, 0u, Time.unscaledTimeAsDouble);
+        }
+
+        public void ApplyNetworkPose(Vector3 position, Quaternion rotation, uint serverTick, double timestamp)
+        {
+            if (!ShouldAcceptNetworkPoseTick(serverTick))
+            {
+                return;
+            }
+
             if (cachedTransform == null)
             {
                 cachedTransform = transform;
@@ -213,14 +243,13 @@ namespace FlickDom.Gameplay
                 cachedRigidbody = GetComponent<Rigidbody>();
             }
 
-            cachedTransform.SetPositionAndRotation(position, rotation);
-            if (cachedRigidbody != null)
+            if (ShouldPredictLocalNetworkMovement())
             {
-                cachedRigidbody.position = position;
-                cachedRigidbody.rotation = rotation;
-                cachedRigidbody.linearVelocity = Vector3.zero;
-                cachedRigidbody.angularVelocity = Vector3.zero;
+                ReconcilePredictedPose(position, rotation);
+                return;
             }
+
+            AddNetworkPoseSnapshot(serverTick, timestamp, position, rotation);
         }
 
         public void ConfigureSlingshotLauncher(GameObject prefab, Material material)
@@ -484,19 +513,189 @@ namespace FlickDom.Gameplay
             nextNetworkInputSubmitTime = Time.unscaledTime + NetworkInputSendInterval;
             lastSubmittedNetworkMoveDirection = desiredMoveDirection;
             lastSubmittedNetworkSprintHeld = sprintHeld;
-            bootstrap.SubmitMonkeyMovementInputToHost(owner, desiredMoveDirection, sprintHeld);
+            bootstrap.SubmitMonkeyMovementInputToHost(owner, desiredMoveDirection, sprintHeld, nextNetworkInputSequence++);
         }
 
         private bool ShouldUseNetworkPoseOnly()
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
-            return bootstrap != null && bootstrap.IsClientOnly;
+            return bootstrap != null && bootstrap.IsClientOnly && bootstrap.LocalPlayerId != owner;
+        }
+
+        private bool ShouldPredictLocalNetworkMovement()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap != null && bootstrap.IsClientOnly && bootstrap.LocalPlayerId == owner;
         }
 
         private bool HasActiveNetworkMovementInput()
         {
             return Time.time <= networkInputExpiresAt
                 && networkMoveDirection.sqrMagnitude > MinInputMagnitude;
+        }
+
+        private void ReconcilePredictedPose(Vector3 position, Quaternion rotation)
+        {
+            if (cachedRigidbody == null)
+            {
+                cachedTransform.SetPositionAndRotation(position, rotation);
+                return;
+            }
+
+            float error = Vector3.Distance(cachedRigidbody.position, position);
+            if (error <= owningPredictionIgnoreDistance)
+            {
+                return;
+            }
+
+            if (error >= owningPredictionSnapDistance)
+            {
+                cachedTransform.SetPositionAndRotation(position, rotation);
+                cachedRigidbody.position = position;
+                cachedRigidbody.rotation = rotation;
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+                return;
+            }
+
+            Vector3 correctedPosition = Vector3.Lerp(
+                cachedRigidbody.position,
+                position,
+                owningPredictionCorrectionBlend);
+            Quaternion correctedRotation = Quaternion.Slerp(
+                cachedRigidbody.rotation,
+                rotation,
+                owningPredictionCorrectionBlend);
+            cachedTransform.SetPositionAndRotation(correctedPosition, correctedRotation);
+            cachedRigidbody.position = correctedPosition;
+            cachedRigidbody.rotation = correctedRotation;
+        }
+
+        private void AddNetworkPoseSnapshot(uint tick, double timestamp, Vector3 position, Quaternion rotation)
+        {
+            if (networkPoseSnapshotCount >= SnapshotBufferSize)
+            {
+                for (int i = 1; i < SnapshotBufferSize; i++)
+                {
+                    networkPoseSnapshots[i - 1] = networkPoseSnapshots[i];
+                }
+
+                networkPoseSnapshotCount = SnapshotBufferSize - 1;
+            }
+
+            networkPoseSnapshots[networkPoseSnapshotCount++] = new NetworkPoseSnapshot
+            {
+                Tick = tick,
+                Timestamp = timestamp,
+                Position = position,
+                Rotation = rotation
+            };
+        }
+
+        private bool ShouldAcceptNetworkPoseTick(uint tick)
+        {
+            if (tick == 0u)
+            {
+                return true;
+            }
+
+            if (!hasLatestNetworkPoseTick || IsTickNewerOrEqual(tick, latestNetworkPoseTick))
+            {
+                hasLatestNetworkPoseTick = true;
+                latestNetworkPoseTick = tick;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsTickNewerOrEqual(uint incoming, uint previous)
+        {
+            return incoming == previous || (int)(incoming - previous) > 0;
+        }
+
+        private void RenderNetworkPoseIfNeeded()
+        {
+            if (!ShouldUseNetworkPoseOnly() || networkPoseSnapshotCount <= 0)
+            {
+                return;
+            }
+
+            double renderTime = GetNetworkRenderTime();
+            NetworkPoseSnapshot target = networkPoseSnapshots[networkPoseSnapshotCount - 1];
+            if (networkPoseSnapshotCount >= 2)
+            {
+                for (int i = 0; i < networkPoseSnapshotCount - 1; i++)
+                {
+                    NetworkPoseSnapshot from = networkPoseSnapshots[i];
+                    NetworkPoseSnapshot to = networkPoseSnapshots[i + 1];
+                    if (renderTime < from.Timestamp || renderTime > to.Timestamp)
+                    {
+                        continue;
+                    }
+
+                    double duration = Math.Max(0.0001d, to.Timestamp - from.Timestamp);
+                    float t = Mathf.Clamp01((float)((renderTime - from.Timestamp) / duration));
+                    target = new NetworkPoseSnapshot
+                    {
+                        Tick = to.Tick,
+                        Timestamp = renderTime,
+                        Position = Vector3.Lerp(from.Position, to.Position, t),
+                        Rotation = Quaternion.Slerp(from.Rotation, to.Rotation, t)
+                    };
+                    break;
+                }
+            }
+
+            ApplyRenderedNetworkPose(target.Position, target.Rotation);
+        }
+
+        private double GetNetworkRenderTime()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null && bootstrap.NetworkManager != null)
+            {
+                return bootstrap.NetworkManager.ServerTime.Time - snapshotInterpolationBackTime;
+            }
+
+            return Time.unscaledTimeAsDouble - snapshotInterpolationBackTime;
+        }
+
+        private void ApplyRenderedNetworkPose(Vector3 position, Quaternion rotation)
+        {
+            if (cachedTransform == null)
+            {
+                cachedTransform = transform;
+            }
+
+            if (cachedRigidbody == null)
+            {
+                cachedRigidbody = GetComponent<Rigidbody>();
+            }
+
+            Vector3 currentPosition = cachedRigidbody != null
+                ? cachedRigidbody.position
+                : cachedTransform.position;
+            if (Vector3.Distance(currentPosition, position) >= remoteInterpolationSnapDistance)
+            {
+                networkPoseSnapshotCount = 1;
+                networkPoseSnapshots[0] = new NetworkPoseSnapshot
+                {
+                    Tick = 0u,
+                    Timestamp = GetNetworkRenderTime(),
+                    Position = position,
+                    Rotation = rotation
+                };
+            }
+
+            cachedTransform.SetPositionAndRotation(position, rotation);
+            if (cachedRigidbody != null)
+            {
+                cachedRigidbody.position = position;
+                cachedRigidbody.rotation = rotation;
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
         }
 
         private void StopHorizontalMovement()
@@ -897,6 +1096,14 @@ namespace FlickDom.Gameplay
         private void RefreshLocalStandaloneInputPolicy()
         {
             allowLocalStandaloneInput = owner != FlickDomPlayerId.Player2 || !HasMultiplePlayerMonkeys();
+        }
+
+        private struct NetworkPoseSnapshot
+        {
+            public uint Tick;
+            public double Timestamp;
+            public Vector3 Position;
+            public Quaternion Rotation;
         }
     }
 }

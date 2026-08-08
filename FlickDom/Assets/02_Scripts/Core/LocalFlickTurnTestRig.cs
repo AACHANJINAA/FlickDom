@@ -348,12 +348,13 @@ namespace FlickDom.Gameplay
             }
 
             Mouse mouse = Mouse.current;
-            if (mouse == null || inputCamera == null || !mouse.leftButton.wasPressedThisFrame)
+            if (mouse == null || inputCamera == null)
             {
                 return;
             }
 
-            if (ShouldSuppressPieceOrderInput(mouse))
+            UpdatePieceOrderInputSuppression(mouse);
+            if (!mouse.leftButton.wasPressedThisFrame || ShouldSuppressPieceOrderClick())
             {
                 return;
             }
@@ -1044,6 +1045,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!CanControlLocalGameState())
+            {
+                return;
+            }
+
             if (logStateChanges)
             {
                 Debug.Log("[TurnTest] Piece died: " + piece.PieceId + " left the playable board.", this);
@@ -1057,6 +1063,11 @@ namespace FlickDom.Gameplay
         {
             if (gameModeManager == null
                 || gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing)
+            {
+                return;
+            }
+
+            if (!CanControlLocalGameState())
             {
                 return;
             }
@@ -1118,8 +1129,20 @@ namespace FlickDom.Gameplay
             physicsCompletionRoutine = null;
             if (gameModeManager != null && gameModeManager.CurrentState == FlickDomGameState.PhysicsProcessing)
             {
+                NotifyNetworkPhysicsSettledIfHost();
                 gameModeManager.CompleteCurrentPlayerPhysics();
             }
+        }
+
+        private static void NotifyNetworkPhysicsSettledIfHost()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsHost)
+            {
+                return;
+            }
+
+            bootstrap.NotifyHostPhysicsSettled();
         }
 
         private void StopPendingPhysicsCompletion()
@@ -1220,26 +1243,28 @@ namespace FlickDom.Gameplay
             pieceOrderInputUnlockFrame = Time.frameCount + 1;
         }
 
-        private bool ShouldSuppressPieceOrderInput(Mouse mouse)
+        private void UpdatePieceOrderInputSuppression(Mouse mouse)
         {
-            EventSystem eventSystem = EventSystem.current;
-            if (eventSystem != null && eventSystem.IsPointerOverGameObject())
-            {
-                return true;
-            }
-
             if (!suppressPieceOrderInputUntilPointerReleased)
             {
-                return false;
+                return;
             }
 
-            if (mouse.leftButton.isPressed || Time.frameCount <= pieceOrderInputUnlockFrame)
+            if (!mouse.leftButton.isPressed && Time.frameCount > pieceOrderInputUnlockFrame)
+            {
+                suppressPieceOrderInputUntilPointerReleased = false;
+            }
+        }
+
+        private bool ShouldSuppressPieceOrderClick()
+        {
+            if (suppressPieceOrderInputUntilPointerReleased)
             {
                 return true;
             }
 
-            suppressPieceOrderInputUntilPointerReleased = false;
-            return false;
+            EventSystem eventSystem = EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
         }
 
         private void BeginNoPlacementAdvanceIfNeeded()

@@ -54,6 +54,7 @@ namespace FlickDom.Networking
         private const string PieceOrderSelectionMessageName = "FlickDom.PieceOrderSelection";
         private const string PieceOrderStateMessageName = "FlickDom.PieceOrderState";
         private const string PieceTransformMessageName = "FlickDom.PieceTransform";
+        private const string PhysicsSettledMessageName = "FlickDom.PhysicsSettled";
         private const string PlacementRequestMessageName = "FlickDom.PlacementRequest";
         private const string PlacementAcceptedMessageName = "FlickDom.PlacementAccepted";
         private const string PlacementCandidatesMessageName = "FlickDom.PlacementCandidates";
@@ -94,6 +95,7 @@ namespace FlickDom.Networking
         private bool pieceOrderSelectionMessageHandlerRegistered;
         private bool pieceOrderStateMessageHandlerRegistered;
         private bool pieceTransformMessageHandlerRegistered;
+        private bool physicsSettledMessageHandlerRegistered;
         private bool placementRequestMessageHandlerRegistered;
         private bool placementAcceptedMessageHandlerRegistered;
         private bool placementCandidatesMessageHandlerRegistered;
@@ -112,6 +114,11 @@ namespace FlickDom.Networking
         private bool networkStartInProgress;
         private int lobbyPlayerCount;
         private float nextTransformBroadcastTime;
+        private uint serverTick;
+        private uint lastPlayer1MonkeyInputSequence;
+        private uint lastPlayer2MonkeyInputSequence;
+        private bool hasPlayer1MonkeyInputSequence;
+        private bool hasPlayer2MonkeyInputSequence;
 
         public NetworkManager NetworkManager
         {
@@ -404,6 +411,7 @@ namespace FlickDom.Networking
         {
             if (useUnityRelay)
             {
+                ResetNetworkRuntimeState();
                 _ = StartHostWithRelayAsync();
                 return;
             }
@@ -419,6 +427,7 @@ namespace FlickDom.Networking
                 return;
             }
 
+            ResetNetworkRuntimeState();
             networkStartInProgress = true;
             string listenAddress = GetHostListenAddress();
             Debug.Log("[Network] Preparing Host. Requested port: " + port
@@ -526,6 +535,7 @@ namespace FlickDom.Networking
             lobbyPlayerCount = 0;
             relayJoinCode = string.Empty;
             networkStatusMessage = string.Empty;
+            ResetNetworkRuntimeState();
         }
 
         public void SetConnectionTarget(string address, ushort targetPort)
@@ -604,7 +614,7 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
         }
 
-        public void SubmitMonkeyMovementInputToHost(FlickDomPlayerId owner, Vector3 moveDirection, bool sprint)
+        public void SubmitMonkeyMovementInputToHost(FlickDomPlayerId owner, Vector3 moveDirection, bool sprint, uint sequence)
         {
             if (networkManager == null
                 || !networkManager.IsClient
@@ -615,9 +625,10 @@ namespace FlickDom.Networking
             }
 
             Vector3 safeMoveDirection = ClampNetworkMoveDirection(moveDirection);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(float) * 3 + sizeof(bool), Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(uint) + sizeof(float) * 3 + sizeof(bool), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
+                writer.WriteValueSafe(sequence);
                 writer.WriteValueSafe(safeMoveDirection);
                 writer.WriteValueSafe(sprint);
                 networkManager.CustomMessagingManager.SendNamedMessage(
@@ -803,6 +814,18 @@ namespace FlickDom.Networking
             SendAllPieceTransformsToClients();
             SendAllMonkeyPosesToClients();
             Debug.Log("[Network] Flick accepted broadcast. Player: " + owner + ", Piece: " + pieceId + ".", this);
+        }
+
+        public void NotifyHostPhysicsSettled()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            SendPhysicsSettledToClients();
         }
 
         public void NotifyHostPlacementApplied(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
@@ -1832,6 +1855,13 @@ namespace FlickDom.Networking
                 Debug.Log("[Network] Piece transform message handler registered.", this);
             }
 
+            if (!physicsSettledMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PhysicsSettledMessageName, HandlePhysicsSettledMessage);
+                physicsSettledMessageHandlerRegistered = true;
+                Debug.Log("[Network] Physics settled message handler registered.", this);
+            }
+
             if (!placementRequestMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlacementRequestMessageName, HandlePlacementRequestMessage);
@@ -1968,6 +1998,12 @@ namespace FlickDom.Networking
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PieceTransformMessageName);
                 pieceTransformMessageHandlerRegistered = false;
+            }
+
+            if (physicsSettledMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PhysicsSettledMessageName);
+                physicsSettledMessageHandlerRegistered = false;
             }
 
             if (placementRequestMessageHandlerRegistered)
@@ -2269,6 +2305,7 @@ namespace FlickDom.Networking
             }
 
             reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out uint sequence);
             reader.ReadValueSafe(out Vector3 moveDirection);
             reader.ReadValueSafe(out bool sprint);
 
@@ -2278,6 +2315,11 @@ namespace FlickDom.Networking
             if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
             {
                 Debug.LogWarning("[Network] Rejected monkey input from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
+
+            if (!ShouldAcceptMonkeyInputSequence(owner, sequence))
+            {
                 return;
             }
 
@@ -2306,13 +2348,15 @@ namespace FlickDom.Networking
             }
 
             reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out uint serverTickValue);
+            reader.ReadValueSafe(out double timestamp);
             reader.ReadValueSafe(out Vector3 position);
             reader.ReadValueSafe(out Quaternion rotation);
 
             MonkeyThirdPersonController monkey = FindMonkey((FlickDomPlayerId)ownerValue);
             if (monkey != null)
             {
-                monkey.ApplyNetworkPose(position, rotation);
+                monkey.ApplyNetworkPose(position, rotation, serverTickValue, timestamp);
             }
         }
 
@@ -2522,11 +2566,30 @@ namespace FlickDom.Networking
             }
 
             nextTransformBroadcastTime = Time.unscaledTime + Mathf.Max(0.01f, transformBroadcastInterval);
-            SendAllPieceTransformsToClients();
-            SendAllMonkeyPosesToClients();
+            uint tick = NextServerTick();
+            double timestamp = GetNetworkTimestamp();
+            SendMovingPieceTransformsToClients(tick, timestamp);
+            SendAllMonkeyPosesToClients(tick, timestamp);
         }
 
         private void SendAllPieceTransformsToClients()
+        {
+            uint tick = NextServerTick();
+            double timestamp = GetNetworkTimestamp();
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            List<TurnBasedFlickPiece> pieces = CollectUniqueFlickPieces();
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                SendPieceTransformToClients(pieces[i], clients, tick, timestamp, false);
+            }
+        }
+
+        private void SendMovingPieceTransformsToClients(uint tick, double timestamp)
         {
             List<ulong> clients = GetRemoteClientIds();
             if (clients.Count <= 0)
@@ -2537,20 +2600,31 @@ namespace FlickDom.Networking
             List<TurnBasedFlickPiece> pieces = CollectUniqueFlickPieces();
             for (int i = 0; i < pieces.Count; i++)
             {
-                SendPieceTransformToClients(pieces[i], clients);
+                TurnBasedFlickPiece piece = pieces[i];
+                if (piece != null && piece.ShouldSendMovingNetworkState())
+                {
+                    SendPieceTransformToClients(piece, clients, tick, timestamp, false);
+                }
             }
         }
 
         private void SendAllPieceTransformsToClient(ulong clientId)
         {
+            uint tick = NextServerTick();
+            double timestamp = GetNetworkTimestamp();
             List<TurnBasedFlickPiece> pieces = CollectUniqueFlickPieces();
             for (int i = 0; i < pieces.Count; i++)
             {
-                SendPieceTransformToClient(pieces[i], clientId);
+                SendPieceTransformToClient(pieces[i], clientId, tick, timestamp, false);
             }
         }
 
-        private void SendPieceTransformToClients(TurnBasedFlickPiece piece, IReadOnlyList<ulong> clients)
+        private void SendPieceTransformToClients(
+            TurnBasedFlickPiece piece,
+            IReadOnlyList<ulong> clients,
+            uint tick,
+            double timestamp,
+            bool isFinal)
         {
             if (piece == null
                 || networkManager == null
@@ -2560,28 +2634,82 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(piece.PieceId ?? string.Empty);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 7 + sizeof(bool), Allocator.Temp))
+            piece.GetNetworkPhysicsState(
+                out Vector3 position,
+                out Quaternion rotation,
+                out Vector3 velocity,
+                out Vector3 angularVelocity);
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(uint) + sizeof(double) + sizeof(float) * 13 + sizeof(bool) * 2, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)piece.Owner);
                 writer.WriteValueSafe(fixedPieceId);
-                writer.WriteValueSafe(piece.transform.position);
-                writer.WriteValueSafe(piece.transform.rotation);
+                writer.WriteValueSafe(tick);
+                writer.WriteValueSafe(timestamp);
+                writer.WriteValueSafe(position);
+                writer.WriteValueSafe(rotation);
+                writer.WriteValueSafe(velocity);
+                writer.WriteValueSafe(angularVelocity);
                 writer.WriteValueSafe(piece.IsDead);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    PieceTransformMessageName,
-                    clients,
-                    writer,
-                    NetworkDelivery.UnreliableSequenced);
+                writer.WriteValueSafe(isFinal);
+                if (isFinal)
+                {
+                    networkManager.CustomMessagingManager.SendNamedMessage(PieceTransformMessageName, clients, writer);
+                }
+                else
+                {
+                    networkManager.CustomMessagingManager.SendNamedMessage(
+                        PieceTransformMessageName,
+                        clients,
+                        writer,
+                        NetworkDelivery.UnreliableSequenced);
+                }
             }
         }
 
-        private void SendPieceTransformToClient(TurnBasedFlickPiece piece, ulong clientId)
+        private void SendPieceTransformToClient(TurnBasedFlickPiece piece, ulong clientId, uint tick, double timestamp, bool isFinal)
         {
             List<ulong> clients = new List<ulong>(1) { clientId };
-            SendPieceTransformToClients(piece, clients);
+            SendPieceTransformToClients(piece, clients, tick, timestamp, isFinal);
+        }
+
+        private void SendPhysicsSettledToClients()
+        {
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            List<TurnBasedFlickPiece> pieces = CollectUniqueFlickPieces();
+            uint tick = NextServerTick();
+            double timestamp = GetNetworkTimestamp();
+            FastBufferWriter writer = new FastBufferWriter(CalculatePhysicsSettledCapacity(pieces), Allocator.Temp);
+            try
+            {
+                writer.WriteValueSafe(tick);
+                writer.WriteValueSafe(timestamp);
+                writer.WriteValueSafe(pieces.Count);
+                for (int i = 0; i < pieces.Count; i++)
+                {
+                    WritePiecePhysicsState(ref writer, pieces[i]);
+                }
+
+                networkManager.CustomMessagingManager.SendNamedMessage(PhysicsSettledMessageName, clients, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+
+            Debug.Log("[Network] Physics settled snapshot broadcast. Pieces: " + pieces.Count + ".", this);
         }
 
         private void SendAllMonkeyPosesToClients()
+        {
+            SendAllMonkeyPosesToClients(NextServerTick(), GetNetworkTimestamp());
+        }
+
+        private void SendAllMonkeyPosesToClients(uint tick, double timestamp)
         {
             List<ulong> clients = GetRemoteClientIds();
             if (clients.Count <= 0)
@@ -2592,21 +2720,23 @@ namespace FlickDom.Networking
             List<MonkeyThirdPersonController> monkeys = CollectUniqueMonkeys();
             for (int i = 0; i < monkeys.Count; i++)
             {
-                SendMonkeyPoseToClients(monkeys[i], clients);
+                SendMonkeyPoseToClients(monkeys[i], clients, tick, timestamp);
             }
         }
 
         private void SendAllMonkeyPosesToClient(ulong clientId)
         {
+            uint tick = NextServerTick();
+            double timestamp = GetNetworkTimestamp();
             List<MonkeyThirdPersonController> monkeys = CollectUniqueMonkeys();
             List<ulong> clients = new List<ulong>(1) { clientId };
             for (int i = 0; i < monkeys.Count; i++)
             {
-                SendMonkeyPoseToClients(monkeys[i], clients);
+                SendMonkeyPoseToClients(monkeys[i], clients, tick, timestamp);
             }
         }
 
-        private void SendMonkeyPoseToClients(MonkeyThirdPersonController monkey, IReadOnlyList<ulong> clients)
+        private void SendMonkeyPoseToClients(MonkeyThirdPersonController monkey, IReadOnlyList<ulong> clients, uint tick, double timestamp)
         {
             if (monkey == null
                 || networkManager == null
@@ -2615,9 +2745,11 @@ namespace FlickDom.Networking
                 return;
             }
 
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(float) * 7, Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(uint) + sizeof(double) + sizeof(float) * 7, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)monkey.Owner);
+                writer.WriteValueSafe(tick);
+                writer.WriteValueSafe(timestamp);
                 writer.WriteValueSafe(monkey.transform.position);
                 writer.WriteValueSafe(monkey.transform.rotation);
                 networkManager.CustomMessagingManager.SendNamedMessage(
@@ -2637,16 +2769,47 @@ namespace FlickDom.Networking
 
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out uint serverTickValue);
+            reader.ReadValueSafe(out double timestamp);
             reader.ReadValueSafe(out Vector3 position);
             reader.ReadValueSafe(out Quaternion rotation);
+            reader.ReadValueSafe(out Vector3 velocity);
+            reader.ReadValueSafe(out Vector3 angularVelocity);
             reader.ReadValueSafe(out bool isDead);
+            reader.ReadValueSafe(out bool isFinal);
 
             TurnBasedFlickPiece piece = FindFlickPiece((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
             if (piece != null)
             {
-                piece.ApplyNetworkPose(position, rotation);
+                piece.ApplyNetworkPhysicsState(
+                    position,
+                    rotation,
+                    velocity,
+                    angularVelocity,
+                    serverTickValue,
+                    timestamp,
+                    isFinal);
                 piece.ApplyNetworkState(isDead);
             }
+        }
+
+        private void HandlePhysicsSettledMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out uint tick);
+            reader.ReadValueSafe(out double timestamp);
+            reader.ReadValueSafe(out int pieceCount);
+            pieceCount = Mathf.Max(0, pieceCount);
+            for (int i = 0; i < pieceCount; i++)
+            {
+                ReadAndApplyPiecePhysicsState(ref reader, tick, timestamp, true);
+            }
+
+            Debug.Log("[Network] Physics settled snapshot received from Host. Pieces: " + pieceCount + ".", this);
         }
 
         private void HandlePlacementRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -3055,6 +3218,138 @@ namespace FlickDom.Networking
 
             builder.Append("]");
             return builder.ToString();
+        }
+
+        private uint NextServerTick()
+        {
+            if (serverTick == uint.MaxValue)
+            {
+                serverTick = 1u;
+            }
+            else
+            {
+                serverTick++;
+            }
+
+            return serverTick;
+        }
+
+        private void ResetNetworkRuntimeState()
+        {
+            serverTick = 0u;
+            lastPlayer1MonkeyInputSequence = 0u;
+            lastPlayer2MonkeyInputSequence = 0u;
+            hasPlayer1MonkeyInputSequence = false;
+            hasPlayer2MonkeyInputSequence = false;
+        }
+
+        private double GetNetworkTimestamp()
+        {
+            return networkManager != null
+                ? networkManager.ServerTime.Time
+                : Time.unscaledTimeAsDouble;
+        }
+
+        private bool ShouldAcceptMonkeyInputSequence(FlickDomPlayerId owner, uint sequence)
+        {
+            if (owner == FlickDomPlayerId.Player1)
+            {
+                if (!hasPlayer1MonkeyInputSequence || IsSequenceNewer(sequence, lastPlayer1MonkeyInputSequence))
+                {
+                    hasPlayer1MonkeyInputSequence = true;
+                    lastPlayer1MonkeyInputSequence = sequence;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (owner == FlickDomPlayerId.Player2)
+            {
+                if (!hasPlayer2MonkeyInputSequence || IsSequenceNewer(sequence, lastPlayer2MonkeyInputSequence))
+                {
+                    hasPlayer2MonkeyInputSequence = true;
+                    lastPlayer2MonkeyInputSequence = sequence;
+                    return true;
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+
+        private static bool IsSequenceNewer(uint incoming, uint previous)
+        {
+            return (int)(incoming - previous) > 0;
+        }
+
+        private static int CalculatePhysicsSettledCapacity(IReadOnlyList<TurnBasedFlickPiece> pieces)
+        {
+            int count = pieces != null ? pieces.Count : 0;
+            return sizeof(uint)
+                + sizeof(double)
+                + sizeof(int)
+                + count * (sizeof(int) + 64 + sizeof(float) * 13 + sizeof(bool));
+        }
+
+        private static void WritePiecePhysicsState(ref FastBufferWriter writer, TurnBasedFlickPiece piece)
+        {
+            if (piece == null)
+            {
+                writer.WriteValueSafe((int)FlickDomPlayerId.None);
+                writer.WriteValueSafe(new FixedString64Bytes(string.Empty));
+                writer.WriteValueSafe(Vector3.zero);
+                writer.WriteValueSafe(Quaternion.identity);
+                writer.WriteValueSafe(Vector3.zero);
+                writer.WriteValueSafe(Vector3.zero);
+                writer.WriteValueSafe(false);
+                return;
+            }
+
+            piece.GetNetworkPhysicsState(
+                out Vector3 position,
+                out Quaternion rotation,
+                out Vector3 velocity,
+                out Vector3 angularVelocity);
+            writer.WriteValueSafe((int)piece.Owner);
+            writer.WriteValueSafe(new FixedString64Bytes(piece.PieceId ?? string.Empty));
+            writer.WriteValueSafe(position);
+            writer.WriteValueSafe(rotation);
+            writer.WriteValueSafe(velocity);
+            writer.WriteValueSafe(angularVelocity);
+            writer.WriteValueSafe(piece.IsDead);
+        }
+
+        private static void ReadAndApplyPiecePhysicsState(
+            ref FastBufferReader reader,
+            uint tick,
+            double timestamp,
+            bool isFinal)
+        {
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out Vector3 position);
+            reader.ReadValueSafe(out Quaternion rotation);
+            reader.ReadValueSafe(out Vector3 velocity);
+            reader.ReadValueSafe(out Vector3 angularVelocity);
+            reader.ReadValueSafe(out bool isDead);
+
+            TurnBasedFlickPiece piece = FindFlickPiece((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
+            if (piece == null)
+            {
+                return;
+            }
+
+            piece.ApplyNetworkPhysicsState(
+                position,
+                rotation,
+                velocity,
+                angularVelocity,
+                tick,
+                timestamp,
+                isFinal);
+            piece.ApplyNetworkState(isDead);
         }
 
         private static void WriteOwnedCells(ref FastBufferWriter writer, IReadOnlyList<Vector2Int> cells)
