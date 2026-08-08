@@ -610,7 +610,6 @@ namespace FlickDom.Networking
             FlickDomPlayerId owner,
             string pieceId,
             Vector3 impulse,
-            Vector3 launchPosition,
             uint shotId)
         {
             if (networkManager == null
@@ -622,21 +621,22 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
-            Vector3 safeImpulse = ClampNetworkFlickImpulse(impulse);
+            DecomposeFlickImpulse(impulse, out Vector3 flickDirection, out float flickPower);
+            NormalizeNetworkFlickCommand(flickDirection, flickPower, out flickDirection, out flickPower);
             FlickLatencyProbe.RecordClientRequestBuilt(shotId, owner, pieceId);
             SendLatencyPingToHost(shotId, "flick");
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6 + sizeof(uint), Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 4 + sizeof(uint), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
-                writer.WriteValueSafe(safeImpulse);
-                writer.WriteValueSafe(launchPosition);
+                writer.WriteValueSafe(flickDirection);
+                writer.WriteValueSafe(flickPower);
                 writer.WriteValueSafe(shotId);
                 FlickLatencyProbe.RecordClientRequestSend(shotId);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickRequestMessageName, NetworkManager.ServerClientId, writer);
             }
 
-            Debug.Log("[Network] Flick request sent to Host. Shot: " + shotId + ", Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
+            Debug.Log("[Network] Flick request sent to Host. Shot: " + shotId + ", Piece: " + pieceId + ", Direction: " + flickDirection + ", Power: " + flickPower.ToString("0.###") + ".", this);
         }
 
         public void SubmitMonkeyMovementInputToHost(FlickDomPlayerId owner, Vector3 moveDirection, bool sprint, uint sequence)
@@ -2335,13 +2335,14 @@ namespace FlickDom.Networking
             double hostReceiveTime = Time.unscaledTimeAsDouble;
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
-            reader.ReadValueSafe(out Vector3 impulse);
-            reader.ReadValueSafe(out Vector3 launchPosition);
+            reader.ReadValueSafe(out Vector3 flickDirection);
+            reader.ReadValueSafe(out float flickPower);
             reader.ReadValueSafe(out uint shotId);
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
-            impulse = ClampNetworkFlickImpulse(impulse);
+            NormalizeNetworkFlickCommand(flickDirection, flickPower, out flickDirection, out flickPower);
+            Vector3 impulse = flickDirection * flickPower;
             FlickLatencyProbe.RecordHostRequestReceived(shotId, owner, pieceId, hostReceiveTime);
 
             if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
@@ -2368,12 +2369,17 @@ namespace FlickDom.Networking
 
             FlickLatencyProbe.RecordHostValidationComplete(shotId);
 
-            if (piece.TryQueueAuthoritativeFlick(impulse, launchPosition, shotId))
+            if (piece.TryQueueAuthoritativeFlickCommand(
+                flickDirection,
+                flickPower,
+                shotId,
+                out Vector3 authoritativeImpulse,
+                out Vector3 authoritativeLaunchPosition))
             {
                 FlickLatencyProbe.RecordHostFlickQueued(shotId);
-                SendFlickAcceptedToClients(owner, pieceId, impulse, launchPosition, shotId);
+                SendFlickAcceptedToClients(owner, pieceId, authoritativeImpulse, authoritativeLaunchPosition, shotId);
                 BroadcastPieceOrderState();
-                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Shot: " + shotId + ", Piece: " + pieceId + ", Impulse: " + impulse + ", LaunchPosition: " + launchPosition + ".", this);
+                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Shot: " + shotId + ", Piece: " + pieceId + ", Direction: " + flickDirection + ", Power: " + flickPower.ToString("0.###") + ".", this);
             }
             else
             {
@@ -2407,11 +2413,14 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6 + sizeof(uint), Allocator.Temp))
+            DecomposeFlickImpulse(impulse, out Vector3 flickDirection, out float flickPower);
+            NormalizeNetworkFlickCommand(flickDirection, flickPower, out flickDirection, out flickPower);
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 7 + sizeof(uint), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
-                writer.WriteValueSafe(impulse);
+                writer.WriteValueSafe(flickDirection);
+                writer.WriteValueSafe(flickPower);
                 writer.WriteValueSafe(launchPosition);
                 writer.WriteValueSafe(shotId);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickAcceptedMessageName, clients, writer);
@@ -2427,12 +2436,15 @@ namespace FlickDom.Networking
 
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
-            reader.ReadValueSafe(out Vector3 impulse);
+            reader.ReadValueSafe(out Vector3 flickDirection);
+            reader.ReadValueSafe(out float flickPower);
             reader.ReadValueSafe(out Vector3 launchPosition);
             reader.ReadValueSafe(out uint shotId);
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
+            NormalizeNetworkFlickCommand(flickDirection, flickPower, out flickDirection, out flickPower);
+            Vector3 impulse = flickDirection * flickPower;
             FlickLatencyProbe.RecordClientFlickAccepted(shotId);
             LocalFlickTurnTestRig turnRig = FindAnyObjectByType<LocalFlickTurnTestRig>();
             if (turnRig != null)
@@ -3770,6 +3782,7 @@ namespace FlickDom.Networking
         {
             EnsureNamedMonkeyController(FlickDomPlayerId.Player1);
             EnsureNamedMonkeyController(FlickDomPlayerId.Player2);
+            FlickDomCollisionRules.IgnoreMonkeyPieceCollisions();
         }
 
         private static MonkeyThirdPersonController EnsureNamedMonkeyController(FlickDomPlayerId owner)
@@ -3949,25 +3962,51 @@ namespace FlickDom.Networking
             BroadcastGameState();
         }
 
-        private Vector3 ClampNetworkFlickImpulse(Vector3 impulse)
+        private static void DecomposeFlickImpulse(Vector3 impulse, out Vector3 direction, out float power)
+        {
+            impulse.y = 0f;
+            if (!IsFiniteVector(impulse))
+            {
+                direction = Vector3.zero;
+                power = 0f;
+                return;
+            }
+
+            power = Mathf.Max(0f, impulse.magnitude);
+            direction = power > 0.0001f ? impulse / power : Vector3.zero;
+        }
+
+        private void NormalizeNetworkFlickCommand(
+            Vector3 direction,
+            float power,
+            out Vector3 safeDirection,
+            out float safePower)
         {
             float maxMagnitude = Mathf.Max(0f, maxNetworkFlickImpulseMagnitude);
-            if (maxMagnitude <= 0f)
+            if (maxMagnitude <= 0f || !IsFiniteVector(direction) || float.IsNaN(power) || float.IsInfinity(power))
             {
-                return Vector3.zero;
+                safeDirection = Vector3.zero;
+                safePower = 0f;
+                return;
             }
 
-            if (float.IsNaN(impulse.x)
-                || float.IsNaN(impulse.y)
-                || float.IsNaN(impulse.z)
-                || float.IsInfinity(impulse.x)
-                || float.IsInfinity(impulse.y)
-                || float.IsInfinity(impulse.z))
+            direction.y = 0f;
+            safeDirection = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.zero;
+            safePower = Mathf.Clamp(power, 0f, maxMagnitude);
+            if (safeDirection == Vector3.zero)
             {
-                return Vector3.zero;
+                safePower = 0f;
             }
+        }
 
-            return Vector3.ClampMagnitude(impulse, maxMagnitude);
+        private static bool IsFiniteVector(Vector3 value)
+        {
+            return !float.IsNaN(value.x)
+                && !float.IsNaN(value.y)
+                && !float.IsNaN(value.z)
+                && !float.IsInfinity(value.x)
+                && !float.IsInfinity(value.y)
+                && !float.IsInfinity(value.z);
         }
 
         private static Vector3 ClampNetworkMoveDirection(Vector3 moveDirection)

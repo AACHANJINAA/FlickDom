@@ -121,6 +121,7 @@ namespace FlickDom.Gameplay
 
             ConfigurePieces(player1Pieces, FlickDomPlayerId.Player1, "P1");
             ConfigurePieces(player2Pieces, FlickDomPlayerId.Player2, "P2");
+            FlickDomCollisionRules.IgnoreMonkeyPieceCollisions();
             BuildStartTrayVisuals();
             EnsureOrderLabelUi();
             HideAllOrderLabels();

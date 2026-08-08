@@ -188,6 +188,7 @@ namespace FlickDom.Gameplay
             ApplyBaseColor();
             PreloadHitSound();
             PreloadFlickFailedSound();
+            FlickDomCollisionRules.IgnoreMonkeyCollisionsForPiece(this);
         }
 
         private void OnValidate()
@@ -218,6 +219,11 @@ namespace FlickDom.Gameplay
             {
                 UpdateStateIndicatorTransform();
             }
+        }
+
+        private void OnEnable()
+        {
+            FlickDomCollisionRules.IgnoreMonkeyCollisionsForPiece(this);
         }
 
         private void OnDisable()
@@ -376,6 +382,17 @@ namespace FlickDom.Gameplay
             {
                 TickStopDetection();
             }
+        }
+
+        private Vector3 CalculateLaunchPositionFromForceVector(Vector3 forceVector)
+        {
+            forceVector.y = 0f;
+            if (forceVector.magnitude > maxDragDistance)
+            {
+                forceVector = forceVector.normalized * maxDragDistance;
+            }
+
+            return PreserveAimHeight(initialPiecePosition - forceVector);
         }
 
         public void Configure(FlickDomPlayerId newOwner, string newPieceId, GameModeManager manager)
@@ -902,9 +919,8 @@ namespace FlickDom.Gameplay
 
             characterAimActive = true;
             characterAimVector = launchVector;
-            presentationPosition = PreserveAimHeight(presentationPosition);
-            characterAimPiecePosition = presentationPosition;
-            dragTargetPosition = presentationPosition;
+            characterAimPiecePosition = CalculateLaunchPositionFromForceVector(launchVector);
+            dragTargetPosition = characterAimPiecePosition;
             ShowFlickPreview(characterAimVector);
             FlickDragUpdated?.Invoke(
                 this,
@@ -917,10 +933,6 @@ namespace FlickDom.Gameplay
         {
             uint shotId = BeginNetworkLatencySampleIfNeeded();
             Vector3 forceVector;
-            Vector3 launchPosition = characterAimActive
-                ? characterAimPiecePosition
-                : cachedRigidbody.position;
-            launchPosition = PreserveAimHeight(launchPosition);
             if (characterAimActive)
             {
                 forceVector = characterAimVector;
@@ -944,6 +956,7 @@ namespace FlickDom.Gameplay
             }
 
             queuedImpulse = forceVector * forceMultiplier;
+            Vector3 launchPosition = CalculateLaunchPositionFromForceVector(forceVector);
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
             FlickReleased?.Invoke(this, queuedImpulse);
@@ -992,6 +1005,53 @@ namespace FlickDom.Gameplay
         public bool TryQueueAuthoritativeFlick(Vector3 impulse)
         {
             return TryQueueAuthoritativeFlick(impulse, transform.position, 0u);
+        }
+
+        public bool TryQueueAuthoritativeFlick(Vector3 impulse, uint shotId)
+        {
+            return TryQueueAuthoritativeFlick(impulse, transform.position, shotId);
+        }
+
+        public bool TryQueueAuthoritativeFlickCommand(
+            Vector3 direction,
+            float power,
+            uint shotId,
+            out Vector3 queuedImpulse,
+            out Vector3 queuedLaunchPosition)
+        {
+            queuedImpulse = Vector3.zero;
+            queuedLaunchPosition = transform.position;
+
+            direction.y = 0f;
+            if (!IsFinite(direction) || float.IsNaN(power) || float.IsInfinity(power))
+            {
+                return false;
+            }
+
+            Vector3 safeDirection = direction.sqrMagnitude > 0.0001f
+                ? direction.normalized
+                : Vector3.zero;
+            float maxPower = Mathf.Max(0f, forceMultiplier * maxDragDistance);
+            float safePower = maxPower > 0f ? Mathf.Clamp(power, 0f, maxPower) : 0f;
+            if (safeDirection == Vector3.zero)
+            {
+                safePower = 0f;
+            }
+
+            queuedImpulse = safeDirection * safePower;
+
+            float dragDistance = forceMultiplier > 0.0001f
+                ? Mathf.Clamp(safePower / forceMultiplier, 0f, maxDragDistance)
+                : 0f;
+            Vector3 requestedLaunchPosition = transform.position - safeDirection * dragDistance;
+
+            if (!TryQueueAuthoritativeFlick(queuedImpulse, requestedLaunchPosition, shotId))
+            {
+                return false;
+            }
+
+            queuedLaunchPosition = transform.position;
+            return true;
         }
 
         public bool TryQueueAuthoritativeFlick(Vector3 impulse, Vector3 requestedLaunchPosition)
@@ -1230,7 +1290,7 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
-            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition, shotId);
+            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, shotId);
             pendingNetworkFlickShotId = shotId;
             BeginPendingNetworkFlick(impulse, launchPosition, shotId);
             return true;
@@ -2022,6 +2082,91 @@ namespace FlickDom.Gameplay
             public Quaternion Rotation;
             public Vector3 Velocity;
             public Vector3 AngularVelocity;
+        }
+    }
+
+    public static class FlickDomCollisionRules
+    {
+        public static void IgnoreMonkeyPieceCollisions()
+        {
+            TurnBasedFlickPiece[] pieces =
+                UnityEngine.Object.FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include);
+            MonkeyThirdPersonController[] monkeys =
+                UnityEngine.Object.FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
+
+            for (int pieceIndex = 0; pieceIndex < pieces.Length; pieceIndex++)
+            {
+                TurnBasedFlickPiece piece = pieces[pieceIndex];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                for (int monkeyIndex = 0; monkeyIndex < monkeys.Length; monkeyIndex++)
+                {
+                    IgnorePieceAgainstMonkey(piece, monkeys[monkeyIndex]);
+                }
+            }
+        }
+
+        public static void IgnoreMonkeyCollisionsForPiece(TurnBasedFlickPiece piece)
+        {
+            if (piece == null)
+            {
+                return;
+            }
+
+            MonkeyThirdPersonController[] monkeys =
+                UnityEngine.Object.FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
+            for (int i = 0; i < monkeys.Length; i++)
+            {
+                IgnorePieceAgainstMonkey(piece, monkeys[i]);
+            }
+        }
+
+        public static void IgnorePieceCollisionsForMonkey(MonkeyThirdPersonController monkey)
+        {
+            if (monkey == null)
+            {
+                return;
+            }
+
+            TurnBasedFlickPiece[] pieces =
+                UnityEngine.Object.FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                IgnorePieceAgainstMonkey(pieces[i], monkey);
+            }
+        }
+
+        private static void IgnorePieceAgainstMonkey(TurnBasedFlickPiece piece, MonkeyThirdPersonController monkey)
+        {
+            if (piece == null || monkey == null)
+            {
+                return;
+            }
+
+            Collider[] pieceColliders = piece.GetComponentsInChildren<Collider>(true);
+            Collider[] monkeyColliders = monkey.GetComponentsInChildren<Collider>(true);
+            for (int pieceIndex = 0; pieceIndex < pieceColliders.Length; pieceIndex++)
+            {
+                Collider pieceCollider = pieceColliders[pieceIndex];
+                if (pieceCollider == null)
+                {
+                    continue;
+                }
+
+                for (int monkeyIndex = 0; monkeyIndex < monkeyColliders.Length; monkeyIndex++)
+                {
+                    Collider monkeyCollider = monkeyColliders[monkeyIndex];
+                    if (monkeyCollider == null || monkeyCollider == pieceCollider)
+                    {
+                        continue;
+                    }
+
+                    Physics.IgnoreCollision(pieceCollider, monkeyCollider, true);
+                }
+            }
         }
     }
 }

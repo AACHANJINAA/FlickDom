@@ -142,6 +142,7 @@ namespace FlickDom.Gameplay
             ApplyWebGlCompatibilityOverrides();
             CacheAnimationStates();
             SetupSlingshotPresenter();
+            FlickDomCollisionRules.IgnorePieceCollisionsForMonkey(this);
         }
 
         private void OnValidate()
@@ -172,6 +173,11 @@ namespace FlickDom.Gameplay
         private void FixedUpdate()
         {
             ApplyMovement();
+        }
+
+        private void OnEnable()
+        {
+            FlickDomCollisionRules.IgnorePieceCollisionsForMonkey(this);
         }
 
         private void OnDisable()
