@@ -1838,7 +1838,7 @@ MonoBehaviour:
   stageLabelSize: {x: 300, y: 68}
   stageLabelYOffset: 220
   stageLabelFontSize: 32
-  confirmButtonText: "\uD655\uC778"
+  confirmButtonText: Confirm
   confirmButtonSize: {x: 144, y: 90}
   confirmButtonYOffset: -207
   confirmButtonFontSize: 22

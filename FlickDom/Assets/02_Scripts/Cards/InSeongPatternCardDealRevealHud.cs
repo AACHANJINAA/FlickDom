@@ -52,7 +52,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector2 stageLabelSize = new Vector2(300f, 68f);
         [SerializeField] private float stageLabelYOffset = 220f;
         [SerializeField] private int stageLabelFontSize = 32;
-        [SerializeField] private string confirmButtonText = "확인";
+        [SerializeField] private string confirmButtonText = "Confirm";
         [SerializeField] private Vector2 confirmButtonSize = new Vector2(144f, 90f);
         [SerializeField] private float confirmButtonYOffset = -207f;
         [SerializeField] private int confirmButtonFontSize = 22;
