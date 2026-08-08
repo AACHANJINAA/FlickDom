@@ -1,4 +1,7 @@
 using FlickDom.Networking;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
@@ -552,8 +555,10 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            GUIUtility.systemCopyBuffer = joinCode.Trim();
-            Debug.Log("[Network] Relay join code copied to clipboard.", this);
+            if (WebClipboardBridge.TryCopyText(joinCode.Trim()))
+            {
+                Debug.Log("[Network] Relay join code copied to clipboard.", this);
+            }
         }
 
         private void ApplyConnectionInput()
@@ -596,7 +601,9 @@ namespace FlickDom.Gameplay
             bool useRelay = hasBootstrap && bootstrap.UsesUnityRelay;
             bool canEditConnection = hasBootstrap && !bootstrap.IsRunning && !bootstrap.IsNetworkStartInProgress;
             bool canStartGame = hasBootstrap && bootstrap.CanStartNetworkGame;
-            bool hasRelayJoinCode = useRelay && !string.IsNullOrEmpty(bootstrap.RelayJoinCode);
+            bool hasRelayJoinCode = useRelay
+                && (!string.IsNullOrEmpty(bootstrap.RelayJoinCode)
+                    || (addressInput != null && !string.IsNullOrWhiteSpace(addressInput.text)));
 
             if (addressInput != null)
             {
@@ -1455,5 +1462,28 @@ namespace FlickDom.Gameplay
             }
 #endif
         }
+    }
+
+    public static class WebClipboardBridge
+    {
+        public static bool TryCopyText(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            FlickDomCopyTextToClipboard(text);
+#else
+            GUIUtility.systemCopyBuffer = text;
+#endif
+            return true;
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void FlickDomCopyTextToClipboard(string text);
+#endif
     }
 }

@@ -49,6 +49,8 @@ namespace FlickDom.Networking
         private const string GameStateMessageName = "FlickDom.GameState";
         private const string FlickRequestMessageName = "FlickDom.FlickRequest";
         private const string FlickAcceptedMessageName = "FlickDom.FlickAccepted";
+        private const string LatencyPingMessageName = "FlickDom.LatencyPing";
+        private const string LatencyPongMessageName = "FlickDom.LatencyPong";
         private const string MonkeyInputMessageName = "FlickDom.MonkeyInput";
         private const string MonkeyPoseMessageName = "FlickDom.MonkeyPose";
         private const string PieceOrderSelectionMessageName = "FlickDom.PieceOrderSelection";
@@ -84,12 +86,15 @@ namespace FlickDom.Networking
         private string portInput = "7777";
         private string relayJoinCodeInput = string.Empty;
         private string relayJoinCode = string.Empty;
+        private string relayRegion = "n/a";
         private string networkStatusMessage = string.Empty;
         private bool startGameMessageHandlerRegistered;
         private bool lobbyStateMessageHandlerRegistered;
         private bool gameStateMessageHandlerRegistered;
         private bool flickRequestMessageHandlerRegistered;
         private bool flickAcceptedMessageHandlerRegistered;
+        private bool latencyPingMessageHandlerRegistered;
+        private bool latencyPongMessageHandlerRegistered;
         private bool monkeyInputMessageHandlerRegistered;
         private bool monkeyPoseMessageHandlerRegistered;
         private bool pieceOrderSelectionMessageHandlerRegistered;
@@ -117,6 +122,9 @@ namespace FlickDom.Networking
         private uint serverTick;
         private uint lastPlayer1MonkeyInputSequence;
         private uint lastPlayer2MonkeyInputSequence;
+        private uint clientFlickShotSequence;
+        private uint latencyPingSequence;
+        private readonly Dictionary<uint, double> pendingLatencyPings = new Dictionary<uint, double>();
         private bool hasPlayer1MonkeyInputSequence;
         private bool hasPlayer2MonkeyInputSequence;
 
@@ -237,6 +245,8 @@ namespace FlickDom.Networking
 
         private void Awake()
         {
+            ConfigureRuntimeLogStackTraces();
+
             if (!IsNetworkEnabledForActiveScene())
             {
                 Debug.Log("[Network] FlickDom network lobby is disabled outside scene '" + networkSceneName + "'.", this);
@@ -261,6 +271,13 @@ namespace FlickDom.Networking
                 DontDestroyOnLoad(gameObject);
                 DontDestroyOnLoad(networkManager.gameObject);
             }
+        }
+
+        private static void ConfigureRuntimeLogStackTraces()
+        {
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.ScriptOnly);
+            Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.ScriptOnly);
         }
 
         private void Start()
@@ -456,6 +473,7 @@ namespace FlickDom.Networking
 
                 RegisterNetworkMessageHandlersIfReady();
                 SetLocalPlayerRole(FlickDomPlayerId.Player1);
+                LogNetworkDiagnostics("Host");
                 BroadcastLobbyState();
                 Debug.Log("[Network] Host started. Local role is Player1.", this);
             }
@@ -500,6 +518,8 @@ namespace FlickDom.Networking
 
                 RegisterNetworkMessageHandlersIfReady();
                 SetLocalPlayerRole(FlickDomPlayerId.Player2);
+                LogNetworkDiagnostics("Client");
+                SendLatencyPingToHost(0u, "connect");
                 Debug.Log("[Network] Client start requested. Local role is Player2.", this);
             }
             catch (Exception exception)
@@ -590,7 +610,8 @@ namespace FlickDom.Networking
             FlickDomPlayerId owner,
             string pieceId,
             Vector3 impulse,
-            Vector3 launchPosition)
+            Vector3 launchPosition,
+            uint shotId)
         {
             if (networkManager == null
                 || !networkManager.IsClient
@@ -602,16 +623,20 @@ namespace FlickDom.Networking
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
             Vector3 safeImpulse = ClampNetworkFlickImpulse(impulse);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6, Allocator.Temp))
+            FlickLatencyProbe.RecordClientRequestBuilt(shotId, owner, pieceId);
+            SendLatencyPingToHost(shotId, "flick");
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6 + sizeof(uint), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
                 writer.WriteValueSafe(safeImpulse);
                 writer.WriteValueSafe(launchPosition);
+                writer.WriteValueSafe(shotId);
+                FlickLatencyProbe.RecordClientRequestSend(shotId);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickRequestMessageName, NetworkManager.ServerClientId, writer);
             }
 
-            Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
+            Debug.Log("[Network] Flick request sent to Host. Shot: " + shotId + ", Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
         }
 
         public void SubmitMonkeyMovementInputToHost(FlickDomPlayerId owner, Vector3 moveDirection, bool sprint, uint sequence)
@@ -656,6 +681,7 @@ namespace FlickDom.Networking
 
                 int maxConnections = Mathf.Max(1, maxPlayers - 1);
                 Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
+                relayRegion = string.IsNullOrWhiteSpace(allocation.Region) ? "n/a" : allocation.Region;
                 relayJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
                 ConfigureTransportForRelay(allocation.ToRelayServerData(GetRelayConnectionType()));
@@ -670,6 +696,7 @@ namespace FlickDom.Networking
 
                 RegisterNetworkMessageHandlersIfReady();
                 SetLocalPlayerRole(FlickDomPlayerId.Player1);
+                LogNetworkDiagnostics("RelayHost");
                 BroadcastLobbyState();
                 networkStatusMessage = "Relay room created. Join Code: " + relayJoinCode;
                 Debug.Log("[Network] Relay Host started. Join Code: " + relayJoinCode + ".", this);
@@ -709,6 +736,7 @@ namespace FlickDom.Networking
                 await EnsureUnityServicesSignedInAsync();
 
                 JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(safeJoinCode);
+                relayRegion = string.IsNullOrWhiteSpace(allocation.Region) ? "n/a" : allocation.Region;
                 ConfigureTransportForRelay(allocation.ToRelayServerData(GetRelayConnectionType()));
                 bool started = networkManager.StartClient();
                 if (!started)
@@ -722,6 +750,8 @@ namespace FlickDom.Networking
                 relayJoinCodeInput = safeJoinCode;
                 RegisterNetworkMessageHandlersIfReady();
                 SetLocalPlayerRole(FlickDomPlayerId.Player2);
+                LogNetworkDiagnostics("RelayClient");
+                SendLatencyPingToHost(0u, "connect");
                 networkStatusMessage = "Relay Client started. Waiting for connection...";
                 Debug.Log("[Network] Relay Client start requested. Join Code: " + safeJoinCode + ".", this);
             }
@@ -826,6 +856,49 @@ namespace FlickDom.Networking
             }
 
             SendPhysicsSettledToClients();
+        }
+
+        private void SendLatencyPingToHost(uint shotId, string reason)
+        {
+            if (networkManager == null
+                || !networkManager.IsClient
+                || networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            latencyPingSequence = latencyPingSequence == uint.MaxValue ? 1u : latencyPingSequence + 1u;
+            uint pingId = latencyPingSequence;
+            double sentAt = Time.unscaledTimeAsDouble;
+            pendingLatencyPings[pingId] = sentAt;
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(uint) * 2 + 32, Allocator.Temp))
+            {
+                writer.WriteValueSafe(pingId);
+                writer.WriteValueSafe(shotId);
+                writer.WriteValueSafe(new FixedString32Bytes(reason ?? string.Empty));
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    LatencyPingMessageName,
+                    NetworkManager.ServerClientId,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
+            }
+        }
+
+        public uint BeginClientFlickLatencySample(FlickDomPlayerId owner, string pieceId)
+        {
+            if (clientFlickShotSequence == uint.MaxValue)
+            {
+                clientFlickShotSequence = 1u;
+            }
+            else
+            {
+                clientFlickShotSequence++;
+            }
+
+            uint shotId = clientFlickShotSequence;
+            FlickLatencyProbe.RecordClientPointerUp(shotId, owner, pieceId);
+            return shotId;
         }
 
         public void NotifyHostPlacementApplied(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
@@ -1050,6 +1123,33 @@ namespace FlickDom.Networking
             }
 
             unityTransport.UseWebSockets = useWebSocketTransport || IsWebGlRuntime();
+        }
+
+        private void LogNetworkDiagnostics(string phase)
+        {
+            string platform =
+#if UNITY_WEBGL && !UNITY_EDITOR
+                "WebGL";
+#else
+                Application.platform.ToString();
+#endif
+            uint configuredTickRate = networkManager != null && networkManager.NetworkConfig != null
+                ? networkManager.NetworkConfig.TickRate
+                : 0u;
+            Debug.Log(
+                "[NetworkDiagnostics]"
+                + "\nPhase: " + phase
+                + "\nPlatform: " + platform
+                + "\nRelay connection type: " + GetRelayConnectionType()
+                + "\nRelay region: " + relayRegion
+                + "\nUseRelay: " + useUnityRelay
+                + "\nUseWebSockets: " + (unityTransport != null && unityTransport.UseWebSockets)
+                + "\nNetworkTickRate: " + configuredTickRate
+                + "\nTransformBroadcastInterval: " + (transformBroadcastInterval * 1000f).ToString("0.0") + " ms"
+                + "\nFixedDeltaTime: " + (Time.fixedDeltaTime * 1000f).ToString("0.0") + " ms"
+                + "\nTargetFrameRate: " + Application.targetFrameRate
+                + "\nVSyncCount: " + QualitySettings.vSyncCount,
+                this);
         }
 
         private string GetRelayConnectionType()
@@ -1823,6 +1923,20 @@ namespace FlickDom.Networking
                 Debug.Log("[Network] Flick accepted message handler registered.", this);
             }
 
+            if (!latencyPingMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(LatencyPingMessageName, HandleLatencyPingMessage);
+                latencyPingMessageHandlerRegistered = true;
+                Debug.Log("[Network] Latency ping message handler registered.", this);
+            }
+
+            if (!latencyPongMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(LatencyPongMessageName, HandleLatencyPongMessage);
+                latencyPongMessageHandlerRegistered = true;
+                Debug.Log("[Network] Latency pong message handler registered.", this);
+            }
+
             if (!monkeyInputMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MonkeyInputMessageName, HandleMonkeyInputMessage);
@@ -1971,6 +2085,18 @@ namespace FlickDom.Networking
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(FlickAcceptedMessageName);
                 flickAcceptedMessageHandlerRegistered = false;
+            }
+
+            if (latencyPingMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LatencyPingMessageName);
+                latencyPingMessageHandlerRegistered = false;
+            }
+
+            if (latencyPongMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LatencyPongMessageName);
+                latencyPongMessageHandlerRegistered = false;
             }
 
             if (monkeyInputMessageHandlerRegistered)
@@ -2206,14 +2332,17 @@ namespace FlickDom.Networking
                 return;
             }
 
+            double hostReceiveTime = Time.unscaledTimeAsDouble;
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
             reader.ReadValueSafe(out Vector3 impulse);
             reader.ReadValueSafe(out Vector3 launchPosition);
+            reader.ReadValueSafe(out uint shotId);
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
             impulse = ClampNetworkFlickImpulse(impulse);
+            FlickLatencyProbe.RecordHostRequestReceived(shotId, owner, pieceId, hostReceiveTime);
 
             if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
             {
@@ -2237,19 +2366,32 @@ namespace FlickDom.Networking
                 return;
             }
 
-            if (piece.TryQueueAuthoritativeFlick(impulse, launchPosition))
+            FlickLatencyProbe.RecordHostValidationComplete(shotId);
+
+            if (piece.TryQueueAuthoritativeFlick(impulse, launchPosition, shotId))
             {
-                SendFlickAcceptedToClients(owner, pieceId);
+                FlickLatencyProbe.RecordHostFlickQueued(shotId);
+                SendFlickAcceptedToClients(owner, pieceId, impulse, launchPosition, shotId);
                 BroadcastPieceOrderState();
-                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Piece: " + pieceId + ", Impulse: " + impulse + ", LaunchPosition: " + launchPosition + ".", this);
+                Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Shot: " + shotId + ", Piece: " + pieceId + ", Impulse: " + impulse + ", LaunchPosition: " + launchPosition + ".", this);
             }
             else
             {
-                Debug.LogWarning("[Network] Host could not queue flick request. Piece may already be launched or queued. Piece: " + pieceId + ".", this);
+                Debug.LogWarning("[Network] Host could not queue flick request. Piece may already be launched or queued. Shot: " + shotId + ", Piece: " + pieceId + ".", this);
             }
         }
 
         private void SendFlickAcceptedToClients(FlickDomPlayerId owner, string pieceId)
+        {
+            SendFlickAcceptedToClients(owner, pieceId, Vector3.zero, Vector3.zero, 0u);
+        }
+
+        private void SendFlickAcceptedToClients(
+            FlickDomPlayerId owner,
+            string pieceId,
+            Vector3 impulse,
+            Vector3 launchPosition,
+            uint shotId)
         {
             if (networkManager == null
                 || !networkManager.IsHost
@@ -2265,10 +2407,13 @@ namespace FlickDom.Networking
             }
 
             FixedString64Bytes fixedPieceId = new FixedString64Bytes(pieceId ?? string.Empty);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64, Allocator.Temp))
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(float) * 6 + sizeof(uint), Allocator.Temp))
             {
                 writer.WriteValueSafe((int)owner);
                 writer.WriteValueSafe(fixedPieceId);
+                writer.WriteValueSafe(impulse);
+                writer.WriteValueSafe(launchPosition);
+                writer.WriteValueSafe(shotId);
                 networkManager.CustomMessagingManager.SendNamedMessage(FlickAcceptedMessageName, clients, writer);
             }
         }
@@ -2282,9 +2427,13 @@ namespace FlickDom.Networking
 
             reader.ReadValueSafe(out int ownerValue);
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+            reader.ReadValueSafe(out Vector3 impulse);
+            reader.ReadValueSafe(out Vector3 launchPosition);
+            reader.ReadValueSafe(out uint shotId);
 
             FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
             string pieceId = fixedPieceId.ToString();
+            FlickLatencyProbe.RecordClientFlickAccepted(shotId);
             LocalFlickTurnTestRig turnRig = FindAnyObjectByType<LocalFlickTurnTestRig>();
             if (turnRig != null)
             {
@@ -2294,10 +2443,62 @@ namespace FlickDom.Networking
             TurnBasedFlickPiece piece = FindFlickPiece(owner, pieceId);
             if (piece != null)
             {
-                piece.MarkNetworkFlickAccepted();
+                piece.MarkNetworkFlickAccepted(impulse, launchPosition, shotId);
             }
 
-            Debug.Log("[Network] Flick accepted received from Host. Player: " + owner + ", Piece: " + pieceId + ".", this);
+            Debug.Log("[Network] Flick accepted received from Host. Shot: " + shotId + ", Player: " + owner + ", Piece: " + pieceId + ".", this);
+        }
+
+        private void HandleLatencyPingMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out uint pingId);
+            reader.ReadValueSafe(out uint shotId);
+            reader.ReadValueSafe(out FixedString32Bytes reason);
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(uint) * 2 + 32, Allocator.Temp))
+            {
+                writer.WriteValueSafe(pingId);
+                writer.WriteValueSafe(shotId);
+                writer.WriteValueSafe(reason);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    LatencyPongMessageName,
+                    senderClientId,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
+            }
+        }
+
+        private void HandleLatencyPongMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null || networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out uint pingId);
+            reader.ReadValueSafe(out uint shotId);
+            reader.ReadValueSafe(out FixedString32Bytes reason);
+            if (!pendingLatencyPings.TryGetValue(pingId, out double sentAt))
+            {
+                return;
+            }
+
+            pendingLatencyPings.Remove(pingId);
+            double rttMs = (Time.unscaledTimeAsDouble - sentAt) * 1000d;
+            Debug.Log(
+                "[NetworkDiagnostics] Relay RTT sample"
+                + "\nReason: " + reason
+                + "\nShot: " + shotId
+                + "\nPingId: " + pingId
+                + "\nEstimated RTT: " + rttMs.ToString("0.0") + " ms"
+                + "\nDelivery: UnreliableSequenced", this);
+            FlickLatencyProbe.RecordEstimatedRtt(shotId, rttMs);
         }
 
         private void HandleMonkeyInputMessage(ulong senderClientId, FastBufferReader reader)
@@ -2784,6 +2985,7 @@ namespace FlickDom.Networking
             TurnBasedFlickPiece piece = FindFlickPiece((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
             if (piece != null)
             {
+                FlickLatencyProbe.RecordClientFirstPieceState((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
                 piece.ApplyNetworkPhysicsState(
                     position,
                     rotation,
@@ -3240,6 +3442,9 @@ namespace FlickDom.Networking
         private void ResetNetworkRuntimeState()
         {
             serverTick = 0u;
+            clientFlickShotSequence = 0u;
+            latencyPingSequence = 0u;
+            pendingLatencyPings.Clear();
             lastPlayer1MonkeyInputSequence = 0u;
             lastPlayer2MonkeyInputSequence = 0u;
             hasPlayer1MonkeyInputSequence = false;
@@ -3344,6 +3549,7 @@ namespace FlickDom.Networking
                 return;
             }
 
+            FlickLatencyProbe.RecordClientFirstPieceState((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
             piece.ApplyNetworkPhysicsState(
                 position,
                 rotation,
@@ -3872,6 +4078,374 @@ namespace FlickDom.Networking
             {
                 GUI.enabled = previousEnabled;
             }
+        }
+    }
+
+    public static class FlickLatencyProbe
+    {
+        private const int MaxSamples = 32;
+        private static readonly Dictionary<uint, Sample> Samples = new Dictionary<uint, Sample>();
+
+        public static void RecordClientPointerUp(uint shotId, FlickDomPlayerId owner, string pieceId)
+        {
+            if (shotId == 0u)
+            {
+                return;
+            }
+
+            Samples[shotId] = new Sample
+            {
+                ShotId = shotId,
+                Owner = owner,
+                PieceId = pieceId ?? string.Empty,
+                ClientPointerUpTime = Now(),
+                HasClientPointerUpTime = true
+            };
+            TrimSamples();
+        }
+
+        public static void RecordClientRequestBuilt(uint shotId, FlickDomPlayerId owner, string pieceId)
+        {
+            if (!TryGetOrCreate(shotId, owner, pieceId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.ClientRequestBuiltTime = Now();
+            sample.HasClientRequestBuiltTime = true;
+            Samples[shotId] = sample;
+        }
+
+        public static void RecordClientRequestSend(uint shotId)
+        {
+            if (!Samples.TryGetValue(shotId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.ClientSendTime = Now();
+            sample.HasClientSendTime = true;
+            Samples[shotId] = sample;
+
+            Debug.Log(
+                "[FlickLatency] Shot " + shotId + " Client send\n"
+                + "PointerUp -> RequestBuilt : " + FormatDelta(sample.ClientPointerUpTime, sample.ClientRequestBuiltTime, sample.HasClientPointerUpTime && sample.HasClientRequestBuiltTime) + "\n"
+                + "RequestBuilt -> Send     : " + FormatDelta(sample.ClientRequestBuiltTime, sample.ClientSendTime, sample.HasClientRequestBuiltTime && sample.HasClientSendTime) + "\n"
+                + "PointerUp -> Send        : " + FormatDelta(sample.ClientPointerUpTime, sample.ClientSendTime, sample.HasClientPointerUpTime && sample.HasClientSendTime));
+        }
+
+        public static void RecordClientFlickAccepted(uint shotId)
+        {
+            if (!Samples.TryGetValue(shotId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.ClientAcceptedTime = Now();
+            sample.HasClientAcceptedTime = true;
+            Samples[shotId] = sample;
+            Debug.Log(
+                "[FlickLatency] Shot " + shotId + " Client accepted\n"
+                + "Send -> FlickAccepted    : " + FormatDelta(sample.ClientSendTime, sample.ClientAcceptedTime, sample.HasClientSendTime));
+        }
+
+        public static void RecordClientFirstPieceState(FlickDomPlayerId owner, string pieceId)
+        {
+            if (!TryFindActiveClientSample(owner, pieceId, out uint shotId, out Sample sample)
+                || sample.HasClientFirstPieceStateTime)
+            {
+                return;
+            }
+
+            sample.ClientFirstPieceStateTime = Now();
+            sample.HasClientFirstPieceStateTime = true;
+            Samples[shotId] = sample;
+        }
+
+        public static void RecordClientFirstVisibleMovement(uint shotId, FlickDomPlayerId owner, string pieceId)
+        {
+            if (!TryGetOrFindClientSample(shotId, owner, pieceId, out uint sampleShotId, out Sample sample)
+                || sample.HasClientFirstVisibleMovementTime)
+            {
+                return;
+            }
+
+            sample.ClientFirstVisibleMovementTime = Now();
+            sample.HasClientFirstVisibleMovementTime = true;
+            Samples[sampleShotId] = sample;
+            LogClientSummary(sample);
+        }
+
+        public static void RecordHostRequestReceived(uint shotId, FlickDomPlayerId owner, string pieceId, double receiveTime)
+        {
+            if (shotId == 0u)
+            {
+                return;
+            }
+
+            Samples[shotId] = new Sample
+            {
+                ShotId = shotId,
+                Owner = owner,
+                PieceId = pieceId ?? string.Empty,
+                HostReceiveTime = receiveTime,
+                HasHostReceiveTime = true
+            };
+            TrimSamples();
+        }
+
+        public static void RecordHostFlickQueued(uint shotId)
+        {
+            if (!Samples.TryGetValue(shotId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.HostQueueTime = Now();
+            sample.HasHostQueueTime = true;
+            Samples[shotId] = sample;
+            Debug.Log(
+                "[FlickLatency] Shot " + shotId + " Host queue\n"
+                + "Receive -> Validate       : " + FormatDelta(sample.HostReceiveTime, sample.HostValidationTime, sample.HasHostReceiveTime && sample.HasHostValidationTime) + "\n"
+                + "Validate -> QueueFlick    : " + FormatDelta(sample.HostValidationTime, sample.HostQueueTime, sample.HasHostValidationTime));
+        }
+
+        public static void RecordHostValidationComplete(uint shotId)
+        {
+            if (!Samples.TryGetValue(shotId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.HostValidationTime = Now();
+            sample.HasHostValidationTime = true;
+            Samples[shotId] = sample;
+        }
+
+        public static void RecordHostPhysicsApplied(uint shotId, FlickDomPlayerId owner, string pieceId)
+        {
+            if (!TryGetOrFindHostSample(shotId, owner, pieceId, out uint sampleShotId, out Sample sample)
+                || sample.HasHostPhysicsAppliedTime)
+            {
+                return;
+            }
+
+            sample.HostPhysicsAppliedTime = Now();
+            sample.HasHostPhysicsAppliedTime = true;
+            Samples[sampleShotId] = sample;
+            Debug.Log(
+                "[FlickLatency] Shot " + sampleShotId + " Host physics\n"
+                + "QueueFlick -> AddForce    : " + FormatDelta(sample.HostQueueTime, sample.HostPhysicsAppliedTime, sample.HasHostQueueTime));
+        }
+
+        public static void RecordHostPhysicsStepComplete(uint shotId, FlickDomPlayerId owner, string pieceId)
+        {
+            if (!TryGetOrFindHostSample(shotId, owner, pieceId, out uint sampleShotId, out Sample sample)
+                || sample.HasHostPhysicsStepCompleteTime)
+            {
+                return;
+            }
+
+            sample.HostPhysicsStepCompleteTime = Now();
+            sample.HasHostPhysicsStepCompleteTime = true;
+            Samples[sampleShotId] = sample;
+            Debug.Log(
+                "[FlickLatency] Shot " + sampleShotId + " Host summary\n"
+                + "HOST\n"
+                + "Receive -> Validate       : " + FormatDelta(sample.HostReceiveTime, sample.HostValidationTime, sample.HasHostReceiveTime && sample.HasHostValidationTime) + "\n"
+                + "Validate -> AddForce      : " + FormatDelta(sample.HostValidationTime, sample.HostPhysicsAppliedTime, sample.HasHostValidationTime && sample.HasHostPhysicsAppliedTime) + "\n"
+                + "AddForce -> PhysicsStep   : " + FormatDelta(sample.HostPhysicsAppliedTime, sample.HostPhysicsStepCompleteTime, sample.HasHostPhysicsAppliedTime));
+        }
+
+        public static void RecordEstimatedRtt(uint shotId, double rttMs)
+        {
+            if (shotId == 0u || !Samples.TryGetValue(shotId, out Sample sample))
+            {
+                return;
+            }
+
+            sample.EstimatedRttMs = rttMs;
+            sample.HasEstimatedRtt = true;
+            Samples[shotId] = sample;
+        }
+
+        private static void LogClientSummary(Sample sample)
+        {
+            Debug.Log(
+                "[FlickLatency] Shot " + sample.ShotId + " Client summary\n"
+                + "CLIENT\n"
+                + "PointerUp -> Send        : " + FormatDelta(sample.ClientPointerUpTime, sample.ClientSendTime, sample.HasClientPointerUpTime && sample.HasClientSendTime) + "\n"
+                + "Send -> FlickAccepted    : " + FormatDelta(sample.ClientSendTime, sample.ClientAcceptedTime, sample.HasClientSendTime && sample.HasClientAcceptedTime) + "\n"
+                + "Send -> FirstPieceState  : " + FormatDelta(sample.ClientSendTime, sample.ClientFirstPieceStateTime, sample.HasClientSendTime && sample.HasClientFirstPieceStateTime) + "\n"
+                + "Accepted -> PieceState   : " + FormatDelta(sample.ClientAcceptedTime, sample.ClientFirstPieceStateTime, sample.HasClientAcceptedTime && sample.HasClientFirstPieceStateTime) + "\n"
+                + "PointerUp -> VisibleMove : " + FormatDelta(sample.ClientPointerUpTime, sample.ClientFirstVisibleMovementTime, sample.HasClientPointerUpTime && sample.HasClientFirstVisibleMovementTime) + "\n"
+                + "NETWORK\n"
+                + "Estimated RTT            : " + (sample.HasEstimatedRtt ? sample.EstimatedRttMs.ToString("0.0") + " ms" : "n/a"));
+        }
+
+        private static bool TryGetOrCreate(uint shotId, FlickDomPlayerId owner, string pieceId, out Sample sample)
+        {
+            if (shotId == 0u)
+            {
+                sample = default;
+                return false;
+            }
+
+            if (Samples.TryGetValue(shotId, out sample))
+            {
+                return true;
+            }
+
+            sample = new Sample
+            {
+                ShotId = shotId,
+                Owner = owner,
+                PieceId = pieceId ?? string.Empty
+            };
+            Samples[shotId] = sample;
+            TrimSamples();
+            return true;
+        }
+
+        private static bool TryGetOrFindClientSample(
+            uint shotId,
+            FlickDomPlayerId owner,
+            string pieceId,
+            out uint sampleShotId,
+            out Sample sample)
+        {
+            if (shotId != 0u && Samples.TryGetValue(shotId, out sample))
+            {
+                sampleShotId = shotId;
+                return true;
+            }
+
+            return TryFindActiveClientSample(owner, pieceId, out sampleShotId, out sample);
+        }
+
+        private static bool TryGetOrFindHostSample(
+            uint shotId,
+            FlickDomPlayerId owner,
+            string pieceId,
+            out uint sampleShotId,
+            out Sample sample)
+        {
+            if (shotId != 0u && Samples.TryGetValue(shotId, out sample))
+            {
+                sampleShotId = shotId;
+                return true;
+            }
+
+            foreach (KeyValuePair<uint, Sample> pair in Samples)
+            {
+                Sample candidate = pair.Value;
+                if (candidate.Owner == owner
+                    && string.Equals(candidate.PieceId, pieceId ?? string.Empty, StringComparison.Ordinal)
+                    && candidate.HasHostQueueTime
+                    && !candidate.HasHostPhysicsAppliedTime)
+                {
+                    sampleShotId = pair.Key;
+                    sample = candidate;
+                    return true;
+                }
+            }
+
+            sampleShotId = 0u;
+            sample = default;
+            return false;
+        }
+
+        private static bool TryFindActiveClientSample(
+            FlickDomPlayerId owner,
+            string pieceId,
+            out uint shotId,
+            out Sample sample)
+        {
+            foreach (KeyValuePair<uint, Sample> pair in Samples)
+            {
+                Sample candidate = pair.Value;
+                if (candidate.Owner == owner
+                    && string.Equals(candidate.PieceId, pieceId ?? string.Empty, StringComparison.Ordinal)
+                    && candidate.HasClientSendTime
+                    && !candidate.HasClientFirstVisibleMovementTime)
+                {
+                    shotId = pair.Key;
+                    sample = candidate;
+                    return true;
+                }
+            }
+
+            shotId = 0u;
+            sample = default;
+            return false;
+        }
+
+        private static void TrimSamples()
+        {
+            while (Samples.Count > MaxSamples)
+            {
+                uint oldestShotId = uint.MaxValue;
+                foreach (uint shotId in Samples.Keys)
+                {
+                    if (shotId < oldestShotId)
+                    {
+                        oldestShotId = shotId;
+                    }
+                }
+
+                if (oldestShotId == uint.MaxValue)
+                {
+                    return;
+                }
+
+                Samples.Remove(oldestShotId);
+            }
+        }
+
+        private static double Now()
+        {
+            return Time.unscaledTimeAsDouble;
+        }
+
+        private static string FormatDelta(double from, double to, bool hasValue)
+        {
+            if (!hasValue)
+            {
+                return "n/a";
+            }
+
+            return ((to - from) * 1000d).ToString("0.0") + " ms";
+        }
+
+        private struct Sample
+        {
+            public uint ShotId;
+            public FlickDomPlayerId Owner;
+            public string PieceId;
+            public double ClientPointerUpTime;
+            public double ClientRequestBuiltTime;
+            public double ClientSendTime;
+            public double ClientAcceptedTime;
+            public double ClientFirstPieceStateTime;
+            public double ClientFirstVisibleMovementTime;
+            public double HostReceiveTime;
+            public double HostValidationTime;
+            public double HostQueueTime;
+            public double HostPhysicsAppliedTime;
+            public double HostPhysicsStepCompleteTime;
+            public double EstimatedRttMs;
+            public bool HasClientPointerUpTime;
+            public bool HasClientRequestBuiltTime;
+            public bool HasClientSendTime;
+            public bool HasClientAcceptedTime;
+            public bool HasClientFirstPieceStateTime;
+            public bool HasClientFirstVisibleMovementTime;
+            public bool HasHostReceiveTime;
+            public bool HasHostValidationTime;
+            public bool HasHostQueueTime;
+            public bool HasHostPhysicsAppliedTime;
+            public bool HasHostPhysicsStepCompleteTime;
+            public bool HasEstimatedRtt;
         }
     }
 }

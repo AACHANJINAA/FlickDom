@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using FlickDom.Networking;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -77,6 +78,7 @@ namespace FlickDom.Gameplay
         private bool characterAimActive;
         private bool launchQueued;
         private bool awaitingNetworkFlickAcceptance;
+        private bool usingLocalFlickPrediction;
         private bool waitingForStop;
         private bool launchedThisTurn;
         private bool isDead;
@@ -86,6 +88,8 @@ namespace FlickDom.Gameplay
         private bool canInteractThisTurn = true;
         private bool waitForPointerReleaseBeforeInput;
         private float stoppedTimer;
+        private uint queuedFlickShotId;
+        private uint pendingNetworkFlickShotId;
         private bool originalUseGravity;
         private bool originalIsKinematic;
         private bool originalColliderEnabled;
@@ -345,6 +349,21 @@ namespace FlickDom.Gameplay
                 cachedRigidbody.linearVelocity = Vector3.zero;
                 cachedRigidbody.angularVelocity = Vector3.zero;
                 cachedRigidbody.AddForce(queuedImpulse, ForceMode.Impulse);
+                FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+                if (bootstrap != null && bootstrap.IsHost)
+                {
+                    FlickLatencyProbe.RecordHostPhysicsApplied(queuedFlickShotId, owner, pieceId);
+                    if (queuedFlickShotId != 0u)
+                    {
+                        StartCoroutine(RecordHostPhysicsStepCompleteAfterFixedUpdate(queuedFlickShotId));
+                    }
+                }
+                else if (bootstrap != null && bootstrap.IsClientOnly && bootstrap.LocalPlayerId == owner)
+                {
+                    FlickLatencyProbe.RecordClientFirstVisibleMovement(queuedFlickShotId, owner, pieceId);
+                }
+
+                queuedFlickShotId = 0u;
                 waitingForStop = true;
                 launchedThisTurn = true;
                 touchedRequiredTargetThisFlick = false;
@@ -758,6 +777,7 @@ namespace FlickDom.Gameplay
             CancelDragPresentation();
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
+            usingLocalFlickPrediction = false;
             HideFlickPreview();
         }
 
@@ -895,6 +915,7 @@ namespace FlickDom.Gameplay
 
         private void EndDragAndQueueFlick()
         {
+            uint shotId = BeginNetworkLatencySampleIfNeeded();
             Vector3 forceVector;
             Vector3 launchPosition = characterAimActive
                 ? characterAimPiecePosition
@@ -926,7 +947,7 @@ namespace FlickDom.Gameplay
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
             FlickReleased?.Invoke(this, queuedImpulse);
-            if (TrySubmitNetworkFlickRequest(queuedImpulse, launchPosition))
+            if (TrySubmitNetworkFlickRequest(queuedImpulse, launchPosition, shotId))
             {
                 return;
             }
@@ -934,18 +955,21 @@ namespace FlickDom.Gameplay
             launchQueued = true;
         }
 
-        private void BeginPendingNetworkFlick(Vector3 launchPosition)
+        private void BeginPendingNetworkFlick(Vector3 impulse, Vector3 launchPosition, uint shotId)
         {
             awaitingNetworkFlickAcceptance = true;
+            usingLocalFlickPrediction = true;
             launchedThisTurn = true;
-            launchQueued = false;
+            launchQueued = true;
+            queuedFlickShotId = shotId;
             waitingForStop = false;
             stoppedTimer = 0f;
             pieceSnapshotCount = 0;
 
+            launchPosition = PreserveCurrentHeight(launchPosition);
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
-            ParkWithoutCollision();
+            queuedImpulse = impulse;
         }
 
         private void CancelDragPresentation()
@@ -967,10 +991,15 @@ namespace FlickDom.Gameplay
 
         public bool TryQueueAuthoritativeFlick(Vector3 impulse)
         {
-            return TryQueueAuthoritativeFlick(impulse, transform.position);
+            return TryQueueAuthoritativeFlick(impulse, transform.position, 0u);
         }
 
         public bool TryQueueAuthoritativeFlick(Vector3 impulse, Vector3 requestedLaunchPosition)
+        {
+            return TryQueueAuthoritativeFlick(impulse, requestedLaunchPosition, 0u);
+        }
+
+        public bool TryQueueAuthoritativeFlick(Vector3 impulse, Vector3 requestedLaunchPosition, uint shotId)
         {
             if (isDead || launchedThisTurn || launchQueued)
             {
@@ -992,6 +1021,7 @@ namespace FlickDom.Gameplay
             cachedRigidbody.position = safeLaunchPosition;
             transform.position = safeLaunchPosition;
             queuedImpulse = impulse;
+            queuedFlickShotId = shotId;
             launchQueued = true;
             return true;
         }
@@ -1021,9 +1051,20 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (!isFinal && ShouldKeepLocalPredictionForMovingNetworkState())
+            {
+                return;
+            }
+
             if (isFinal)
             {
                 pieceSnapshotCount = 0;
+                usingLocalFlickPrediction = false;
+                awaitingNetworkFlickAcceptance = false;
+                launchQueued = false;
+                waitingForStop = false;
+                queuedFlickShotId = 0u;
+                stoppedTimer = 0f;
                 SnapToNetworkPhysicsState(position, rotation, velocity, angularVelocity);
                 return;
             }
@@ -1076,17 +1117,47 @@ namespace FlickDom.Gameplay
 
         public void MarkNetworkFlickAccepted()
         {
+            MarkNetworkFlickAccepted(Vector3.zero, Vector3.zero, 0u);
+        }
+
+        public void MarkNetworkFlickAccepted(Vector3 acceptedImpulse, Vector3 acceptedLaunchPosition)
+        {
+            MarkNetworkFlickAccepted(acceptedImpulse, acceptedLaunchPosition, 0u);
+        }
+
+        public void MarkNetworkFlickAccepted(Vector3 acceptedImpulse, Vector3 acceptedLaunchPosition, uint shotId)
+        {
             if (awaitingNetworkFlickAcceptance)
             {
-                awaitingNetworkFlickAcceptance = false;
-                launchedThisTurn = true;
-                launchQueued = false;
-                waitingForStop = false;
-                isDragging = false;
-                characterAimActive = false;
-                characterAimVector = Vector3.zero;
-                HideFlickPreview();
-                ParkWithoutCollision();
+                if (launchQueued || waitingForStop || launchedThisTurn)
+                {
+                    awaitingNetworkFlickAcceptance = false;
+                    launchedThisTurn = true;
+                    isDragging = false;
+                    characterAimActive = false;
+                    characterAimVector = Vector3.zero;
+                    HideFlickPreview();
+                    return;
+                }
+
+                if (acceptedImpulse.sqrMagnitude > 0.0001f && IsFinite(acceptedLaunchPosition))
+                {
+                    BeginAcceptedNetworkPrediction(acceptedImpulse, acceptedLaunchPosition, shotId);
+                }
+                else
+                {
+                    awaitingNetworkFlickAcceptance = false;
+                    usingLocalFlickPrediction = false;
+                    launchedThisTurn = true;
+                    launchQueued = false;
+                    waitingForStop = false;
+                    isDragging = false;
+                    characterAimActive = false;
+                    characterAimVector = Vector3.zero;
+                    HideFlickPreview();
+                    ParkWithoutCollision();
+                }
+
                 return;
             }
 
@@ -1110,6 +1181,37 @@ namespace FlickDom.Gameplay
             ParkWithoutCollision();
         }
 
+        private void BeginAcceptedNetworkPrediction(Vector3 acceptedImpulse, Vector3 acceptedLaunchPosition)
+        {
+            BeginAcceptedNetworkPrediction(acceptedImpulse, acceptedLaunchPosition, 0u);
+        }
+
+        private void BeginAcceptedNetworkPrediction(Vector3 acceptedImpulse, Vector3 acceptedLaunchPosition, uint shotId)
+        {
+            if (shotId == 0u)
+            {
+                shotId = pendingNetworkFlickShotId;
+            }
+
+            awaitingNetworkFlickAcceptance = false;
+            usingLocalFlickPrediction = true;
+            launchedThisTurn = true;
+            launchQueued = true;
+            queuedFlickShotId = shotId;
+            waitingForStop = false;
+            isDragging = false;
+            characterAimActive = false;
+            characterAimVector = Vector3.zero;
+            stoppedTimer = 0f;
+            pieceSnapshotCount = 0;
+
+            acceptedLaunchPosition = PreserveCurrentHeight(acceptedLaunchPosition);
+            cachedRigidbody.position = acceptedLaunchPosition;
+            transform.position = acceptedLaunchPosition;
+            queuedImpulse = acceptedImpulse;
+            HideFlickPreview();
+        }
+
         private bool ShouldIgnoreNetworkPoseWhileLocallyInteractive()
         {
             if (isDragging)
@@ -1120,7 +1222,7 @@ namespace FlickDom.Gameplay
             return false;
         }
 
-        private bool TrySubmitNetworkFlickRequest(Vector3 impulse, Vector3 launchPosition)
+        private bool TrySubmitNetworkFlickRequest(Vector3 impulse, Vector3 launchPosition, uint shotId)
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
             if (bootstrap == null || !bootstrap.IsRunning || bootstrap.IsHost)
@@ -1128,9 +1230,27 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
-            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition);
-            BeginPendingNetworkFlick(launchPosition);
+            bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition, shotId);
+            pendingNetworkFlickShotId = shotId;
+            BeginPendingNetworkFlick(impulse, launchPosition, shotId);
             return true;
+        }
+
+        private uint BeginNetworkLatencySampleIfNeeded()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsRunning || bootstrap.IsHost)
+            {
+                return 0u;
+            }
+
+            return bootstrap.BeginClientFlickLatencySample(owner, pieceId);
+        }
+
+        private IEnumerator RecordHostPhysicsStepCompleteAfterFixedUpdate(uint shotId)
+        {
+            yield return new WaitForFixedUpdate();
+            FlickLatencyProbe.RecordHostPhysicsStepComplete(shotId, owner, pieceId);
         }
 
         private bool ShouldReconcilePredictedPhysics()
@@ -1139,7 +1259,16 @@ namespace FlickDom.Gameplay
             return bootstrap != null
                 && bootstrap.IsClientOnly
                 && bootstrap.LocalPlayerId == owner
-                && (awaitingNetworkFlickAcceptance || waitingForStop || launchQueued || launchedThisTurn);
+                && (awaitingNetworkFlickAcceptance || usingLocalFlickPrediction || waitingForStop || launchQueued);
+        }
+
+        private bool ShouldKeepLocalPredictionForMovingNetworkState()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return usingLocalFlickPrediction
+                && bootstrap != null
+                && bootstrap.IsClientOnly
+                && bootstrap.LocalPlayerId == owner;
         }
 
         private void ReconcilePredictedPhysics(
@@ -1375,6 +1504,7 @@ namespace FlickDom.Gameplay
             characterAimVector = Vector3.zero;
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
+            usingLocalFlickPrediction = false;
             waitingForStop = false;
             invalidatedThisTurn = true;
             stoppedTimer = 0f;
@@ -1417,6 +1547,7 @@ namespace FlickDom.Gameplay
             characterAimVector = Vector3.zero;
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
+            usingLocalFlickPrediction = false;
             waitingForStop = false;
             stoppedTimer = 0f;
             HideFlickPreview();

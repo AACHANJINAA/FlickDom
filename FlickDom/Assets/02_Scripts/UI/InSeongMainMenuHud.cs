@@ -760,8 +760,10 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            GUIUtility.systemCopyBuffer = joinCode.Trim();
-            Debug.Log("[Network] Relay join code copied to clipboard.", this);
+            if (WebClipboardBridge.TryCopyText(joinCode.Trim()))
+            {
+                Debug.Log("[Network] Relay join code copied to clipboard.", this);
+            }
         }
 
         private void ApplyConnectionInput()
@@ -804,7 +806,9 @@ namespace FlickDom.Gameplay
             bool useRelay = hasBootstrap && bootstrap.UsesUnityRelay;
             bool canEditConnection = hasBootstrap && !bootstrap.IsRunning && !bootstrap.IsNetworkStartInProgress;
             bool canStartGame = hasBootstrap && bootstrap.CanStartNetworkGame;
-            bool hasRelayJoinCode = useRelay && !string.IsNullOrEmpty(bootstrap.RelayJoinCode);
+            bool hasRelayJoinCode = useRelay
+                && (!string.IsNullOrEmpty(bootstrap.RelayJoinCode)
+                    || (addressInput != null && !string.IsNullOrWhiteSpace(addressInput.text)));
 
             if (addressInput != null)
             {

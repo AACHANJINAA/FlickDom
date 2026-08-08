@@ -707,8 +707,11 @@ namespace FlickDom.Gameplay
             {
                 cachedRigidbody.position = position;
                 cachedRigidbody.rotation = rotation;
-                cachedRigidbody.linearVelocity = Vector3.zero;
-                cachedRigidbody.angularVelocity = Vector3.zero;
+                if (!cachedRigidbody.isKinematic)
+                {
+                    cachedRigidbody.linearVelocity = Vector3.zero;
+                    cachedRigidbody.angularVelocity = Vector3.zero;
+                }
             }
         }
 
