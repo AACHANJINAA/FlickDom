@@ -11,6 +11,8 @@ namespace FlickDom.Gameplay
         private const string MarkingSoundResourcePath = "Audio/Marking";
         private const string MarkingAudioObjectName = "Token Map Marking Audio";
         private const float MarkingSoundVolumeScale = 2.0f;
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
         [Header("References")]
         [SerializeField] private TokenMapManager tokenMapManager;
@@ -63,7 +65,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color emptyColor = new Color(0.45f, 0.48f, 0.5f);
         [SerializeField] private Color player1CandidateColor = new Color(0.05f, 0.28f, 1f);
         [SerializeField] private Color player2CandidateColor = new Color(1f, 0.12f, 0.08f);
-        [SerializeField] private Color sharedCandidateColor = new Color(0.72f, 0.16f, 0.95f);
+        [SerializeField] private Color sharedCandidateColor = new Color(1f, 0.78f, 0.18f);
         [SerializeField] private Color player1OwnedColor = new Color(0.02f, 0.12f, 0.65f);
         [SerializeField] private Color player2OwnedColor = new Color(0.65f, 0.04f, 0.02f);
 
@@ -80,11 +82,10 @@ namespace FlickDom.Gameplay
         private FlickDomPlayerId[,] candidatePrimaryOwners;
         private int[,] candidateFlags;
         private Material emptyMaterial;
-        private Material player1CandidateMaterial;
-        private Material player2CandidateMaterial;
-        private Material sharedCandidateMaterial;
         private Material player1OwnedMaterial;
         private Material player2OwnedMaterial;
+        private Material candidateMarkerBaseMaterial;
+        private MaterialPropertyBlock candidateMarkerPropertyBlock;
         private Transform cachedTransform;
         private Transform placementGridRoot;
         private Transform player1StarRoot;
@@ -442,7 +443,8 @@ namespace FlickDom.Gameplay
             }
 
             Renderer markerRenderer = markerObject.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = sharedCandidateMaterial;
+            markerRenderer.sharedMaterial = candidateMarkerBaseMaterial;
+            ApplyCandidateMarkerColor(markerRenderer, sharedCandidateColor);
             markerObject.SetActive(false);
 
             candidateMarkerObjects[x, y] = markerObject;
@@ -452,9 +454,6 @@ namespace FlickDom.Gameplay
         private void CreateMaterials()
         {
             emptyMaterial = CreateMaterial("Token Map Empty", emptyColor);
-            player1CandidateMaterial = CreateMaterial("Token Map Player1 Candidate", player1CandidateColor);
-            player2CandidateMaterial = CreateMaterial("Token Map Player2 Candidate", player2CandidateColor);
-            sharedCandidateMaterial = CreateMaterial("Token Map Shared Candidate", sharedCandidateColor);
             player1OwnedMaterial = CreateMaterial("Token Map Player1 Owned", player1OwnedColor);
             player2OwnedMaterial = CreateMaterial("Token Map Player2 Owned", player2OwnedColor);
 
@@ -472,6 +471,14 @@ namespace FlickDom.Gameplay
             {
                 player2OwnedMaterial = player2OwnedMaterialOverride;
             }
+
+            candidateMarkerBaseMaterial = emptyMaterialOverride != null
+                ? emptyMaterialOverride
+                : player1StarMaterial != null
+                    ? player1StarMaterial
+                    : player2StarMaterial != null
+                        ? player2StarMaterial
+                        : emptyMaterial;
         }
 
         private Material CreateMaterial(string materialName, Color color)
@@ -533,33 +540,57 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            markerRenderer.sharedMaterial =
-                ResolveCandidateMarkerMaterial(flags, candidatePrimaryOwners[cell.x, cell.y]);
+            if (candidateMarkerBaseMaterial != null)
+            {
+                markerRenderer.sharedMaterial = candidateMarkerBaseMaterial;
+            }
+
+            ApplyCandidateMarkerColor(
+                markerRenderer,
+                ResolveCandidateMarkerColor(flags, candidatePrimaryOwners[cell.x, cell.y]));
         }
 
-        private Material ResolveCandidateMarkerMaterial(int flags, FlickDomPlayerId primaryOwner)
+        private Color ResolveCandidateMarkerColor(int flags, FlickDomPlayerId primaryOwner)
         {
             if (primaryOwner == FlickDomPlayerId.Player1)
             {
-                return player1CandidateMaterial;
+                return player1CandidateColor;
             }
 
             if (primaryOwner == FlickDomPlayerId.Player2)
             {
-                return player2CandidateMaterial;
+                return player2CandidateColor;
             }
 
             if ((flags & Player1CandidateFlag) != 0)
             {
-                return player1CandidateMaterial;
+                return player1CandidateColor;
             }
 
             if ((flags & Player2CandidateFlag) != 0)
             {
-                return player2CandidateMaterial;
+                return player2CandidateColor;
             }
 
-            return sharedCandidateMaterial;
+            return sharedCandidateColor;
+        }
+
+        private void ApplyCandidateMarkerColor(Renderer markerRenderer, Color color)
+        {
+            if (markerRenderer == null)
+            {
+                return;
+            }
+
+            if (candidateMarkerPropertyBlock == null)
+            {
+                candidateMarkerPropertyBlock = new MaterialPropertyBlock();
+            }
+
+            markerRenderer.GetPropertyBlock(candidateMarkerPropertyBlock);
+            candidateMarkerPropertyBlock.SetColor(BaseColorPropertyId, color);
+            candidateMarkerPropertyBlock.SetColor(ColorPropertyId, color);
+            markerRenderer.SetPropertyBlock(candidateMarkerPropertyBlock);
         }
 
         private void HandleCellOwnerChanged(Vector2Int cell, FlickDomPlayerId previousOwner, FlickDomPlayerId nextOwner)

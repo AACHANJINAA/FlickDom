@@ -35,7 +35,7 @@ namespace FlickDom.Gameplay
                     }
 
                     Shader shader = Shader.Find(shaderNames[i]);
-                    if (shader != null)
+                    if (shader != null && shader.isSupported)
                     {
                         return shader;
                     }
@@ -78,7 +78,11 @@ namespace FlickDom.Gameplay
             Renderer renderer = primitive.GetComponent<Renderer>();
             if (renderer != null && renderer.sharedMaterial != null)
             {
-                cachedPrimitiveShader = renderer.sharedMaterial.shader;
+                Shader primitiveShader = renderer.sharedMaterial.shader;
+                if (primitiveShader != null && primitiveShader.isSupported)
+                {
+                    cachedPrimitiveShader = primitiveShader;
+                }
             }
 
             Object.Destroy(primitive);
