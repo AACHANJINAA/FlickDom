@@ -27,6 +27,14 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool hideDeadPiece = true;
         [SerializeField] private Color deadTint = new Color(0.08f, 0.08f, 0.08f);
 
+        [Header("Network Smoothing")]
+        [SerializeField, Min(0f)] private float networkCorrectionIgnoreDistance = 0.03f;
+        [SerializeField, Min(0.01f)] private float networkCorrectionSnapDistance = 0.75f;
+        [SerializeField, Range(0.01f, 1f)] private float networkPositionCorrectionBlend = 0.35f;
+        [SerializeField, Range(0.01f, 1f)] private float networkVelocityCorrectionBlend = 0.5f;
+        [SerializeField, Min(0.02f)] private float snapshotInterpolationBackTime = 0.1f;
+        [SerializeField, Min(0.0001f)] private float movingStateVelocityThreshold = 0.02f;
+
         [Header("Visuals")]
         [SerializeField] private Color player1Color = new Color(0.1f, 0.35f, 1f);
         [SerializeField] private Color player2Color = new Color(1f, 0.2f, 0.15f);
@@ -86,10 +94,15 @@ namespace FlickDom.Gameplay
         private CollisionDetectionMode originalCollisionDetectionMode;
         private float activeIndicatorDiameterMultiplierRuntime;
         private int selectionOrderNumber;
+        private readonly PieceSnapshot[] pieceSnapshots = new PieceSnapshot[SnapshotBufferSize];
+        private int pieceSnapshotCount;
+        private uint latestNetworkStateTick;
+        private bool hasLatestNetworkStateTick;
 
         private const string HitSoundResourcePath = "Audio/Hit";
         private const string PieceAudioObjectName = "Flick Piece Audio";
         private const float HitSoundCooldownSeconds = 0.03f;
+        private const int SnapshotBufferSize = 4;
 
         private static AudioSource sharedAudioSource;
         private static AudioClip hitSoundClip;
@@ -175,6 +188,12 @@ namespace FlickDom.Gameplay
             tokenRadius = Mathf.Max(0.01f, tokenRadius);
             stopSpeed = Mathf.Max(0.001f, stopSpeed);
             stopConfirmSeconds = Mathf.Max(0f, stopConfirmSeconds);
+            networkCorrectionIgnoreDistance = Mathf.Max(0f, networkCorrectionIgnoreDistance);
+            networkCorrectionSnapDistance = Mathf.Max(networkCorrectionIgnoreDistance + 0.01f, networkCorrectionSnapDistance);
+            networkPositionCorrectionBlend = Mathf.Clamp01(networkPositionCorrectionBlend);
+            networkVelocityCorrectionBlend = Mathf.Clamp01(networkVelocityCorrectionBlend);
+            snapshotInterpolationBackTime = Mathf.Max(0.02f, snapshotInterpolationBackTime);
+            movingStateVelocityThreshold = Mathf.Max(0.0001f, movingStateVelocityThreshold);
             stateIndicatorYOffset = Mathf.Max(0.01f, stateIndicatorYOffset);
             stateIndicatorHeight = Mathf.Max(0.001f, stateIndicatorHeight);
             currentTargetIndicatorDiameterMultiplier = Mathf.Max(0.1f, currentTargetIndicatorDiameterMultiplier);
@@ -184,6 +203,8 @@ namespace FlickDom.Gameplay
 
         private void LateUpdate()
         {
+            RenderNetworkSnapshotIfNeeded();
+
             if (stateIndicatorObject != null && stateIndicatorObject.activeSelf)
             {
                 UpdateStateIndicatorTransform();
@@ -511,6 +532,43 @@ namespace FlickDom.Gameplay
             float stopSpeedSqr = stopSpeed * stopSpeed;
             return cachedRigidbody.linearVelocity.sqrMagnitude <= stopSpeedSqr
                 && cachedRigidbody.angularVelocity.sqrMagnitude <= stopSpeedSqr;
+        }
+
+        public bool ShouldSendMovingNetworkState()
+        {
+            EnsureCachedComponents();
+            if (isDead)
+            {
+                return true;
+            }
+
+            if (cachedRigidbody == null || cachedRigidbody.isKinematic)
+            {
+                return waitingForStop || launchQueued;
+            }
+
+            float thresholdSqr = movingStateVelocityThreshold * movingStateVelocityThreshold;
+            return waitingForStop
+                || launchQueued
+                || cachedRigidbody.linearVelocity.sqrMagnitude > thresholdSqr
+                || cachedRigidbody.angularVelocity.sqrMagnitude > thresholdSqr;
+        }
+
+        public void GetNetworkPhysicsState(
+            out Vector3 position,
+            out Quaternion rotation,
+            out Vector3 velocity,
+            out Vector3 angularVelocity)
+        {
+            EnsureCachedComponents();
+            position = cachedRigidbody != null ? cachedRigidbody.position : transform.position;
+            rotation = cachedRigidbody != null ? cachedRigidbody.rotation : transform.rotation;
+            velocity = cachedRigidbody != null && !cachedRigidbody.isKinematic
+                ? cachedRigidbody.linearVelocity
+                : Vector3.zero;
+            angularVelocity = cachedRigidbody != null && !cachedRigidbody.isKinematic
+                ? cachedRigidbody.angularVelocity
+                : Vector3.zero;
         }
 
         public bool ShouldBeRemovedAfterLeavingPlayableBoard()
@@ -899,23 +957,43 @@ namespace FlickDom.Gameplay
 
         public void ApplyNetworkPose(Vector3 position, Quaternion rotation)
         {
+            ApplyNetworkPhysicsState(position, rotation, Vector3.zero, Vector3.zero, 0u, Time.unscaledTimeAsDouble, false);
+        }
+
+        public void ApplyNetworkPhysicsState(
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 velocity,
+            Vector3 angularVelocity,
+            uint serverTick,
+            double timestamp,
+            bool isFinal)
+        {
+            if (!ShouldAcceptNetworkStateTick(serverTick))
+            {
+                return;
+            }
+
             EnsureCachedComponents();
             if (ShouldIgnoreNetworkPoseWhileLocallyInteractive())
             {
                 return;
             }
 
-            transform.SetPositionAndRotation(position, rotation);
-            if (cachedRigidbody != null)
+            if (isFinal)
             {
-                cachedRigidbody.position = position;
-                cachedRigidbody.rotation = rotation;
-                if (!cachedRigidbody.isKinematic)
-                {
-                    cachedRigidbody.linearVelocity = Vector3.zero;
-                    cachedRigidbody.angularVelocity = Vector3.zero;
-                }
+                pieceSnapshotCount = 0;
+                SnapToNetworkPhysicsState(position, rotation, velocity, angularVelocity);
+                return;
             }
+
+            if (ShouldReconcilePredictedPhysics())
+            {
+                ReconcilePredictedPhysics(position, rotation, velocity, angularVelocity);
+                return;
+            }
+
+            AddPieceSnapshot(serverTick, timestamp, position, rotation, velocity, angularVelocity);
         }
 
         public void ApplyNetworkState(bool networkIsDead)
@@ -928,6 +1006,16 @@ namespace FlickDom.Gameplay
 
         public void MarkNetworkFlickAccepted()
         {
+            if (ShouldReconcilePredictedPhysics())
+            {
+                launchedThisTurn = true;
+                isDragging = false;
+                characterAimActive = false;
+                characterAimVector = Vector3.zero;
+                HideFlickPreview();
+                return;
+            }
+
             launchedThisTurn = true;
             launchQueued = false;
             waitingForStop = false;
@@ -957,9 +1045,186 @@ namespace FlickDom.Gameplay
             }
 
             bootstrap.SubmitFlickRequestToHost(owner, pieceId, impulse, launchPosition);
-            cachedRigidbody.position = initialPiecePosition;
-            transform.position = initialPiecePosition;
-            return true;
+            return false;
+        }
+
+        private bool ShouldReconcilePredictedPhysics()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap != null
+                && bootstrap.IsClientOnly
+                && bootstrap.LocalPlayerId == owner
+                && (waitingForStop || launchQueued || launchedThisTurn);
+        }
+
+        private void ReconcilePredictedPhysics(
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 velocity,
+            Vector3 angularVelocity)
+        {
+            if (cachedRigidbody == null)
+            {
+                transform.SetPositionAndRotation(position, rotation);
+                return;
+            }
+
+            float error = Vector3.Distance(cachedRigidbody.position, position);
+            if (error <= networkCorrectionIgnoreDistance)
+            {
+                return;
+            }
+
+            if (error >= networkCorrectionSnapDistance)
+            {
+                SnapToNetworkPhysicsState(position, rotation, velocity, angularVelocity);
+                return;
+            }
+
+            Vector3 correctedPosition = Vector3.Lerp(
+                cachedRigidbody.position,
+                position,
+                networkPositionCorrectionBlend);
+            Quaternion correctedRotation = Quaternion.Slerp(
+                cachedRigidbody.rotation,
+                rotation,
+                networkPositionCorrectionBlend);
+            cachedRigidbody.position = correctedPosition;
+            cachedRigidbody.rotation = correctedRotation;
+            transform.SetPositionAndRotation(correctedPosition, correctedRotation);
+
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = Vector3.Lerp(
+                    cachedRigidbody.linearVelocity,
+                    velocity,
+                    networkVelocityCorrectionBlend);
+                cachedRigidbody.angularVelocity = Vector3.Lerp(
+                    cachedRigidbody.angularVelocity,
+                    angularVelocity,
+                    networkVelocityCorrectionBlend);
+            }
+        }
+
+        private void SnapToNetworkPhysicsState(
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 velocity,
+            Vector3 angularVelocity)
+        {
+            transform.SetPositionAndRotation(position, rotation);
+            if (cachedRigidbody == null)
+            {
+                return;
+            }
+
+            cachedRigidbody.position = position;
+            cachedRigidbody.rotation = rotation;
+            if (!cachedRigidbody.isKinematic)
+            {
+                cachedRigidbody.linearVelocity = velocity;
+                cachedRigidbody.angularVelocity = angularVelocity;
+            }
+        }
+
+        private void AddPieceSnapshot(
+            uint tick,
+            double timestamp,
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 velocity,
+            Vector3 angularVelocity)
+        {
+            if (pieceSnapshotCount >= SnapshotBufferSize)
+            {
+                for (int i = 1; i < SnapshotBufferSize; i++)
+                {
+                    pieceSnapshots[i - 1] = pieceSnapshots[i];
+                }
+
+                pieceSnapshotCount = SnapshotBufferSize - 1;
+            }
+
+            pieceSnapshots[pieceSnapshotCount++] = new PieceSnapshot
+            {
+                Tick = tick,
+                Timestamp = timestamp,
+                Position = position,
+                Rotation = rotation,
+                Velocity = velocity,
+                AngularVelocity = angularVelocity
+            };
+        }
+
+        private bool ShouldAcceptNetworkStateTick(uint tick)
+        {
+            if (tick == 0u)
+            {
+                return true;
+            }
+
+            if (!hasLatestNetworkStateTick || IsTickNewerOrEqual(tick, latestNetworkStateTick))
+            {
+                hasLatestNetworkStateTick = true;
+                latestNetworkStateTick = tick;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsTickNewerOrEqual(uint incoming, uint previous)
+        {
+            return incoming == previous || (int)(incoming - previous) > 0;
+        }
+
+        private void RenderNetworkSnapshotIfNeeded()
+        {
+            if (ShouldReconcilePredictedPhysics() || isDragging || pieceSnapshotCount <= 0)
+            {
+                return;
+            }
+
+            double renderTime = GetNetworkRenderTime();
+            PieceSnapshot target = pieceSnapshots[pieceSnapshotCount - 1];
+            if (pieceSnapshotCount >= 2)
+            {
+                for (int i = 0; i < pieceSnapshotCount - 1; i++)
+                {
+                    PieceSnapshot from = pieceSnapshots[i];
+                    PieceSnapshot to = pieceSnapshots[i + 1];
+                    if (renderTime < from.Timestamp || renderTime > to.Timestamp)
+                    {
+                        continue;
+                    }
+
+                    double duration = Math.Max(0.0001d, to.Timestamp - from.Timestamp);
+                    float t = Mathf.Clamp01((float)((renderTime - from.Timestamp) / duration));
+                    target = new PieceSnapshot
+                    {
+                        Tick = to.Tick,
+                        Timestamp = renderTime,
+                        Position = Vector3.Lerp(from.Position, to.Position, t),
+                        Rotation = Quaternion.Slerp(from.Rotation, to.Rotation, t),
+                        Velocity = Vector3.Lerp(from.Velocity, to.Velocity, t),
+                        AngularVelocity = Vector3.Lerp(from.AngularVelocity, to.AngularVelocity, t)
+                    };
+                    break;
+                }
+            }
+
+            SnapToNetworkPhysicsState(target.Position, target.Rotation, target.Velocity, target.AngularVelocity);
+        }
+
+        private double GetNetworkRenderTime()
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null && bootstrap.NetworkManager != null)
+            {
+                return bootstrap.NetworkManager.ServerTime.Time - snapshotInterpolationBackTime;
+            }
+
+            return Time.unscaledTimeAsDouble - snapshotInterpolationBackTime;
         }
 
         private void TickStopDetection()
@@ -1516,6 +1781,16 @@ namespace FlickDom.Gameplay
             {
                 material.SetColor(ColorPropertyId, color);
             }
+        }
+
+        private struct PieceSnapshot
+        {
+            public uint Tick;
+            public double Timestamp;
+            public Vector3 Position;
+            public Quaternion Rotation;
+            public Vector3 Velocity;
+            public Vector3 AngularVelocity;
         }
     }
 }
