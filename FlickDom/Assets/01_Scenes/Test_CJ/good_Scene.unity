@@ -356,6 +356,102 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &684862708
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 684862710}
+  - component: {fileID: 684862711}
+  m_Layer: 0
+  m_Name: InSeong Main Menu HUD
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &684862710
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 684862708}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &684862711
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 684862708}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b7ef4aa99ff68b429b3c915d3a191cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.InSeongMainMenuHud
+  backgroundTexture: {fileID: 0}
+  editorBackgroundAssetPath: Assets/04_Arts/UI/FlickDom_main.png
+  resourcesBackgroundPath: UI/FlickDom_main
+  menuPanelSize: {x: 620, y: 470}
+  menuPanelOffset: {x: 60, y: 0}
+  buttonSize: {x: 250, y: 66}
+  titleFontSize: 52
+  buttonFontSize: 19
+  bodyFontSize: 17
+  dimColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.27058825}
+  panelColor: {r: 0, g: 0, b: 0, a: 0}
+  buttonColor: {r: 1, g: 0.86, b: 0.28, a: 0.94}
+  buttonHighlightedColor: {r: 1, g: 0.94, b: 0.46, a: 1}
+  buttonPressedColor: {r: 0.88, g: 0.63, b: 0.16, a: 1}
+  disabledButtonColor: {r: 0.55, g: 0.55, b: 0.55, a: 0.62}
+  textColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  lightTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  inputColor: {r: 1, g: 1, b: 1, a: 0.9}
+  focusedInputColor: {r: 1, g: 0.95, b: 0.58, a: 0.98}
+  panelSprite: {fileID: 0}
+  dialogPanelSprite: {fileID: 21300000, guid: 363851b00df18364daed29a43965b617, type: 3}
+  dialogPanelSize: {x: 680, y: 460}
+  dialogPanelColor: {r: 1, g: 1, b: 1, a: 1}
+  dialogPanelBorderScale: 1.8
+  buttonSprite: {fileID: 21300000, guid: 4762aaf2befaa65459d4ddfa424f95db, type: 3}
+  singleModeButtonSprite: {fileID: 21300000, guid: e152f22eaf3ac7d4aaff6f356b277f3b, type: 3}
+  multiplayerButtonSprite: {fileID: 21300000, guid: df1cb0dba9c537a488aa6fc1ce5066ea, type: 3}
+  gameRulesButtonSprite: {fileID: 21300000, guid: bbff852fdf5d7d0459c3ad198f8cde7d, type: 3}
+  inputSlotSprite: {fileID: 21300000, guid: 8fdb5c505a5b45448816c96e7a113272, type: 3}
+  logoSprite: {fileID: 21300000, guid: 0573184e9a24e7a4695b79b530edb6e5, type: 3}
+  logoSize: {x: 560, y: 166}
+  rulesImageSprite: {fileID: 21300000, guid: 1ab71636c9074b9498f0316b2f0bf131, type: 3}
+  rulesImageSize: {x: 660, y: 372}
+  titleText: FlickDom
+  singleModeText: Single Play
+  multiplayerText: Multiplayer
+  gameRulesText: Rules
+  createRoomText: Create Room
+  joinRoomText: Join Room
+  copyCodeText: Copy Code
+  startGameText: Start Game
+  backText: Back
+  addressLabelText: IP Address
+  portLabelText: Port
+  emptyRulesText: 
+  bundledFont: {fileID: 0}
+  bundledFontResourcePath: Fonts/NotoSansKR-VF
+  fallbackFontNames:
+  - Malgun Gothic
+  - Segoe UI
+  - Arial Unicode MS
+  - Arial
 --- !u!1001 &733616310
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1726,12 +1822,12 @@ MonoBehaviour:
   firstOrderColor: {r: 1, g: 0.68, b: 0.05, a: 1}
   secondOrderColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
   thirdOrderColor: {r: 0.15, g: 0.68, b: 1, a: 1}
-  outlineColor: {r: 0, g: 0, b: 0, a: 0.8}
+  outlineColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.8}
   outlineDistance: {x: 2, y: -2}
-  restartButtonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.96}
-  restartButtonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
-  restartButtonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
-  restartButtonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
+  restartButtonColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
+  restartButtonHighlightedColor: {r: 0.96862745, g: 0.7372549, b: 0.3882353, a: 1}
+  restartButtonPressedColor: {r: 0.7882353, g: 0.49803922, b: 0.16470589, a: 1}
+  restartButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
 --- !u!114 &1371976863
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1801,15 +1897,15 @@ MonoBehaviour:
   returnText: "\uB3CC\uC544\uAC00\uAE30"
   emptyCardText: "\uCE74\uB4DC \uC5C6\uC74C"
   roundChangeText: Round Change
-  panelColor: {r: 0.08, g: 0.09, b: 0.1, a: 0.86}
-  buttonColor: {r: 0.93, g: 0.95, b: 0.96, a: 0.96}
-  buttonHighlightedColor: {r: 1, g: 1, b: 1, a: 1}
-  buttonPressedColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
-  buttonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
-  cardBackgroundColor: {r: 1, g: 1, b: 1, a: 0.97}
-  emptyCardTextColor: {r: 0.94, g: 0.96, b: 0.98, a: 1}
-  roundChangePanelColor: {r: 0.05, g: 0.06, b: 0.07, a: 0.9}
-  roundChangeTextColor: {r: 1, g: 1, b: 1, a: 1}
+  panelColor: {r: 0.3529412, g: 0.20392157, b: 0.09411765, a: 0.8784314}
+  buttonColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
+  buttonHighlightedColor: {r: 0.96862745, g: 0.7372549, b: 0.3882353, a: 1}
+  buttonPressedColor: {r: 0.7882353, g: 0.49803922, b: 0.16470589, a: 1}
+  buttonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  cardBackgroundColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  emptyCardTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  roundChangePanelColor: {r: 0.3529412, g: 0.20392157, b: 0.09411765, a: 0.9019608}
+  roundChangeTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
 --- !u!114 &1371976864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1884,18 +1980,18 @@ MonoBehaviour:
   - Segoe UI
   - Arial Unicode MS
   - Arial
-  dimmerColor: {r: 0.02, g: 0.07, b: 0.12, a: 0.32}
-  frameColor: {r: 1, g: 1, b: 1, a: 0.98}
-  stageTextColor: {r: 1, g: 0.93, b: 0.55, a: 1}
-  confirmButtonColor: {r: 1, g: 0.88, b: 0.28, a: 0.98}
-  confirmButtonHighlightedColor: {r: 1, g: 0.96, b: 0.55, a: 1}
-  confirmButtonPressedColor: {r: 0.94, g: 0.7, b: 0.12, a: 1}
-  confirmButtonTextColor: {r: 0.08, g: 0.1, b: 0.12, a: 1}
-  fallbackBaseColor: {r: 0.96, g: 0.94, b: 0.88, a: 1}
+  dimmerColor: {r: 0.22745098, g: 0.14117648, b: 0.07058824, a: 0.65882355}
+  frameColor: {r: 0.9098039, g: 0.62352943, b: 0.2509804, a: 1}
+  stageTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  confirmButtonColor: {r: 0.5647059, g: 0.63529414, b: 0.15294118, a: 1}
+  confirmButtonHighlightedColor: {r: 0.65882355, g: 0.74509805, b: 0.2, a: 1}
+  confirmButtonPressedColor: {r: 0.43137255, g: 0.4862745, b: 0.10980392, a: 1}
+  confirmButtonTextColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
+  fallbackBaseColor: {r: 0.9843137, g: 0.90588236, b: 0.7490196, a: 1}
   easyColor: {r: 0.42, g: 0.68, b: 0.12, a: 1}
   normalColor: {r: 0.95, g: 0.72, b: 0.12, a: 1}
   hardColor: {r: 0.82, g: 0.16, b: 0.16, a: 1}
-  emptyCellColor: {r: 0.8, g: 0.78, b: 0.7, a: 1}
+  emptyCellColor: {r: 0.89411765, g: 0.827451, b: 0.68235296, a: 1}
 --- !u!1001 &1660593428
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2168,3 +2264,4 @@ SceneRoots:
   - {fileID: 1357366719}
   - {fileID: 605210813}
   - {fileID: 1246881620}
+  - {fileID: 684862710}
