@@ -1552,11 +1552,13 @@ namespace FlickDom.Networking
             if (gameModeManager.CurrentState != FlickDomGameState.NotStarted)
             {
                 localGameStartedFromNetwork = true;
+                FlickDomBgmPlayer.PlayInGameBgm();
                 Debug.Log("[Network] GameModeManager already started. Current state: " + gameModeManager.CurrentState + ".", this);
                 return;
             }
 
             gameModeManager.StartLocalGame();
+            FlickDomBgmPlayer.PlayInGameBgm();
             localGameStartedFromNetwork = true;
             SubscribeGameModeEvents(true);
             SubscribePatternCardEvents(true);
@@ -1588,6 +1590,7 @@ namespace FlickDom.Networking
             localGameStartedFromNetwork = true;
             SetLocalPlayerRole(FlickDomPlayerId.None);
             gameModeManager.StartLocalGame();
+            FlickDomBgmPlayer.PlayInGameBgm();
             SubscribeGameModeEvents(true);
             SubscribePatternCardEvents(true);
             Debug.Log("[Network] Single-player mode started from lobby.", this);

@@ -116,6 +116,7 @@ namespace FlickDom.Gameplay
             }
 
             ApplyWebSafeText();
+            FlickDomBgmPlayer.PlayStartBgm();
             EnsureBootstrap();
             BuildHud();
             ShowMainMenu();
@@ -495,6 +496,7 @@ namespace FlickDom.Gameplay
             EnsureBootstrap();
             if (bootstrap != null && bootstrap.TryStartSinglePlayerModeFromMenu())
             {
+                FlickDomBgmPlayer.PlayInGameBgm();
                 canvas.gameObject.SetActive(false);
             }
         }
@@ -530,6 +532,7 @@ namespace FlickDom.Gameplay
             EnsureBootstrap();
             if (bootstrap != null && bootstrap.TryStartNetworkGameFromMenu())
             {
+                FlickDomBgmPlayer.PlayInGameBgm();
                 canvas.gameObject.SetActive(false);
             }
         }
