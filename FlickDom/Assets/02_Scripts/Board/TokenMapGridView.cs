@@ -8,8 +8,8 @@ namespace FlickDom.Gameplay
     {
         private const int Player1CandidateFlag = 1;
         private const int Player2CandidateFlag = 2;
-        private const string StampSoundResourcePath = "Audio/Stamp";
-        private const string StampAudioObjectName = "Token Map Stamp Audio";
+        private const string MarkingSoundResourcePath = "Audio/Marking";
+        private const string MarkingAudioObjectName = "Token Map Marking Audio";
 
         [Header("References")]
         [SerializeField] private TokenMapManager tokenMapManager;
@@ -100,8 +100,8 @@ namespace FlickDom.Gameplay
         private GameObject[] starStampPool;
         private int nextStarStampIndex;
         private readonly Dictionary<Collider, TokenMapGridCell> cellsByCollider = new Dictionary<Collider, TokenMapGridCell>();
-        private static AudioSource stampAudioSource;
-        private static AudioClip stampSoundClip;
+        private static AudioSource markingAudioSource;
+        private static AudioClip markingSoundClip;
 
         public Vector3 GridCenter
         {
@@ -131,7 +131,7 @@ namespace FlickDom.Gameplay
             BuildGrid();
             BuildStarPools();
             BuildStarStampPool();
-            PreloadStampSound();
+            PreloadMarkingSound();
         }
 
         private void OnEnable()
@@ -982,7 +982,7 @@ namespace FlickDom.Gameplay
 
             if (playStamp)
             {
-                PlayStampSound();
+                PlayMarkingSound();
             }
 
             stars[starIndex].SetActive(placementBoardVisible);
@@ -1049,7 +1049,7 @@ namespace FlickDom.Gameplay
 
             yield return MoveStamp(stampObject.transform, startPosition, impactPosition, starStampDownDuration);
 
-            PlayStampSound();
+            PlayMarkingSound();
 
             if (starObject != null && IsPlacementStarStillAssigned(starObject, cell))
             {
@@ -1065,59 +1065,59 @@ namespace FlickDom.Gameplay
             stampObject.SetActive(false);
         }
 
-        private static void PlayStampSound()
+        private static void PlayMarkingSound()
         {
-            EnsureStampAudioSource();
-            EnsureStampSoundClip();
-            if (stampAudioSource == null || stampSoundClip == null)
+            EnsureMarkingAudioSource();
+            EnsureMarkingSoundClip();
+            if (markingAudioSource == null || markingSoundClip == null)
             {
                 return;
             }
 
-            stampAudioSource.PlayOneShot(stampSoundClip);
+            markingAudioSource.PlayOneShot(markingSoundClip);
         }
 
-        private static void PreloadStampSound()
+        private static void PreloadMarkingSound()
         {
-            EnsureStampAudioSource();
-            EnsureStampSoundClip();
+            EnsureMarkingAudioSource();
+            EnsureMarkingSoundClip();
         }
 
-        private static void EnsureStampAudioSource()
+        private static void EnsureMarkingAudioSource()
         {
-            if (stampAudioSource != null)
+            if (markingAudioSource != null)
             {
                 return;
             }
 
-            GameObject audioObject = GameObject.Find(StampAudioObjectName);
+            GameObject audioObject = GameObject.Find(MarkingAudioObjectName);
             if (audioObject == null)
             {
-                audioObject = new GameObject(StampAudioObjectName);
+                audioObject = new GameObject(MarkingAudioObjectName);
                 DontDestroyOnLoad(audioObject);
             }
 
-            if (!audioObject.TryGetComponent(out stampAudioSource))
+            if (!audioObject.TryGetComponent(out markingAudioSource))
             {
-                stampAudioSource = audioObject.AddComponent<AudioSource>();
+                markingAudioSource = audioObject.AddComponent<AudioSource>();
             }
 
-            stampAudioSource.playOnAwake = false;
-            stampAudioSource.loop = false;
-            stampAudioSource.spatialBlend = 0f;
+            markingAudioSource.playOnAwake = false;
+            markingAudioSource.loop = false;
+            markingAudioSource.spatialBlend = 0f;
         }
 
-        private static void EnsureStampSoundClip()
+        private static void EnsureMarkingSoundClip()
         {
-            if (stampSoundClip != null)
+            if (markingSoundClip != null)
             {
                 return;
             }
 
-            stampSoundClip = Resources.Load<AudioClip>(StampSoundResourcePath);
-            if (stampSoundClip == null)
+            markingSoundClip = Resources.Load<AudioClip>(MarkingSoundResourcePath);
+            if (markingSoundClip == null)
             {
-                Debug.LogWarning("[Stamp Audio] Could not load sound at Resources/" + StampSoundResourcePath + ".", null);
+                Debug.LogWarning("[Marking Audio] Could not load sound at Resources/" + MarkingSoundResourcePath + ".", null);
             }
         }
 

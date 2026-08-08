@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using FlickDom.Networking;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private float raycastDistance = 100f;
         [SerializeField] private bool autoCompleteWhenAllCandidatesPlaced = true;
         [SerializeField] private bool autoStartNextRoundAfterPlacement = true;
+        [SerializeField] private float placementCompletionDelay = 1f;
         [SerializeField] private bool showOnlyCurrentCandidate = true;
         [SerializeField] private bool logSelections = true;
 
@@ -48,6 +50,7 @@ namespace FlickDom.Gameplay
         private Canvas messageCanvas;
         private Text messageText;
         private Font resolvedMessageFont;
+        private Coroutine delayedCompletionRoutine;
 
         private void Awake()
         {
@@ -89,6 +92,7 @@ namespace FlickDom.Gameplay
         private void OnValidate()
         {
             raycastDistance = Mathf.Max(1f, raycastDistance);
+            placementCompletionDelay = Mathf.Max(0f, placementCompletionDelay);
             messageFontSize = Mathf.Max(8, messageFontSize);
             messagePanelSize.x = Mathf.Max(120f, messagePanelSize.x);
             messagePanelSize.y = Mathf.Max(32f, messagePanelSize.y);
@@ -113,6 +117,8 @@ namespace FlickDom.Gameplay
             {
                 gameModeManager.StateChanged -= HandleStateChanged;
             }
+
+            StopDelayedCompletion();
         }
 
         private void OnDestroy()
@@ -168,12 +174,14 @@ namespace FlickDom.Gameplay
             selectionActive = nextState == FlickDomGameState.PlacementSelection;
             if (selectionActive)
             {
+                StopDelayedCompletion();
                 resolvedCandidates.Clear();
                 ClearPendingRelocation();
                 RefreshActiveCandidateHighlight();
             }
             else
             {
+                StopDelayedCompletion();
                 activeCandidate = null;
                 ClearPendingRelocation();
                 HideSelectionMessage();
@@ -531,12 +539,57 @@ namespace FlickDom.Gameplay
             IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
             if (candidates.Count > 0 && resolvedCandidates.Count >= candidates.Count)
             {
-                bool completedPlacement = gameModeManager.CompletePlacementSelection();
-                if (completedPlacement && autoStartNextRoundAfterPlacement)
-                {
-                    AdvanceToNextRoundForLocalTest();
-                }
+                BeginDelayedCompletion();
             }
+        }
+
+        private void BeginDelayedCompletion()
+        {
+            if (delayedCompletionRoutine != null)
+            {
+                return;
+            }
+
+            delayedCompletionRoutine = StartCoroutine(CompletePlacementAfterDelay());
+        }
+
+        private IEnumerator CompletePlacementAfterDelay()
+        {
+            if (placementCompletionDelay > 0f)
+            {
+                yield return new WaitForSeconds(placementCompletionDelay);
+            }
+
+            delayedCompletionRoutine = null;
+            if (gameModeManager == null
+                || gameModeManager.CurrentState != FlickDomGameState.PlacementSelection
+                || !CanControlLocalGameState())
+            {
+                yield break;
+            }
+
+            IReadOnlyList<PiecePlacementCandidate> candidates = gameModeManager.PendingPlacementCandidates;
+            if (candidates.Count <= 0 || resolvedCandidates.Count < candidates.Count)
+            {
+                yield break;
+            }
+
+            bool completedPlacement = gameModeManager.CompletePlacementSelection();
+            if (completedPlacement && autoStartNextRoundAfterPlacement)
+            {
+                AdvanceToNextRoundForLocalTest();
+            }
+        }
+
+        private void StopDelayedCompletion()
+        {
+            if (delayedCompletionRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(delayedCompletionRoutine);
+            delayedCompletionRoutine = null;
         }
 
         private void AdvanceToNextRoundForLocalTest()
