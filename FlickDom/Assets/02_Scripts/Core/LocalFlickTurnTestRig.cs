@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using FlickDom.Networking;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -69,6 +70,8 @@ namespace FlickDom.Gameplay
         private Coroutine noPlacementAdvanceRoutine;
         private Canvas orderLabelCanvas;
         private readonly List<Text> orderLabels = new List<Text>(3);
+        private bool suppressPieceOrderInputUntilPointerReleased;
+        private int pieceOrderInputUnlockFrame;
 
         private void Awake()
         {
@@ -338,6 +341,11 @@ namespace FlickDom.Gameplay
 
             Mouse mouse = Mouse.current;
             if (mouse == null || inputCamera == null || !mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            if (ShouldSuppressPieceOrderInput(mouse))
             {
                 return;
             }
@@ -1120,6 +1128,7 @@ namespace FlickDom.Gameplay
             if (nextState == FlickDomGameState.PieceOrderSelection)
             {
                 StopPendingNoPlacementAdvance();
+                SuppressPieceOrderInputUntilPointerReleased();
                 CompleteOrderSelectionIfNoPieces();
             }
             else if (nextState == FlickDomGameState.PlayerFlicking)
@@ -1138,6 +1147,34 @@ namespace FlickDom.Gameplay
 
             RefreshPieceHighlights();
             RefreshOrderLabels();
+        }
+
+        private void SuppressPieceOrderInputUntilPointerReleased()
+        {
+            suppressPieceOrderInputUntilPointerReleased = true;
+            pieceOrderInputUnlockFrame = Time.frameCount + 1;
+        }
+
+        private bool ShouldSuppressPieceOrderInput(Mouse mouse)
+        {
+            EventSystem eventSystem = EventSystem.current;
+            if (eventSystem != null && eventSystem.IsPointerOverGameObject())
+            {
+                return true;
+            }
+
+            if (!suppressPieceOrderInputUntilPointerReleased)
+            {
+                return false;
+            }
+
+            if (mouse.leftButton.isPressed || Time.frameCount <= pieceOrderInputUnlockFrame)
+            {
+                return true;
+            }
+
+            suppressPieceOrderInputUntilPointerReleased = false;
+            return false;
         }
 
         private void BeginNoPlacementAdvanceIfNeeded()
