@@ -15,6 +15,7 @@ namespace FlickDom.Gameplay
 
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
+        [SerializeField] private InSeongPatternCardDealRevealHud cardRevealHud;
         [SerializeField] private PlacementCameraController placementCameraController;
         [SerializeField] private Font font;
         [SerializeField] private string bundledFontResourcePath = DefaultBundledFontResourcePath;
@@ -118,6 +119,8 @@ namespace FlickDom.Gameplay
             {
                 cardManager = GetComponent<PatternCardManager>();
             }
+
+            ResolveCardRevealHud();
 
             if (placementCameraController == null)
             {
@@ -514,12 +517,38 @@ namespace FlickDom.Gameplay
         private void ShowCardPanel()
         {
             ClosePlacementPreview();
+
+            InSeongPatternCardDealRevealHud revealHud = ResolveCardRevealHud();
+            if (revealHud != null)
+            {
+                ShowIdleState();
+                revealHud.PlayCurrentCardReveal();
+                return;
+            }
+
             screenBlocker.SetActive(true);
             menuButtonObject.SetActive(false);
             menuPanel.SetActive(false);
             placementReturnPanel.SetActive(false);
             cardPanel.SetActive(true);
             RebuildCardContent();
+        }
+
+        private InSeongPatternCardDealRevealHud ResolveCardRevealHud()
+        {
+            if (cardRevealHud != null)
+            {
+                return cardRevealHud;
+            }
+
+            cardRevealHud = GetComponent<InSeongPatternCardDealRevealHud>();
+            if (cardRevealHud != null)
+            {
+                return cardRevealHud;
+            }
+
+            cardRevealHud = FindAnyObjectByType<InSeongPatternCardDealRevealHud>();
+            return cardRevealHud;
         }
 
         private void ShowPlacementPreview()

@@ -13,6 +13,7 @@ namespace FlickDom.Gameplay
     {
         [Header("References")]
         [SerializeField] private PatternCardManager cardManager;
+        [SerializeField] private PatternCardDealRevealHud cardRevealHud;
         [SerializeField] private PlacementCameraController placementCameraController;
         [SerializeField] private Font font;
         [SerializeField] private string[] fallbackFontNames =
@@ -82,6 +83,8 @@ namespace FlickDom.Gameplay
             {
                 cardManager = GetComponent<PatternCardManager>();
             }
+
+            ResolveCardRevealHud();
 
             if (placementCameraController == null)
             {
@@ -448,12 +451,38 @@ namespace FlickDom.Gameplay
         private void ShowCardPanel()
         {
             ClosePlacementPreview();
+
+            PatternCardDealRevealHud revealHud = ResolveCardRevealHud();
+            if (revealHud != null)
+            {
+                ShowIdleState();
+                revealHud.PlayCurrentCardReveal();
+                return;
+            }
+
             screenBlocker.SetActive(true);
             menuButtonObject.SetActive(false);
             menuPanel.SetActive(false);
             placementReturnPanel.SetActive(false);
             cardPanel.SetActive(true);
             RebuildCardContent();
+        }
+
+        private PatternCardDealRevealHud ResolveCardRevealHud()
+        {
+            if (cardRevealHud != null)
+            {
+                return cardRevealHud;
+            }
+
+            cardRevealHud = GetComponent<PatternCardDealRevealHud>();
+            if (cardRevealHud != null)
+            {
+                return cardRevealHud;
+            }
+
+            cardRevealHud = FindAnyObjectByType<PatternCardDealRevealHud>();
+            return cardRevealHud;
         }
 
         private void ShowPlacementPreview()
@@ -588,7 +617,7 @@ namespace FlickDom.Gameplay
                 for (int i = 0; i < cardManager.RemainingCardCount; i++)
                 {
                     PatternCardData card = cardManager.GetRemainingCard(i);
-                    Texture2D texture = ResolveTextureForCard(card, i);
+                    Texture2D texture = ResolveTextureForCard(card);
                     if (texture != null)
                     {
                         textures.Add(texture);
@@ -612,7 +641,7 @@ namespace FlickDom.Gameplay
             return textures;
         }
 
-        private Texture2D ResolveTextureForCard(PatternCardData card, int fallbackIndex)
+        private Texture2D ResolveTextureForCard(PatternCardData card)
         {
             Texture2D boundTexture = PatternCardTextureBinding.Resolve(cardTextureBindings, card);
             if (boundTexture != null)
@@ -620,9 +649,17 @@ namespace FlickDom.Gameplay
                 return boundTexture;
             }
 
-            if (cardTextures != null && fallbackIndex >= 0 && fallbackIndex < cardTextures.Length)
+            if (cardManager != null && cardTextures != null)
             {
-                return cardTextures[fallbackIndex];
+                int remainingCount = Mathf.Min(cardManager.RemainingCardCount, cardTextures.Length);
+                for (int i = 0; i < remainingCount; i++)
+                {
+                    PatternCardData remainingCard = cardManager.GetRemainingCard(i);
+                    if (ReferenceEquals(remainingCard, card) && cardTextures[i] != null)
+                    {
+                        return cardTextures[i];
+                    }
+                }
             }
 
             if (card == null || string.IsNullOrEmpty(card.ResourcesImagePath))
