@@ -44,11 +44,11 @@ namespace FlickDom.Gameplay
         [SerializeField] private float roundChangeMessageSeconds = 1.6f;
 
         [Header("Text")]
-        [SerializeField] private string menuText = "메뉴";
-        [SerializeField] private string cardViewText = "카드 보기";
-        [SerializeField] private string placementViewText = "점령칸 보기";
-        [SerializeField] private string returnText = "돌아가기";
-        [SerializeField] private string emptyCardText = "카드 없음";
+        [SerializeField] private string menuText = "Menu";
+        [SerializeField] private string cardViewText = "Cards";
+        [SerializeField] private string placementViewText = "Board";
+        [SerializeField] private string returnText = "Back";
+        [SerializeField] private string emptyCardText = "No Card";
         [SerializeField] private string roundChangeText = "Round Change";
 
         [Header("Colors")]
@@ -76,6 +76,8 @@ namespace FlickDom.Gameplay
 
         private void Awake()
         {
+            ApplyWebSafeText();
+
             if (cardManager == null)
             {
                 cardManager = GetComponent<PatternCardManager>();
@@ -88,6 +90,15 @@ namespace FlickDom.Gameplay
 
             BuildHud();
             ShowIdleState();
+        }
+
+        private void ApplyWebSafeText()
+        {
+            menuText = "Menu";
+            cardViewText = "Cards";
+            placementViewText = "Board";
+            returnText = "Back";
+            emptyCardText = "No Card";
         }
 
         private void OnEnable()

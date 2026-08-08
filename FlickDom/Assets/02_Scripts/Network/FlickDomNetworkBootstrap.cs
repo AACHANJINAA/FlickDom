@@ -8,7 +8,6 @@ using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace FlickDom.Networking
@@ -22,20 +21,17 @@ namespace FlickDom.Networking
         [SerializeField] private string connectAddress = "127.0.0.1";
         [SerializeField] private string hostListenAddress = "0.0.0.0";
         [SerializeField] private bool forceHostListenOnAllInterfaces = true;
+        [SerializeField] private bool useWebSocketTransport = true;
         [SerializeField] private ushort port = 7777;
         [SerializeField] private int maxPlayers = 2;
         [SerializeField] private bool persistAcrossScenes;
         [SerializeField] private float maxNetworkFlickImpulseMagnitude = 30f;
 
         [Header("Local Test Controls")]
-        [SerializeField] private bool enableKeyboardShortcuts = true;
         [SerializeField] private bool showRuntimeStatus;
         [SerializeField] private bool showLobbyUi;
         [SerializeField] private bool disableLocalAutoStartForNetworkLobby = true;
         [SerializeField] private bool enableCommandLineAutoStart = true;
-        [SerializeField] private Key startHostKey = Key.S;
-        [SerializeField] private Key startClientKey = Key.C;
-        [SerializeField] private Key shutdownKey = Key.X;
 
         private const string DefaultNetworkSceneName = "good_Scene";
         private const string StartGameMessageName = "FlickDom.StartGame";
@@ -43,7 +39,10 @@ namespace FlickDom.Networking
         private const string GameStateMessageName = "FlickDom.GameState";
         private const string FlickRequestMessageName = "FlickDom.FlickRequest";
         private const string FlickAcceptedMessageName = "FlickDom.FlickAccepted";
+        private const string MonkeyInputMessageName = "FlickDom.MonkeyInput";
+        private const string MonkeyPoseMessageName = "FlickDom.MonkeyPose";
         private const string PieceOrderSelectionMessageName = "FlickDom.PieceOrderSelection";
+        private const string PieceOrderStateMessageName = "FlickDom.PieceOrderState";
         private const string PieceTransformMessageName = "FlickDom.PieceTransform";
         private const string PlacementRequestMessageName = "FlickDom.PlacementRequest";
         private const string PlacementAcceptedMessageName = "FlickDom.PlacementAccepted";
@@ -74,7 +73,10 @@ namespace FlickDom.Networking
         private bool gameStateMessageHandlerRegistered;
         private bool flickRequestMessageHandlerRegistered;
         private bool flickAcceptedMessageHandlerRegistered;
+        private bool monkeyInputMessageHandlerRegistered;
+        private bool monkeyPoseMessageHandlerRegistered;
         private bool pieceOrderSelectionMessageHandlerRegistered;
+        private bool pieceOrderStateMessageHandlerRegistered;
         private bool pieceTransformMessageHandlerRegistered;
         private bool placementRequestMessageHandlerRegistered;
         private bool placementAcceptedMessageHandlerRegistered;
@@ -94,7 +96,7 @@ namespace FlickDom.Networking
         private bool networkStartInProgress;
         private int lobbyPlayerCount;
         private float nextTransformBroadcastTime;
-        private const float TransformBroadcastInterval = 0.05f;
+        private const float TransformBroadcastInterval = 0.1f;
 
         public NetworkManager NetworkManager
         {
@@ -255,27 +257,6 @@ namespace FlickDom.Networking
         {
             RegisterNetworkMessageHandlersIfReady();
             BroadcastPieceTransformsIfNeeded();
-
-            if (!enableKeyboardShortcuts || showLobbyUi || Keyboard.current == null)
-            {
-                return;
-            }
-
-            if (WasPressedThisFrame(startHostKey))
-            {
-                Debug.Log("[Network] S pressed. Trying to start Host.", this);
-                StartHost();
-            }
-            else if (WasPressedThisFrame(startClientKey))
-            {
-                Debug.Log("[Network] C pressed. Trying to start Client.", this);
-                StartClient();
-            }
-            else if (WasPressedThisFrame(shutdownKey))
-            {
-                Debug.Log("[Network] X pressed. Shutting down network.", this);
-                Shutdown();
-            }
         }
 
         private void OnGUI()
@@ -290,7 +271,7 @@ namespace FlickDom.Networking
             GUI.Box(new Rect(16f, 16f, 320f, 92f), "FlickDom Network");
             GUI.Label(new Rect(28f, 42f, 296f, 22f), "Mode: " + mode + " / LocalRole: " + LocalPlayerId);
             GUI.Label(new Rect(28f, 64f, 296f, 22f), "Target: " + connectAddress + ":" + port);
-            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Listen: " + hostListenAddress + "   S: Host   C: Client   X: Shutdown");
+            GUI.Label(new Rect(28f, 86f, 296f, 22f), "Listen: " + hostListenAddress);
 
             if (showLobbyUi && !networkGameStarted && !localSinglePlayerModeActive)
             {
@@ -385,6 +366,12 @@ namespace FlickDom.Networking
         {
             if (!CanStartNetwork())
             {
+                return;
+            }
+
+            if (IsWebGlRuntime())
+            {
+                Debug.LogWarning("[Network] Browser Host mode is disabled in WebGL. Start Host from the Editor or a standalone build, then join from WebGL.", this);
                 return;
             }
 
@@ -554,6 +541,26 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Flick request sent to Host. Piece: " + pieceId + ", Impulse: " + safeImpulse + ", LaunchPosition: " + launchPosition + ".", this);
         }
 
+        public void SubmitMonkeyMovementInputToHost(FlickDomPlayerId owner, Vector3 moveDirection, bool sprint)
+        {
+            if (networkManager == null
+                || !networkManager.IsClient
+                || networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            Vector3 safeMoveDirection = ClampNetworkMoveDirection(moveDirection);
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(float) * 3 + sizeof(bool), Allocator.Temp))
+            {
+                writer.WriteValueSafe((int)owner);
+                writer.WriteValueSafe(safeMoveDirection);
+                writer.WriteValueSafe(sprint);
+                networkManager.CustomMessagingManager.SendNamedMessage(MonkeyInputMessageName, NetworkManager.ServerClientId, writer);
+            }
+        }
+
         public void SubmitPieceOrderSelectionToHost(FlickDomPlayerId owner, string pieceId)
         {
             if (networkManager == null
@@ -613,6 +620,7 @@ namespace FlickDom.Networking
             }
 
             SendPieceOrderSelectionToClients(owner, pieceId);
+            BroadcastPieceOrderState();
             Debug.Log("[Network] Piece order selection broadcast. Player: " + owner + ", Piece: " + pieceId + ".", this);
         }
 
@@ -626,7 +634,9 @@ namespace FlickDom.Networking
             }
 
             SendFlickAcceptedToClients(owner, pieceId);
+            BroadcastPieceOrderState();
             SendAllPieceTransformsToClients();
+            SendAllMonkeyPosesToClients();
             Debug.Log("[Network] Flick accepted broadcast. Player: " + owner + ", Piece: " + pieceId + ".", this);
         }
 
@@ -737,6 +747,7 @@ namespace FlickDom.Networking
             EnsureNetworkConfig();
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
             networkManager.NetworkConfig.ConnectionApproval = true;
+            ConfigureTransportProtocol();
         }
 
         private void ResolveGameModeManager()
@@ -825,12 +836,24 @@ namespace FlickDom.Networking
 
         private void ConfigureTransportForHost(ushort targetPort)
         {
+            ConfigureTransportProtocol();
             unityTransport.SetConnectionData(LoopbackAddress, targetPort, GetHostListenAddress());
         }
 
         private void ConfigureTransportForClient(string address, ushort targetPort)
         {
+            ConfigureTransportProtocol();
             unityTransport.SetConnectionData(address, targetPort);
+        }
+
+        private void ConfigureTransportProtocol()
+        {
+            if (unityTransport == null)
+            {
+                return;
+            }
+
+            unityTransport.UseWebSockets = useWebSocketTransport || IsWebGlRuntime();
         }
 
         private bool TryPrepareHostPort()
@@ -842,14 +865,14 @@ namespace FlickDom.Networking
             for (int i = 0; i < MaxHostPortSearchAttempts && firstPort + i <= maxPort; i++)
             {
                 ushort candidatePort = (ushort)(firstPort + i);
-                if (!IsUdpPortAvailable(candidatePort))
+                if (!IsHostPortAvailable(candidatePort))
                 {
                     continue;
                 }
 
                 if (candidatePort != requestedPort)
                 {
-                    Debug.LogWarning("[Network] UDP port " + requestedPort
+                    Debug.LogWarning("[Network] Host port " + requestedPort
                         + " is already in use. Falling back to " + candidatePort + ".", this);
                     port = candidatePort;
                 }
@@ -857,9 +880,38 @@ namespace FlickDom.Networking
                 return true;
             }
 
-            Debug.LogError("[Network] No available UDP host port found from " + requestedPort
+            Debug.LogError("[Network] No available host port found from " + requestedPort
                 + " to " + Mathf.Min(maxPort, firstPort + MaxHostPortSearchAttempts - 1) + ".", this);
             return false;
+        }
+
+        private bool IsHostPortAvailable(ushort targetPort)
+        {
+            return unityTransport != null && unityTransport.UseWebSockets
+                ? IsTcpPortAvailable(targetPort)
+                : IsUdpPortAvailable(targetPort);
+        }
+
+        private static bool IsTcpPortAvailable(ushort targetPort)
+        {
+            TcpListener listener = null;
+            try
+            {
+                listener = new TcpListener(IPAddress.Any, targetPort);
+                listener.Start();
+                return true;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+            finally
+            {
+                if (listener != null)
+                {
+                    listener.Stop();
+                }
+            }
         }
 
         private static bool IsUdpPortAvailable(ushort targetPort)
@@ -908,6 +960,11 @@ namespace FlickDom.Networking
 
         private static string GetShareableHostAddresses()
         {
+            if (IsWebGlRuntime())
+            {
+                return string.Empty;
+            }
+
             List<string> addresses = new List<string>();
 
             try
@@ -996,6 +1053,15 @@ namespace FlickDom.Networking
             return separatorIndex >= 0 ? addresses.Substring(0, separatorIndex) : addresses;
         }
 
+        private static bool IsWebGlRuntime()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return true;
+#else
+            return false;
+#endif
+        }
+
         private void CleanupFailedNetworkStart()
         {
             UnregisterNetworkMessageHandlers();
@@ -1082,7 +1148,9 @@ namespace FlickDom.Networking
                 BroadcastBoardState();
                 BroadcastScoreState();
                 BroadcastCardState();
+                SendPieceOrderStateToClient(clientId);
                 SendAllPieceTransformsToClient(clientId);
+                SendAllMonkeyPosesToClient(clientId);
             }
         }
 
@@ -1216,7 +1284,9 @@ namespace FlickDom.Networking
             BroadcastBoardState();
             BroadcastScoreState();
             BroadcastCardState();
+            BroadcastPieceOrderState();
             SendAllPieceTransformsToClients();
+            SendAllMonkeyPosesToClients();
             Debug.Log("[Network] Host started network game for " + GetHostConnectedPlayerCount() + " players.", this);
         }
 
@@ -1250,6 +1320,7 @@ namespace FlickDom.Networking
             BroadcastBoardState();
             BroadcastScoreState();
             BroadcastCardState();
+            BroadcastPieceOrderState();
             Debug.Log("[Network] Local GameModeManager started.", this);
         }
 
@@ -1318,7 +1389,9 @@ namespace FlickDom.Networking
             BroadcastBoardState();
             BroadcastScoreState();
             BroadcastCardState();
+            BroadcastPieceOrderState();
             SendAllPieceTransformsToClients();
+            SendAllMonkeyPosesToClients();
             Debug.Log("[Network] Host restarted network match.", this);
         }
 
@@ -1337,6 +1410,7 @@ namespace FlickDom.Networking
             BroadcastScoreState();
             BroadcastCardState();
             SendAllPieceTransformsToClients();
+            SendAllMonkeyPosesToClients();
             Debug.Log("[Network] Host returned network match to lobby.", this);
         }
 
@@ -1501,11 +1575,32 @@ namespace FlickDom.Networking
                 Debug.Log("[Network] Flick accepted message handler registered.", this);
             }
 
+            if (!monkeyInputMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MonkeyInputMessageName, HandleMonkeyInputMessage);
+                monkeyInputMessageHandlerRegistered = true;
+                Debug.Log("[Network] Monkey input message handler registered.", this);
+            }
+
+            if (!monkeyPoseMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MonkeyPoseMessageName, HandleMonkeyPoseMessage);
+                monkeyPoseMessageHandlerRegistered = true;
+                Debug.Log("[Network] Monkey pose message handler registered.", this);
+            }
+
             if (!pieceOrderSelectionMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PieceOrderSelectionMessageName, HandlePieceOrderSelectionMessage);
                 pieceOrderSelectionMessageHandlerRegistered = true;
                 Debug.Log("[Network] Piece order selection message handler registered.", this);
+            }
+
+            if (!pieceOrderStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PieceOrderStateMessageName, HandlePieceOrderStateMessage);
+                pieceOrderStateMessageHandlerRegistered = true;
+                Debug.Log("[Network] Piece order state message handler registered.", this);
             }
 
             if (!pieceTransformMessageHandlerRegistered)
@@ -1623,10 +1718,28 @@ namespace FlickDom.Networking
                 flickAcceptedMessageHandlerRegistered = false;
             }
 
+            if (monkeyInputMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MonkeyInputMessageName);
+                monkeyInputMessageHandlerRegistered = false;
+            }
+
+            if (monkeyPoseMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MonkeyPoseMessageName);
+                monkeyPoseMessageHandlerRegistered = false;
+            }
+
             if (pieceOrderSelectionMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PieceOrderSelectionMessageName);
                 pieceOrderSelectionMessageHandlerRegistered = false;
+            }
+
+            if (pieceOrderStateMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PieceOrderStateMessageName);
+                pieceOrderStateMessageHandlerRegistered = false;
             }
 
             if (pieceTransformMessageHandlerRegistered)
@@ -1866,6 +1979,7 @@ namespace FlickDom.Networking
             if (piece.TryQueueAuthoritativeFlick(impulse, launchPosition))
             {
                 SendFlickAcceptedToClients(owner, pieceId);
+                BroadcastPieceOrderState();
                 Debug.Log("[Network] Host accepted flick request from client " + senderClientId + ". Piece: " + pieceId + ", Impulse: " + impulse + ", LaunchPosition: " + launchPosition + ".", this);
             }
             else
@@ -1925,6 +2039,61 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Flick accepted received from Host. Player: " + owner + ", Piece: " + pieceId + ".", this);
         }
 
+        private void HandleMonkeyInputMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager == null || !networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out Vector3 moveDirection);
+            reader.ReadValueSafe(out bool sprint);
+
+            FlickDomPlayerId owner = (FlickDomPlayerId)ownerValue;
+            moveDirection = ClampNetworkMoveDirection(moveDirection);
+
+            if (!IsAllowedRemotePlayerRequest(senderClientId, owner))
+            {
+                Debug.LogWarning("[Network] Rejected monkey input from client " + senderClientId + " for non-local player " + owner + ".", this);
+                return;
+            }
+
+            ResolveGameModeManager();
+            if (!networkGameStarted
+                || gameModeManager == null
+                || gameModeManager.CurrentState == FlickDomGameState.PhysicsProcessing
+                || gameModeManager.CurrentState == FlickDomGameState.CardMatch
+                || gameModeManager.CurrentState == FlickDomGameState.RoundEnd)
+            {
+                return;
+            }
+
+            MonkeyThirdPersonController monkey = FindMonkey(owner);
+            if (monkey != null)
+            {
+                monkey.ApplyNetworkMovementInput(moveDirection, sprint);
+            }
+        }
+
+        private void HandleMonkeyPoseMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int ownerValue);
+            reader.ReadValueSafe(out Vector3 position);
+            reader.ReadValueSafe(out Quaternion rotation);
+
+            MonkeyThirdPersonController monkey = FindMonkey((FlickDomPlayerId)ownerValue);
+            if (monkey != null)
+            {
+                monkey.ApplyNetworkPose(position, rotation);
+            }
+        }
+
         private void HandlePieceOrderSelectionMessage(ulong senderClientId, FastBufferReader reader)
         {
             reader.ReadValueSafe(out int ownerValue);
@@ -1969,6 +2138,7 @@ namespace FlickDom.Networking
             }
 
             BroadcastGameState();
+            BroadcastPieceOrderState();
             Debug.Log("[Network] Host accepted piece order selection from client " + senderClientId + ". Player: " + owner + ", Piece: " + pieceId + ".", this);
         }
 
@@ -1996,6 +2166,129 @@ namespace FlickDom.Networking
             }
         }
 
+        private void BroadcastPieceOrderState()
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            SendPieceOrderStateToClients(clients);
+        }
+
+        private void SendPieceOrderStateToClient(ulong clientId)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            SendPieceOrderStateToClients(new List<ulong>(1) { clientId });
+        }
+
+        private void SendPieceOrderStateToClients(IReadOnlyList<ulong> clients)
+        {
+            if (clients == null || clients.Count <= 0)
+            {
+                return;
+            }
+
+            LocalFlickTurnTestRig turnRig = FindAnyObjectByType<LocalFlickTurnTestRig>();
+            if (turnRig == null)
+            {
+                return;
+            }
+
+            List<string> player1Order = new List<string>(3);
+            List<string> player2Order = new List<string>(3);
+            turnRig.GetPieceOrderSnapshot(FlickDomPlayerId.Player1, player1Order);
+            turnRig.GetPieceOrderSnapshot(FlickDomPlayerId.Player2, player2Order);
+
+            FastBufferWriter writer = new FastBufferWriter(CalculatePieceOrderStateCapacity(player1Order, player2Order), Allocator.Temp);
+            try
+            {
+                WritePieceOrderState(ref writer, player1Order, turnRig.GetNextOrderIndexSnapshot(FlickDomPlayerId.Player1));
+                WritePieceOrderState(ref writer, player2Order, turnRig.GetNextOrderIndexSnapshot(FlickDomPlayerId.Player2));
+                networkManager.CustomMessagingManager.SendNamedMessage(PieceOrderStateMessageName, clients, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+
+            Debug.Log("[Network] Piece order state broadcast. P1: " + BuildPieceOrderLog(player1Order) + ", P2: " + BuildPieceOrderLog(player2Order) + ".", this);
+        }
+
+        private void HandlePieceOrderStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            List<string> player1Order = ReadPieceOrderState(ref reader, out int player1NextIndex);
+            List<string> player2Order = ReadPieceOrderState(ref reader, out int player2NextIndex);
+            LocalFlickTurnTestRig turnRig = FindAnyObjectByType<LocalFlickTurnTestRig>();
+            if (turnRig != null)
+            {
+                turnRig.ApplyNetworkPieceOrderSnapshot(player1Order, player1NextIndex, player2Order, player2NextIndex);
+            }
+
+            Debug.Log("[Network] Piece order state received from Host. P1: " + BuildPieceOrderLog(player1Order) + ", P2: " + BuildPieceOrderLog(player2Order) + ".", this);
+        }
+
+        private static int CalculatePieceOrderStateCapacity(IReadOnlyList<string> player1Order, IReadOnlyList<string> player2Order)
+        {
+            int player1Count = player1Order != null ? player1Order.Count : 0;
+            int player2Count = player2Order != null ? player2Order.Count : 0;
+            return sizeof(int) * 4 + 64 * (player1Count + player2Count);
+        }
+
+        private static void WritePieceOrderState(ref FastBufferWriter writer, IReadOnlyList<string> pieceIds, int nextIndex)
+        {
+            int count = pieceIds != null ? pieceIds.Count : 0;
+            writer.WriteValueSafe(nextIndex);
+            writer.WriteValueSafe(count);
+            for (int i = 0; i < count; i++)
+            {
+                writer.WriteValueSafe(new FixedString64Bytes(pieceIds[i] ?? string.Empty));
+            }
+        }
+
+        private static List<string> ReadPieceOrderState(ref FastBufferReader reader, out int nextIndex)
+        {
+            reader.ReadValueSafe(out nextIndex);
+            reader.ReadValueSafe(out int count);
+            List<string> pieceIds = new List<string>(Mathf.Max(0, count));
+            for (int i = 0; i < count; i++)
+            {
+                reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
+                pieceIds.Add(fixedPieceId.ToString());
+            }
+
+            return pieceIds;
+        }
+
+        private static string BuildPieceOrderLog(IReadOnlyList<string> pieceIds)
+        {
+            if (pieceIds == null || pieceIds.Count <= 0)
+            {
+                return "[]";
+            }
+
+            return "[" + string.Join(",", pieceIds) + "]";
+        }
+
         private void BroadcastPieceTransformsIfNeeded()
         {
             if (!networkGameStarted
@@ -2008,6 +2301,7 @@ namespace FlickDom.Networking
 
             nextTransformBroadcastTime = Time.unscaledTime + TransformBroadcastInterval;
             SendAllPieceTransformsToClients();
+            SendAllMonkeyPosesToClients();
         }
 
         private void SendAllPieceTransformsToClients()
@@ -2059,6 +2353,49 @@ namespace FlickDom.Networking
         {
             List<ulong> clients = new List<ulong>(1) { clientId };
             SendPieceTransformToClients(piece, clients);
+        }
+
+        private void SendAllMonkeyPosesToClients()
+        {
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            List<MonkeyThirdPersonController> monkeys = CollectUniqueMonkeys();
+            for (int i = 0; i < monkeys.Count; i++)
+            {
+                SendMonkeyPoseToClients(monkeys[i], clients);
+            }
+        }
+
+        private void SendAllMonkeyPosesToClient(ulong clientId)
+        {
+            List<MonkeyThirdPersonController> monkeys = CollectUniqueMonkeys();
+            List<ulong> clients = new List<ulong>(1) { clientId };
+            for (int i = 0; i < monkeys.Count; i++)
+            {
+                SendMonkeyPoseToClients(monkeys[i], clients);
+            }
+        }
+
+        private void SendMonkeyPoseToClients(MonkeyThirdPersonController monkey, IReadOnlyList<ulong> clients)
+        {
+            if (monkey == null
+                || networkManager == null
+                || networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + sizeof(float) * 7, Allocator.Temp))
+            {
+                writer.WriteValueSafe((int)monkey.Owner);
+                writer.WriteValueSafe(monkey.transform.position);
+                writer.WriteValueSafe(monkey.transform.rotation);
+                networkManager.CustomMessagingManager.SendNamedMessage(MonkeyPoseMessageName, clients, writer);
+            }
         }
 
         private void HandlePieceTransformMessage(ulong senderClientId, FastBufferReader reader)
@@ -2313,6 +2650,12 @@ namespace FlickDom.Networking
             if (tokenMapManager != null)
             {
                 tokenMapManager.ApplyNetworkOwnerGrid(boardSize, player1Cells, player2Cells);
+                TokenMapGridView gridView = FindAnyObjectByType<TokenMapGridView>();
+                if (gridView != null)
+                {
+                    gridView.ClearCandidateHighlights();
+                    gridView.RefreshOwnerCells(tokenMapManager);
+                }
             }
 
             Debug.Log("[Network] Board state received from Host. P1 cells: " + player1Cells.Count + ", P2 cells: " + player2Cells.Count + ".", this);
@@ -2605,6 +2948,22 @@ namespace FlickDom.Networking
             return null;
         }
 
+        private static MonkeyThirdPersonController FindMonkey(FlickDomPlayerId owner)
+        {
+            MonkeyThirdPersonController[] monkeys =
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < monkeys.Length; i++)
+            {
+                MonkeyThirdPersonController monkey = monkeys[i];
+                if (monkey != null && monkey.Owner == owner)
+                {
+                    return monkey;
+                }
+            }
+
+            return null;
+        }
+
         private static List<TurnBasedFlickPiece> CollectUniqueFlickPieces()
         {
             TurnBasedFlickPiece[] pieces = FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -2630,6 +2989,33 @@ namespace FlickDom.Networking
             }
 
             return uniquePieces;
+        }
+
+        private static List<MonkeyThirdPersonController> CollectUniqueMonkeys()
+        {
+            MonkeyThirdPersonController[] monkeys =
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            List<MonkeyThirdPersonController> uniqueMonkeys = new List<MonkeyThirdPersonController>(monkeys.Length);
+            HashSet<FlickDomPlayerId> seenOwners = new HashSet<FlickDomPlayerId>();
+
+            for (int i = 0; i < monkeys.Length; i++)
+            {
+                MonkeyThirdPersonController monkey = monkeys[i];
+                if (monkey == null || monkey.Owner == FlickDomPlayerId.None)
+                {
+                    continue;
+                }
+
+                if (!seenOwners.Add(monkey.Owner))
+                {
+                    Debug.LogWarning("[Network] Duplicate monkey ignored for transform sync. Owner: " + monkey.Owner + ", Object: " + monkey.name + ".", monkey);
+                    continue;
+                }
+
+                uniqueMonkeys.Add(monkey);
+            }
+
+            return uniqueMonkeys;
         }
 
         private void SubscribeGameModeEvents(bool subscribe)
@@ -2748,11 +3134,6 @@ namespace FlickDom.Networking
             BroadcastGameState();
         }
 
-        private static bool WasPressedThisFrame(Key key)
-        {
-            return Keyboard.current[key].wasPressedThisFrame;
-        }
-
         private Vector3 ClampNetworkFlickImpulse(Vector3 impulse)
         {
             float maxMagnitude = Mathf.Max(0f, maxNetworkFlickImpulseMagnitude);
@@ -2772,6 +3153,27 @@ namespace FlickDom.Networking
             }
 
             return Vector3.ClampMagnitude(impulse, maxMagnitude);
+        }
+
+        private static Vector3 ClampNetworkMoveDirection(Vector3 moveDirection)
+        {
+            if (float.IsNaN(moveDirection.x)
+                || float.IsNaN(moveDirection.y)
+                || float.IsNaN(moveDirection.z)
+                || float.IsInfinity(moveDirection.x)
+                || float.IsInfinity(moveDirection.y)
+                || float.IsInfinity(moveDirection.z))
+            {
+                return Vector3.zero;
+            }
+
+            moveDirection.y = 0f;
+            if (moveDirection.sqrMagnitude > 1f)
+            {
+                moveDirection.Normalize();
+            }
+
+            return moveDirection;
         }
 
         private bool IsNetworkEnabledForActiveScene()

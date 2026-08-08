@@ -126,18 +126,18 @@ namespace FlickDom.Gameplay
 
         private void CreateMaterials()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            baseMaterial = new Material(shader);
-            baseMaterial.name = "Card Slot Base Material";
-            borderMaterial = new Material(shader);
-            borderMaterial.name = "Card Slot Border Material";
-            SetMaterialColor(baseMaterial, baseColor);
-            SetMaterialColor(borderMaterial, borderColor);
+            baseMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Card Slot Base Material",
+                baseColor,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
+            borderMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Card Slot Border Material",
+                borderColor,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
         }
 
         private void DestroyGeneratedRoot()

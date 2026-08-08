@@ -31,12 +31,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector2 messagePanelOffset = new Vector2(0f, -92f);
         [SerializeField] private Color messagePanelColor = new Color(0.05f, 0.06f, 0.07f, 0.82f);
         [SerializeField] private Color messageTextColor = Color.white;
-        [SerializeField] private string claimPromptText = "점령할 칸을 선택하세요";
-        [SerializeField] private string relocationPromptText = "점령칸이 5개입니다. 지울 내 점령칸을 선택하세요";
-        [SerializeField] private string invalidClaimText = "선택할 수 없는 점령칸입니다";
-        [SerializeField] private string invalidRelocationText = "내 점령칸만 지울 수 있습니다";
-        [SerializeField] private string claimCompleteText = "점령 완료";
-        [SerializeField] private string relocationCompleteText = "점령칸 교체 완료";
+        [SerializeField] private string claimPromptText = "Choose a cell";
+        [SerializeField] private string relocationPromptText = "Choose one owned cell to move";
+        [SerializeField] private string invalidClaimText = "Cell cannot be claimed";
+        [SerializeField] private string invalidRelocationText = "Choose your owned cell";
+        [SerializeField] private string claimCompleteText = "Cell claimed";
+        [SerializeField] private string relocationCompleteText = "Cell moved";
 
         private readonly HashSet<PiecePlacementCandidate> resolvedCandidates = new HashSet<PiecePlacementCandidate>();
         private readonly RaycastHit[] raycastHits = new RaycastHit[8];
@@ -51,6 +51,8 @@ namespace FlickDom.Gameplay
 
         private void Awake()
         {
+            ApplyWebSafeText();
+
             if (gameModeManager == null)
             {
                 gameModeManager = GetComponent<GameModeManager>();
@@ -72,6 +74,16 @@ namespace FlickDom.Gameplay
             }
 
             BuildSelectionMessageUi();
+        }
+
+        private void ApplyWebSafeText()
+        {
+            claimPromptText = "Choose a cell";
+            relocationPromptText = "Choose one owned cell to move";
+            invalidClaimText = "Cell cannot be claimed";
+            invalidRelocationText = "Choose your owned cell";
+            claimCompleteText = "Cell claimed";
+            relocationCompleteText = "Cell moved";
         }
 
         private void OnValidate()

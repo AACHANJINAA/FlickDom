@@ -18,6 +18,9 @@ namespace FlickDom.Gameplay
         }
 
         private const float MinInputMagnitude = 0.01f;
+        private const float NetworkInputSendInterval = 0.05f;
+        private const float NetworkInputTimeoutSeconds = 0.25f;
+        private const float NetworkInputChangeSqrThreshold = 0.0004f;
         private static readonly int AnimationParameterHash = Animator.StringToHash("animation");
 
         [Header("Ownership")]
@@ -40,9 +43,6 @@ namespace FlickDom.Gameplay
         [SerializeField] private float sprintSpeed = 4.2f;
         [SerializeField] private float rotationSpeed = 540f;
         [SerializeField] private bool faceCameraDirectionWhenIdle = true;
-        [SerializeField] private bool constrainWebGlMovementToSafeArea = true;
-        [SerializeField] private Vector2 webGlSafeAreaMin = new Vector2(-3.4f, -2.7f);
-        [SerializeField] private Vector2 webGlSafeAreaMax = new Vector2(3.4f, 2.75f);
 
         [Header("Animation")]
         [SerializeField] private Animator animator;
@@ -56,6 +56,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private int idleAnimationValue = 1;
         [SerializeField] private int walkAnimationValue = 21;
         [SerializeField] private int runAnimationValue = 18;
+        [SerializeField] private bool disableWebGlLocomotionAnimation;
         [SerializeField] private bool useWebGlMaterialFallback = true;
 
         private static readonly Dictionary<Material, Material> WebGlMaterialFallbacks =
@@ -75,6 +76,12 @@ namespace FlickDom.Gameplay
         private bool hasRunState;
         private LocomotionAnimationState currentAnimationState = (LocomotionAnimationState)(-1);
         private bool sprintHeld;
+        private Vector3 networkMoveDirection;
+        private bool networkSprintHeld;
+        private float networkInputExpiresAt;
+        private Vector3 lastSubmittedNetworkMoveDirection;
+        private bool lastSubmittedNetworkSprintHeld;
+        private float nextNetworkInputSubmitTime;
 
         public FlickDomPlayerId Owner
         {
@@ -113,8 +120,6 @@ namespace FlickDom.Gameplay
                 animator = GetComponentInChildren<Animator>();
             }
 
-            ConfigureWebGlColliderFallback();
-            ClampWebGlPositionToSafeArea();
             ApplyLegacySuriyunAnimationDefaults();
             ApplyWebGlCompatibilityOverrides();
             CacheAnimationStates();
@@ -136,6 +141,7 @@ namespace FlickDom.Gameplay
         private void Update()
         {
             ReadMovementInput();
+            SubmitNetworkMovementInputIfNeeded();
             UpdateAnimationState();
         }
 
@@ -151,12 +157,6 @@ namespace FlickDom.Gameplay
 
             if (cachedRigidbody)
             {
-#if UNITY_WEBGL && !UNITY_EDITOR
-                if (UseWebGlTransformMovement())
-                {
-                    return;
-                }
-#endif
                 Vector3 velocity = cachedRigidbody.linearVelocity;
                 velocity.x = 0f;
                 velocity.z = 0f;
@@ -182,6 +182,41 @@ namespace FlickDom.Gameplay
         public void SetInputEnabled(bool enabled)
         {
             inputEnabled = enabled;
+        }
+
+        public void ApplyNetworkMovementInput(Vector3 moveDirection, bool sprint)
+        {
+            moveDirection.y = 0f;
+            if (moveDirection.sqrMagnitude > 1f)
+            {
+                moveDirection.Normalize();
+            }
+
+            networkMoveDirection = moveDirection;
+            networkSprintHeld = sprint;
+            networkInputExpiresAt = Time.time + NetworkInputTimeoutSeconds;
+        }
+
+        public void ApplyNetworkPose(Vector3 position, Quaternion rotation)
+        {
+            if (cachedTransform == null)
+            {
+                cachedTransform = transform;
+            }
+
+            if (cachedRigidbody == null)
+            {
+                cachedRigidbody = GetComponent<Rigidbody>();
+            }
+
+            cachedTransform.SetPositionAndRotation(position, rotation);
+            if (cachedRigidbody != null)
+            {
+                cachedRigidbody.position = position;
+                cachedRigidbody.rotation = rotation;
+                cachedRigidbody.linearVelocity = Vector3.zero;
+                cachedRigidbody.angularVelocity = Vector3.zero;
+            }
         }
 
         public void ConfigureSlingshotLauncher(GameObject prefab, Material material)
@@ -343,6 +378,23 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
+            if (bootstrap != null && bootstrap.IsRunning)
+            {
+                if (!bootstrap.IsGameActive)
+                {
+                    return false;
+                }
+
+                if (gameModeManager == null)
+                {
+                    return true;
+                }
+
+                return gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing
+                    && gameModeManager.CurrentState != FlickDomGameState.CardMatch
+                    && gameModeManager.CurrentState != FlickDomGameState.RoundEnd;
+            }
+
             if (!requireActivePlayer || gameModeManager == null)
             {
                 return true;
@@ -356,17 +408,23 @@ namespace FlickDom.Gameplay
 
         private void ApplyMovement()
         {
-            BuildCameraRelativeDirection();
-
-            float speed = sprintHeld ? sprintSpeed : walkSpeed;
-#if UNITY_WEBGL && !UNITY_EDITOR
-            if (UseWebGlTransformMovement())
+            if (ShouldUseNetworkPoseOnly())
             {
-                ApplyWebGlTransformMovement(speed);
+                StopHorizontalMovement();
                 return;
             }
-#endif
 
+            if (HasActiveNetworkMovementInput())
+            {
+                desiredMoveDirection = networkMoveDirection;
+                sprintHeld = networkSprintHeld;
+            }
+            else
+            {
+                BuildCameraRelativeDirection();
+            }
+
+            float speed = sprintHeld ? sprintSpeed : walkSpeed;
             Vector3 velocity = cachedRigidbody.linearVelocity;
             targetVelocity.Set(
                 desiredMoveDirection.x * speed,
@@ -393,71 +451,56 @@ namespace FlickDom.Gameplay
             cachedRigidbody.MoveRotation(nextRotation);
         }
 
-        private bool UseWebGlTransformMovement()
+        private void SubmitNetworkMovementInputIfNeeded()
         {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            return true;
-#else
-            return false;
-#endif
-        }
-
-        private void ApplyWebGlTransformMovement(float speed)
-        {
-            if (desiredMoveDirection.sqrMagnitude > MinInputMagnitude)
-            {
-                Vector3 nextPosition =
-                    cachedTransform.position + desiredMoveDirection * speed * Time.fixedDeltaTime;
-                cachedTransform.position = ClampWebGlPosition(nextPosition);
-            }
-
-            Vector3 facingDirection = desiredMoveDirection;
-            if (facingDirection.sqrMagnitude <= MinInputMagnitude && faceCameraDirectionWhenIdle)
-            {
-                facingDirection = cameraForward;
-            }
-
-            if (facingDirection.sqrMagnitude <= MinInputMagnitude)
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsClientOnly || bootstrap.LocalPlayerId != owner)
             {
                 return;
             }
 
-            Quaternion targetRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
-            cachedTransform.rotation = Quaternion.RotateTowards(
-                cachedTransform.rotation,
-                targetRotation,
-                rotationSpeed * Time.fixedDeltaTime);
-        }
+            BuildCameraRelativeDirection();
 
-        private void ClampWebGlPositionToSafeArea()
-        {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            cachedTransform.position = ClampWebGlPosition(cachedTransform.position);
-#endif
-        }
+            bool changed = (desiredMoveDirection - lastSubmittedNetworkMoveDirection).sqrMagnitude
+                > NetworkInputChangeSqrThreshold
+                || sprintHeld != lastSubmittedNetworkSprintHeld;
+            bool hasMovement = desiredMoveDirection.sqrMagnitude > MinInputMagnitude
+                || lastSubmittedNetworkMoveDirection.sqrMagnitude > MinInputMagnitude;
 
-        private Vector3 ClampWebGlPosition(Vector3 position)
-        {
-            if (!constrainWebGlMovementToSafeArea || !IsWebGlRuntime())
+            if (!changed && (!hasMovement || Time.unscaledTime < nextNetworkInputSubmitTime))
             {
-                return position;
+                return;
             }
 
-            Vector2 min = Vector2.Min(webGlSafeAreaMin, webGlSafeAreaMax);
-            Vector2 max = Vector2.Max(webGlSafeAreaMin, webGlSafeAreaMax);
-            position.x = Mathf.Clamp(position.x, min.x, max.x);
-            position.z = Mathf.Clamp(position.z, min.y, max.y);
-            return position;
+            nextNetworkInputSubmitTime = Time.unscaledTime + NetworkInputSendInterval;
+            lastSubmittedNetworkMoveDirection = desiredMoveDirection;
+            lastSubmittedNetworkSprintHeld = sprintHeld;
+            bootstrap.SubmitMonkeyMovementInputToHost(owner, desiredMoveDirection, sprintHeld);
         }
 
-        private void ConfigureWebGlColliderFallback()
+        private bool ShouldUseNetworkPoseOnly()
         {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            if (TryGetComponent(out CapsuleCollider capsuleCollider))
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            return bootstrap != null && bootstrap.IsClientOnly;
+        }
+
+        private bool HasActiveNetworkMovementInput()
+        {
+            return Time.time <= networkInputExpiresAt
+                && networkMoveDirection.sqrMagnitude > MinInputMagnitude;
+        }
+
+        private void StopHorizontalMovement()
+        {
+            if (cachedRigidbody == null)
             {
-                capsuleCollider.enabled = false;
+                return;
             }
-#endif
+
+            Vector3 velocity = cachedRigidbody.linearVelocity;
+            velocity.x = 0f;
+            velocity.z = 0f;
+            cachedRigidbody.linearVelocity = velocity;
         }
 
         private void BuildCameraRelativeDirection()
@@ -498,6 +541,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (ShouldDisableWebGlLocomotionAnimation())
+            {
+                return;
+            }
+
             LocomotionAnimationState nextState = GetLocomotionAnimationState();
             if (nextState == currentAnimationState)
             {
@@ -524,7 +572,9 @@ namespace FlickDom.Gameplay
 
         private LocomotionAnimationState GetLocomotionAnimationState()
         {
-            if (movementInput.sqrMagnitude <= MinInputMagnitude)
+            bool hasMoveInput = movementInput.sqrMagnitude > MinInputMagnitude
+                || HasActiveNetworkMovementInput();
+            if (!hasMoveInput)
             {
                 return LocomotionAnimationState.Idle;
             }
@@ -550,6 +600,11 @@ namespace FlickDom.Gameplay
         private bool ShouldUseWebGlMaterialFallback()
         {
             return useWebGlMaterialFallback && IsWebGlRuntime();
+        }
+
+        private bool ShouldDisableWebGlLocomotionAnimation()
+        {
+            return disableWebGlLocomotionAnimation && IsWebGlRuntime();
         }
 
         private static bool IsWebGlRuntime()
@@ -754,13 +809,6 @@ namespace FlickDom.Gameplay
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-            body.useGravity = false;
-            body.isKinematic = true;
-            body.detectCollisions = false;
-            body.interpolation = RigidbodyInterpolation.None;
-            body.collisionDetectionMode = CollisionDetectionMode.Discrete;
-#endif
         }
 
         private static void ConfigureCapsule(CapsuleCollider capsuleCollider)

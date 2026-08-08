@@ -373,6 +373,49 @@ namespace FlickDom.Gameplay
             return true;
         }
 
+        public void GetPieceOrderSnapshot(FlickDomPlayerId player, List<string> pieceIds)
+        {
+            if (pieceIds == null)
+            {
+                return;
+            }
+
+            pieceIds.Clear();
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
+            if (order == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < order.Count; i++)
+            {
+                TurnBasedFlickPiece piece = order[i];
+                if (piece != null && !string.IsNullOrEmpty(piece.PieceId))
+                {
+                    pieceIds.Add(piece.PieceId);
+                }
+            }
+        }
+
+        public int GetNextOrderIndexSnapshot(FlickDomPlayerId player)
+        {
+            return Mathf.Max(0, GetNextOrderIndex(player));
+        }
+
+        public void ApplyNetworkPieceOrderSnapshot(
+            IReadOnlyList<string> player1PieceIds,
+            int player1NextIndex,
+            IReadOnlyList<string> player2PieceIds,
+            int player2NextIndex)
+        {
+            ApplyNetworkPieceOrderSnapshot(FlickDomPlayerId.Player1, player1PieceIds, player1NextIndex);
+            ApplyNetworkPieceOrderSnapshot(FlickDomPlayerId.Player2, player2PieceIds, player2NextIndex);
+            NotifyPieceOrderChanged(FlickDomPlayerId.Player1);
+            NotifyPieceOrderChanged(FlickDomPlayerId.Player2);
+            RefreshPieceHighlights();
+            RefreshOrderLabels();
+        }
+
         public bool TryMarkFlickAcceptedFromNetwork(FlickDomPlayerId player, string pieceId)
         {
             if (gameModeManager == null
@@ -381,14 +424,23 @@ namespace FlickDom.Gameplay
                 return false;
             }
 
-            TurnBasedFlickPiece currentTarget = GetCurrentFlickTarget(player);
-            if (currentTarget == null || !string.Equals(currentTarget.PieceId, pieceId, System.StringComparison.Ordinal))
+            EnsureDefaultOrderForPlayer(player);
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
+            int acceptedIndex = FindOrderIndexByPieceId(order, pieceId);
+            if (acceptedIndex < 0)
             {
+                TurnBasedFlickPiece currentTarget = GetCurrentFlickTarget(player);
                 Debug.LogWarning("[TurnTest] Ignored network flick acceptance for out-of-order piece " + pieceId + ". Current target is " + (currentTarget != null ? currentTarget.PieceId : "none") + ".", this);
                 return false;
             }
 
-            AdvancePieceOrderIndex(player);
+            int nextIndex = GetNextOrderIndex(player);
+            if (acceptedIndex < nextIndex)
+            {
+                return true;
+            }
+
+            SetNextOrderIndex(player, acceptedIndex + 1);
             RefreshPieceHighlights();
             RefreshOrderLabels();
             return true;
@@ -1472,6 +1524,18 @@ namespace FlickDom.Gameplay
             }
         }
 
+        private void SetNextOrderIndex(FlickDomPlayerId player, int nextIndex)
+        {
+            if (player == FlickDomPlayerId.Player1)
+            {
+                player1NextOrderIndex = Mathf.Max(0, nextIndex);
+            }
+            else if (player == FlickDomPlayerId.Player2)
+            {
+                player2NextOrderIndex = Mathf.Max(0, nextIndex);
+            }
+        }
+
         private int GetNextOrderIndex(FlickDomPlayerId player)
         {
             if (player == FlickDomPlayerId.Player1)
@@ -1517,10 +1581,53 @@ namespace FlickDom.Gameplay
             return null;
         }
 
+        private void ApplyNetworkPieceOrderSnapshot(FlickDomPlayerId player, IReadOnlyList<string> pieceIds, int nextIndex)
+        {
+            List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
+            if (order == null)
+            {
+                return;
+            }
+
+            order.Clear();
+            if (pieceIds != null)
+            {
+                for (int i = 0; i < pieceIds.Count; i++)
+                {
+                    TurnBasedFlickPiece piece = FindPieceById(player, pieceIds[i]);
+                    if (piece != null && !order.Contains(piece))
+                    {
+                        order.Add(piece);
+                    }
+                }
+            }
+
+            SetNextOrderIndex(player, Mathf.Clamp(nextIndex, 0, order.Count));
+        }
+
         private bool IsPieceAlreadyOrdered(FlickDomPlayerId player, TurnBasedFlickPiece piece)
         {
             List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
             return order != null && piece != null && order.Contains(piece);
+        }
+
+        private static int FindOrderIndexByPieceId(List<TurnBasedFlickPiece> order, string pieceId)
+        {
+            if (order == null || string.IsNullOrEmpty(pieceId))
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < order.Count; i++)
+            {
+                TurnBasedFlickPiece piece = order[i];
+                if (piece != null && string.Equals(piece.PieceId, pieceId, System.StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private TurnBasedFlickPiece FindPieceById(FlickDomPlayerId player, string pieceId)

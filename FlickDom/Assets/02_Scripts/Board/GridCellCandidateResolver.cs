@@ -282,14 +282,8 @@ namespace FlickDom.Gameplay
 
         private void CreateVisualMaterials()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            visualCellMaterial = CreateVisualMaterial(shader, "Physical Board Cell", visualCellColor);
-            visualAlternateCellMaterial = CreateVisualMaterial(shader, "Physical Board Alternate Cell", visualAlternateCellColor);
+            visualCellMaterial = CreateVisualMaterial("Physical Board Cell", visualCellColor);
+            visualAlternateCellMaterial = CreateVisualMaterial("Physical Board Alternate Cell", visualAlternateCellColor);
             ownsVisualCellMaterials = true;
 
             if (boardCellMaterialOverride != null)
@@ -302,15 +296,9 @@ namespace FlickDom.Gameplay
 
         private void BuildTopBottomBoundaryWalls()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
             boundaryWallMaterial = boundaryWallMaterialOverride != null
                 ? boundaryWallMaterialOverride
-                : CreateVisualMaterial(shader, "Physical Board Boundary Wall", boundaryWallColor);
+                : CreateVisualMaterial("Physical Board Boundary Wall", boundaryWallColor);
             ownsBoundaryWallMaterial = boundaryWallMaterialOverride == null;
 
             GameObject rootObject = new GameObject("Generated Physical Board Boundary Walls");
@@ -367,12 +355,14 @@ namespace FlickDom.Gameplay
             }
         }
 
-        private static Material CreateVisualMaterial(Shader shader, string materialName, Color color)
+        private static Material CreateVisualMaterial(string materialName, Color color)
         {
-            Material material = new Material(shader);
-            material.name = materialName;
-            material.color = color;
-            return material;
+            return RuntimeMaterialUtility.CreateMaterial(
+                materialName,
+                color,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
         }
 
         private static Renderer[] CreateOptionalVisual(

@@ -12,6 +12,7 @@ Library: C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\BurstOutput\Data\
 --float-mode=Fast
 --generate-link-xml=Temp\burst.link.xml
 --temp-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\Burst
+--debug=Full
 --generate-static-linkage-methods
 --key-folder=C:/Program Files/Unity/6000.5.1f1/Editor/Data/PlaybackEngines/WebGLSupport
 --decode-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Library\Burst
@@ -31,6 +32,7 @@ Library: C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\BurstOutput\Data\
 --target-framework=NetFramework
 --generate-link-xml=Temp\burst.link.xml
 --temp-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\Burst
+--debug=Full
 --generate-static-linkage-methods
 --key-folder=C:/Program Files/Unity/6000.5.1f1/Editor/Data/PlaybackEngines/WebGLSupport
 --decode-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Library\Burst
@@ -148,6 +150,7 @@ Library: C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\BurstOutput\Data\
 --target-framework=NetFramework
 --generate-link-xml=Temp\burst.link.xml
 --temp-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Temp\Burst
+--debug=Full
 --generate-static-linkage-methods
 --key-folder=C:/Program Files/Unity/6000.5.1f1/Editor/Data/PlaybackEngines/WebGLSupport
 --decode-folder=C:\Users\Administrator\Desktop\FlickDom\FlickDom\Library\Burst

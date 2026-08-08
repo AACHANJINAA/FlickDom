@@ -419,26 +419,30 @@ namespace FlickDom.Gameplay
 
         private void CreateMaterials()
         {
-            Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (unlitShader == null)
-            {
-                unlitShader = Shader.Find("Unlit/Texture");
-            }
-
-            Shader litShader = Shader.Find("Universal Render Pipeline/Lit");
-            if (litShader == null)
-            {
-                litShader = Shader.Find("Standard");
-            }
-
-            textureMaterial = new Material(unlitShader != null ? unlitShader : litShader);
-            textureMaterial.name = "Pattern Card Texture Material";
-            baseMaterial = new Material(litShader);
-            baseMaterial.name = "Pattern Card Base Material";
-            lineMaterial = new Material(litShader);
-            lineMaterial.name = "Pattern Card Line Material";
-            fillMaterial = new Material(litShader);
-            fillMaterial.name = "Pattern Card Fill Material";
+            textureMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Pattern Card Texture Material",
+                cardTint,
+                "Universal Render Pipeline/Unlit",
+                "Unlit/Texture",
+                "Sprites/Default");
+            baseMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Pattern Card Base Material",
+                cardBaseColor,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
+            lineMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Pattern Card Line Material",
+                normalColor,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
+            fillMaterial = RuntimeMaterialUtility.CreateMaterial(
+                "Pattern Card Fill Material",
+                normalColor,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
         }
 
         private Color GetDifficultyColor(PatternCardDifficulty difficulty)

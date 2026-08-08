@@ -74,6 +74,7 @@ namespace FlickDom.Gameplay
         private Renderer[,] candidateMarkerRenderers;
         private GameObject[,] candidateMarkerObjects;
         private FlickDomPlayerId[,] ownerCells;
+        private FlickDomPlayerId[,] candidatePrimaryOwners;
         private int[,] candidateFlags;
         private Material emptyMaterial;
         private Material player1CandidateMaterial;
@@ -180,7 +181,7 @@ namespace FlickDom.Gameplay
 
         public void ClearCandidateHighlights()
         {
-            if (candidateFlags == null)
+            if (candidateFlags == null || candidatePrimaryOwners == null)
             {
                 return;
             }
@@ -190,6 +191,7 @@ namespace FlickDom.Gameplay
                 for (int y = 0; y < boardSize; y++)
                 {
                     candidateFlags[x, y] = 0;
+                    candidatePrimaryOwners[x, y] = FlickDomPlayerId.None;
                     RepaintCell(new Vector2Int(x, y));
                 }
             }
@@ -217,7 +219,7 @@ namespace FlickDom.Gameplay
 
         public void ClearCandidateHighlights(FlickDomPlayerId player, IReadOnlyList<Vector2Int> cells)
         {
-            if (cells == null || candidateFlags == null)
+            if (cells == null || candidateFlags == null || candidatePrimaryOwners == null)
             {
                 return;
             }
@@ -238,13 +240,22 @@ namespace FlickDom.Gameplay
                 }
 
                 candidateFlags[cell.x, cell.y] &= removeMask;
+                if (candidateFlags[cell.x, cell.y] == 0)
+                {
+                    candidatePrimaryOwners[cell.x, cell.y] = FlickDomPlayerId.None;
+                }
+                else if (candidatePrimaryOwners[cell.x, cell.y] == player)
+                {
+                    candidatePrimaryOwners[cell.x, cell.y] = GetPrimaryOwnerFromFlags(candidateFlags[cell.x, cell.y]);
+                }
+
                 RepaintCell(cell);
             }
         }
 
         public void ShowCandidateCells(FlickDomPlayerId player, IReadOnlyList<Vector2Int> cells)
         {
-            if (cells == null || candidateFlags == null)
+            if (cells == null || candidateFlags == null || candidatePrimaryOwners == null)
             {
                 return;
             }
@@ -264,6 +275,7 @@ namespace FlickDom.Gameplay
                 }
 
                 candidateFlags[cell.x, cell.y] |= flag;
+                candidatePrimaryOwners[cell.x, cell.y] = player;
                 RepaintCell(cell);
             }
         }
@@ -331,6 +343,7 @@ namespace FlickDom.Gameplay
             candidateMarkerRenderers = new Renderer[boardSize, boardSize];
             candidateMarkerObjects = new GameObject[boardSize, boardSize];
             ownerCells = new FlickDomPlayerId[boardSize, boardSize];
+            candidatePrimaryOwners = new FlickDomPlayerId[boardSize, boardSize];
             candidateFlags = new int[boardSize, boardSize];
             cellsByCollider.Clear();
 
@@ -432,18 +445,12 @@ namespace FlickDom.Gameplay
 
         private void CreateMaterials()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            emptyMaterial = CreateMaterial(shader, "Token Map Empty", emptyColor);
-            player1CandidateMaterial = CreateMaterial(shader, "Token Map Player1 Candidate", player1CandidateColor);
-            player2CandidateMaterial = CreateMaterial(shader, "Token Map Player2 Candidate", player2CandidateColor);
-            sharedCandidateMaterial = CreateMaterial(shader, "Token Map Shared Candidate", sharedCandidateColor);
-            player1OwnedMaterial = CreateMaterial(shader, "Token Map Player1 Owned", player1OwnedColor);
-            player2OwnedMaterial = CreateMaterial(shader, "Token Map Player2 Owned", player2OwnedColor);
+            emptyMaterial = CreateMaterial("Token Map Empty", emptyColor);
+            player1CandidateMaterial = CreateMaterial("Token Map Player1 Candidate", player1CandidateColor);
+            player2CandidateMaterial = CreateMaterial("Token Map Player2 Candidate", player2CandidateColor);
+            sharedCandidateMaterial = CreateMaterial("Token Map Shared Candidate", sharedCandidateColor);
+            player1OwnedMaterial = CreateMaterial("Token Map Player1 Owned", player1OwnedColor);
+            player2OwnedMaterial = CreateMaterial("Token Map Player2 Owned", player2OwnedColor);
 
             if (emptyMaterialOverride != null)
             {
@@ -461,12 +468,14 @@ namespace FlickDom.Gameplay
             }
         }
 
-        private Material CreateMaterial(Shader shader, string materialName, Color color)
+        private Material CreateMaterial(string materialName, Color color)
         {
-            Material material = new Material(shader);
-            material.name = materialName;
-            material.color = color;
-            return material;
+            return RuntimeMaterialUtility.CreateMaterial(
+                materialName,
+                color,
+                "Universal Render Pipeline/Lit",
+                "Universal Render Pipeline/Simple Lit",
+                "Standard");
         }
 
         private void RepaintCell(Vector2Int cell)
@@ -518,14 +527,20 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            markerRenderer.sharedMaterial = ResolveCandidateMarkerMaterial(flags);
+            markerRenderer.sharedMaterial =
+                ResolveCandidateMarkerMaterial(flags, candidatePrimaryOwners[cell.x, cell.y]);
         }
 
-        private Material ResolveCandidateMarkerMaterial(int flags)
+        private Material ResolveCandidateMarkerMaterial(int flags, FlickDomPlayerId primaryOwner)
         {
-            if ((flags & Player1CandidateFlag) != 0 && (flags & Player2CandidateFlag) != 0)
+            if (primaryOwner == FlickDomPlayerId.Player1)
             {
-                return sharedCandidateMaterial;
+                return player1CandidateMaterial;
+            }
+
+            if (primaryOwner == FlickDomPlayerId.Player2)
+            {
+                return player2CandidateMaterial;
             }
 
             if ((flags & Player1CandidateFlag) != 0)
@@ -548,6 +563,7 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            ClearCandidateHighlightAt(cell);
             ownerCells[cell.x, cell.y] = nextOwner;
             RepaintCell(cell);
             ReturnStarToTray(previousOwner, cell);
@@ -556,9 +572,20 @@ namespace FlickDom.Gameplay
             PlaceFlickBoardStar(nextOwner, cell);
         }
 
+        private void ClearCandidateHighlightAt(Vector2Int cell)
+        {
+            if (!IsValidCell(cell) || candidateFlags == null || candidatePrimaryOwners == null)
+            {
+                return;
+            }
+
+            candidateFlags[cell.x, cell.y] = 0;
+            candidatePrimaryOwners[cell.x, cell.y] = FlickDomPlayerId.None;
+        }
+
         private void HandleMapCleared()
         {
-            if (ownerCells == null || candidateFlags == null)
+            if (ownerCells == null || candidateFlags == null || candidatePrimaryOwners == null)
             {
                 return;
             }
@@ -569,6 +596,7 @@ namespace FlickDom.Gameplay
                 {
                     ownerCells[x, y] = FlickDomPlayerId.None;
                     candidateFlags[x, y] = 0;
+                    candidatePrimaryOwners[x, y] = FlickDomPlayerId.None;
                     RepaintCell(new Vector2Int(x, y));
                 }
             }
@@ -628,6 +656,21 @@ namespace FlickDom.Gameplay
             }
 
             return 0;
+        }
+
+        private static FlickDomPlayerId GetPrimaryOwnerFromFlags(int flags)
+        {
+            if ((flags & Player1CandidateFlag) != 0)
+            {
+                return FlickDomPlayerId.Player1;
+            }
+
+            if ((flags & Player2CandidateFlag) != 0)
+            {
+                return FlickDomPlayerId.Player2;
+            }
+
+            return FlickDomPlayerId.None;
         }
 
         private int GetCellIndex(int x, int y)

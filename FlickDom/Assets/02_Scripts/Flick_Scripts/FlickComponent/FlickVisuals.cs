@@ -35,7 +35,12 @@ public class FlickVisuals : MonoBehaviour
         trajectoryLine.widthCurve = new AnimationCurve(keys);
         trajectoryLine.widthMultiplier = 1f;
         
-        trajectoryLine.material = new Material(Shader.Find("Sprites/Default"));
+        trajectoryLine.material = FlickDom.Gameplay.RuntimeMaterialUtility.CreateMaterial(
+            "Flick Trajectory Material",
+            Color.yellow,
+            "Sprites/Default",
+            "Universal Render Pipeline/Unlit",
+            "Unlit/Color");
         trajectoryLine.startColor = Color.yellow;
         trajectoryLine.endColor = Color.red;
     }

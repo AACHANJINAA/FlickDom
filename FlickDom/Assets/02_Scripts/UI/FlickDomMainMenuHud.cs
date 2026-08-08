@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.UI;
 #endif
 using UnityEngine.SceneManagement;
@@ -15,6 +16,8 @@ namespace FlickDom.Gameplay
         private const string TargetSceneName = "good_Scene";
         private const int MenuCanvasSortingOrder = 300;
         private const string DefaultBundledFontResourcePath = "Fonts/NotoSansKR-VF";
+        private const int MaxAddressLength = 64;
+        private const int MaxPortLength = 5;
 
         [Header("Background")]
         [SerializeField] private Texture2D backgroundTexture;
@@ -39,18 +42,19 @@ namespace FlickDom.Gameplay
         [SerializeField] private Color textColor = new Color(0.08f, 0.07f, 0.04f, 1f);
         [SerializeField] private Color lightTextColor = new Color(1f, 0.98f, 0.9f, 1f);
         [SerializeField] private Color inputColor = new Color(1f, 1f, 1f, 0.9f);
+        [SerializeField] private Color focusedInputColor = new Color(1f, 0.95f, 0.58f, 0.98f);
 
         [Header("Text")]
         [SerializeField] private string titleText = "FlickDom";
-        [SerializeField] private string singleModeText = "싱글모드";
-        [SerializeField] private string multiplayerText = "멀티플레이";
-        [SerializeField] private string gameRulesText = "게임룰";
-        [SerializeField] private string createRoomText = "방 생성하기";
-        [SerializeField] private string joinRoomText = "조인 룸";
-        [SerializeField] private string startGameText = "게임 시작";
-        [SerializeField] private string backText = "뒤로가기";
-        [SerializeField] private string addressLabelText = "IP 주소";
-        [SerializeField] private string portLabelText = "포트";
+        [SerializeField] private string singleModeText = "Single Play";
+        [SerializeField] private string multiplayerText = "Multiplayer";
+        [SerializeField] private string gameRulesText = "Rules";
+        [SerializeField] private string createRoomText = "Create Room";
+        [SerializeField] private string joinRoomText = "Join Room";
+        [SerializeField] private string startGameText = "Start Game";
+        [SerializeField] private string backText = "Back";
+        [SerializeField] private string addressLabelText = "IP Address";
+        [SerializeField] private string portLabelText = "Port";
         [SerializeField] private string emptyRulesText = "";
         [SerializeField] private Font bundledFont;
         [SerializeField] private string bundledFontResourcePath = DefaultBundledFontResourcePath;
@@ -79,6 +83,8 @@ namespace FlickDom.Gameplay
         private Button rulesBackButton;
         private Font resolvedFont;
         private FlickDomNetworkBootstrap bootstrap;
+        private InputField focusedConnectionInput;
+        private bool replaceFocusedInputOnNextCharacter;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureMainMenuInScene()
@@ -105,9 +111,28 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            ApplyWebSafeText();
             EnsureBootstrap();
             BuildHud();
             ShowMainMenu();
+        }
+
+        private void ApplyWebSafeText()
+        {
+            singleModeText = "Single Play";
+            multiplayerText = "Multiplayer";
+            gameRulesText = "Rules";
+            createRoomText = "Create Room";
+            joinRoomText = "Join Room";
+            startGameText = "Start Game";
+            backText = "Back";
+            addressLabelText = "IP Address";
+            portLabelText = "Port";
+        }
+
+        private void OnDisable()
+        {
+            ClearFocusedConnectionInput();
         }
 
         private void Update()
@@ -130,6 +155,7 @@ namespace FlickDom.Gameplay
                 ShowMainMenu();
             }
 
+            HandleFocusedConnectionInputKeys();
             HandleFallbackMenuInput();
             RefreshMultiplayerPanel();
         }
@@ -226,16 +252,20 @@ namespace FlickDom.Gameplay
         private GameObject CreateMultiplayerPanel(Transform parent)
         {
             GameObject panel = CreateMenuPanel("Multiplayer Menu Panel", parent);
-            ConfigureVerticalLayout(panel, 22, 22, 12f);
+            ConfigureVerticalLayout(panel, 22, 18, 8f);
 
             Text title = CreateText("Multiplayer Title", multiplayerText, panel.transform, 34, lightTextColor, TextAnchor.MiddleCenter);
             LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
-            titleLayout.preferredHeight = 46f;
+            titleLayout.preferredHeight = 40f;
 
-            CreateText("Address Label", addressLabelText, panel.transform, bodyFontSize, lightTextColor, TextAnchor.LowerLeft);
+            Text addressLabel = CreateText("Address Label", addressLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
+            LayoutElement addressLabelLayout = addressLabel.gameObject.AddComponent<LayoutElement>();
+            addressLabelLayout.preferredHeight = 22f;
             addressInput = CreateInputField("Address Input", panel.transform, bootstrap != null ? bootstrap.CurrentConnectAddress : "127.0.0.1");
 
-            CreateText("Port Label", portLabelText, panel.transform, bodyFontSize, lightTextColor, TextAnchor.LowerLeft);
+            Text portLabel = CreateText("Port Label", portLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
+            LayoutElement portLabelLayout = portLabel.gameObject.AddComponent<LayoutElement>();
+            portLabelLayout.preferredHeight = 22f;
             portInput = CreateInputField("Port Input", panel.transform, bootstrap != null ? bootstrap.CurrentPort.ToString() : "7777");
 
             GameObject row = new GameObject("Room Button Row");
@@ -248,7 +278,7 @@ namespace FlickDom.Gameplay
             rowLayout.childForceExpandWidth = true;
             rowLayout.childForceExpandHeight = true;
             LayoutElement rowElement = row.AddComponent<LayoutElement>();
-            rowElement.preferredHeight = 52f;
+            rowElement.preferredHeight = 44f;
 
             createRoomButton = CreateMenuButton("Create Room Button", createRoomText, row.transform, HandleCreateRoomClicked);
             joinRoomButton = CreateMenuButton("Join Room Button", joinRoomText, row.transform, HandleJoinRoomClicked);
@@ -256,7 +286,7 @@ namespace FlickDom.Gameplay
             startGameButton = CreateMenuButton("Start Game Button", startGameText, panel.transform, HandleStartGameClicked);
             multiplayerStatusText = CreateText("Multiplayer Status", string.Empty, panel.transform, 18, lightTextColor, TextAnchor.UpperLeft);
             LayoutElement statusLayout = multiplayerStatusText.gameObject.AddComponent<LayoutElement>();
-            statusLayout.preferredHeight = 74f;
+            statusLayout.preferredHeight = 58f;
 
             multiplayerBackButton = CreateMenuButton("Multiplayer Back Button", backText, panel.transform, ShowMainMenu);
             return panel;
@@ -353,26 +383,31 @@ namespace FlickDom.Gameplay
             inputObject.transform.SetParent(parent, false);
 
             RectTransform rectTransform = inputObject.AddComponent<RectTransform>();
-            rectTransform.sizeDelta = new Vector2(buttonSize.x, 42f);
+            rectTransform.sizeDelta = new Vector2(buttonSize.x, 36f);
 
             LayoutElement layoutElement = inputObject.AddComponent<LayoutElement>();
             layoutElement.preferredWidth = buttonSize.x;
-            layoutElement.preferredHeight = 42f;
+            layoutElement.preferredHeight = 36f;
 
             Image image = inputObject.AddComponent<Image>();
             image.color = inputColor;
 
             InputField inputField = inputObject.AddComponent<InputField>();
+            inputField.targetGraphic = image;
+            inputField.readOnly = true;
             Text text = CreateText("Text", value, inputObject.transform, bodyFontSize, textColor, TextAnchor.MiddleLeft);
             RectTransform textRect = text.GetComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(12f, 3f);
-            textRect.offsetMax = new Vector2(-12f, -3f);
+            textRect.offsetMin = new Vector2(12f, 2f);
+            textRect.offsetMax = new Vector2(-12f, -2f);
 
             inputField.textComponent = text;
             inputField.text = value;
             inputField.lineType = InputField.LineType.SingleLine;
+            inputField.caretColor = textColor;
+            inputField.selectionColor = new Color(0.25f, 0.48f, 1f, 0.35f);
+            inputField.ForceLabelUpdate();
             return inputField;
         }
 
@@ -407,6 +442,7 @@ namespace FlickDom.Gameplay
 
         private void ShowMainMenu()
         {
+            ClearFocusedConnectionInput();
             SetPanelActive(mainPanel, true);
             SetPanelActive(multiplayerPanel, false);
             SetPanelActive(rulesPanel, false);
@@ -422,6 +458,7 @@ namespace FlickDom.Gameplay
 
         private void ShowRulesMenu()
         {
+            ClearFocusedConnectionInput();
             SetPanelActive(mainPanel, false);
             SetPanelActive(multiplayerPanel, false);
             SetPanelActive(rulesPanel, true);
@@ -550,7 +587,11 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            HandleFallbackKeyboardInput();
+            if (!IsConnectionInputFocused())
+            {
+                HandleFallbackKeyboardInput();
+            }
+
             if (!TryGetPointerDownPosition(out Vector2 screenPosition))
             {
                 return;
@@ -568,6 +609,13 @@ namespace FlickDom.Gameplay
 
             if (multiplayerPanel != null && multiplayerPanel.activeSelf)
             {
+                if (TryFocusInputFieldAt(addressInput, screenPosition)
+                    || TryFocusInputFieldAt(portInput, screenPosition))
+                {
+                    return;
+                }
+
+                ClearFocusedConnectionInput();
                 TryInvokeButtonAt(createRoomButton, screenPosition);
                 TryInvokeButtonAt(joinRoomButton, screenPosition);
                 TryInvokeButtonAt(startGameButton, screenPosition);
@@ -577,8 +625,413 @@ namespace FlickDom.Gameplay
 
             if (rulesPanel != null && rulesPanel.activeSelf)
             {
+                ClearFocusedConnectionInput();
                 TryInvokeButtonAt(rulesBackButton, screenPosition);
             }
+        }
+
+        private bool HandleFocusedConnectionInputKeys()
+        {
+            if (!IsConnectionInputFocused())
+            {
+                return false;
+            }
+
+#if ENABLE_INPUT_SYSTEM
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return false;
+            }
+
+            if (IsCtrlHeld(keyboard) && keyboard.aKey.wasPressedThisFrame)
+            {
+                replaceFocusedInputOnNextCharacter = true;
+                return true;
+            }
+
+            if (IsCtrlHeld(keyboard) && keyboard.vKey.wasPressedThisFrame)
+            {
+                PasteClipboardIntoFocusedInput();
+                return true;
+            }
+
+            if (keyboard.backspaceKey.wasPressedThisFrame)
+            {
+                replaceFocusedInputOnNextCharacter = false;
+                RemoveLastCharacterFromFocusedInput();
+                return true;
+            }
+
+            if (keyboard.deleteKey.wasPressedThisFrame)
+            {
+                replaceFocusedInputOnNextCharacter = false;
+                SetFocusedInputText(string.Empty);
+                return true;
+            }
+
+            if (keyboard.tabKey.wasPressedThisFrame)
+            {
+                FocusConnectionInput(focusedConnectionInput == addressInput ? portInput : addressInput);
+                return true;
+            }
+
+            if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
+            {
+                ClearFocusedConnectionInput();
+                return true;
+            }
+
+            if (keyboard.escapeKey.wasPressedThisFrame)
+            {
+                ClearFocusedConnectionInput();
+                return true;
+            }
+
+            if (TryGetConnectionInputCharacter(keyboard, out char character))
+            {
+                AppendCharacterToFocusedInput(character);
+                return true;
+            }
+#endif
+
+            return false;
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private bool TryGetConnectionInputCharacter(Keyboard keyboard, out char character)
+        {
+            if (keyboard == null)
+            {
+                character = default;
+                return false;
+            }
+
+            if (TryGetDigitCharacter(keyboard, out character))
+            {
+                return true;
+            }
+
+            if (focusedConnectionInput == portInput)
+            {
+                character = default;
+                return false;
+            }
+
+            if (keyboard.periodKey.wasPressedThisFrame || keyboard.numpadPeriodKey.wasPressedThisFrame)
+            {
+                character = '.';
+                return true;
+            }
+
+            if (keyboard.minusKey.wasPressedThisFrame || keyboard.numpadMinusKey.wasPressedThisFrame)
+            {
+                character = '-';
+                return true;
+            }
+
+            if (keyboard.semicolonKey.wasPressedThisFrame && IsShiftHeld(keyboard))
+            {
+                character = ':';
+                return true;
+            }
+
+            if (keyboard.leftBracketKey.wasPressedThisFrame)
+            {
+                character = '[';
+                return true;
+            }
+
+            if (keyboard.rightBracketKey.wasPressedThisFrame)
+            {
+                character = ']';
+                return true;
+            }
+
+            if (TryGetLetterCharacter(keyboard, out character))
+            {
+                return true;
+            }
+
+            character = default;
+            return false;
+        }
+
+        private static bool TryGetDigitCharacter(Keyboard keyboard, out char character)
+        {
+            KeyControl[] digitKeys =
+            {
+                keyboard.digit0Key,
+                keyboard.digit1Key,
+                keyboard.digit2Key,
+                keyboard.digit3Key,
+                keyboard.digit4Key,
+                keyboard.digit5Key,
+                keyboard.digit6Key,
+                keyboard.digit7Key,
+                keyboard.digit8Key,
+                keyboard.digit9Key
+            };
+
+            KeyControl[] numpadKeys =
+            {
+                keyboard.numpad0Key,
+                keyboard.numpad1Key,
+                keyboard.numpad2Key,
+                keyboard.numpad3Key,
+                keyboard.numpad4Key,
+                keyboard.numpad5Key,
+                keyboard.numpad6Key,
+                keyboard.numpad7Key,
+                keyboard.numpad8Key,
+                keyboard.numpad9Key
+            };
+
+            for (int i = 0; i < digitKeys.Length; i++)
+            {
+                if ((digitKeys[i] != null && digitKeys[i].wasPressedThisFrame)
+                    || (numpadKeys[i] != null && numpadKeys[i].wasPressedThisFrame))
+                {
+                    character = (char)('0' + i);
+                    return true;
+                }
+            }
+
+            character = default;
+            return false;
+        }
+
+        private static bool TryGetLetterCharacter(Keyboard keyboard, out char character)
+        {
+            KeyControl[] letterKeys =
+            {
+                keyboard.aKey, keyboard.bKey, keyboard.cKey, keyboard.dKey, keyboard.eKey, keyboard.fKey,
+                keyboard.gKey, keyboard.hKey, keyboard.iKey, keyboard.jKey, keyboard.kKey, keyboard.lKey,
+                keyboard.mKey, keyboard.nKey, keyboard.oKey, keyboard.pKey, keyboard.qKey, keyboard.rKey,
+                keyboard.sKey, keyboard.tKey, keyboard.uKey, keyboard.vKey, keyboard.wKey, keyboard.xKey,
+                keyboard.yKey, keyboard.zKey
+            };
+
+            for (int i = 0; i < letterKeys.Length; i++)
+            {
+                if (letterKeys[i] != null && letterKeys[i].wasPressedThisFrame)
+                {
+                    char lower = (char)('a' + i);
+                    character = IsShiftHeld(keyboard) ? char.ToUpperInvariant(lower) : lower;
+                    return true;
+                }
+            }
+
+            character = default;
+            return false;
+        }
+
+        private static bool IsShiftHeld(Keyboard keyboard)
+        {
+            return keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+        }
+
+        private static bool IsCtrlHeld(Keyboard keyboard)
+        {
+            return keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed;
+        }
+#endif
+
+        private bool TryFocusInputFieldAt(InputField inputField, Vector2 screenPosition)
+        {
+            if (inputField == null || !inputField.isActiveAndEnabled || !inputField.interactable)
+            {
+                return false;
+            }
+
+            RectTransform rectTransform = inputField.GetComponent<RectTransform>();
+            if (rectTransform == null
+                || !RectTransformUtility.RectangleContainsScreenPoint(rectTransform, screenPosition, null))
+            {
+                return false;
+            }
+
+            FocusConnectionInput(inputField);
+            return true;
+        }
+
+        private void FocusConnectionInput(InputField inputField)
+        {
+            if (inputField == null || !inputField.interactable)
+            {
+                return;
+            }
+
+            focusedConnectionInput = inputField;
+            replaceFocusedInputOnNextCharacter = true;
+            EventSystem eventSystem = EventSystem.current;
+            if (eventSystem != null)
+            {
+                eventSystem.SetSelectedGameObject(inputField.gameObject);
+            }
+
+            inputField.Select();
+            inputField.ActivateInputField();
+            inputField.MoveTextEnd(true);
+            ForceInputLabelUpdate(inputField);
+            RefreshInputFocusVisuals();
+        }
+
+        private void ClearFocusedConnectionInput()
+        {
+            if (focusedConnectionInput != null)
+            {
+                focusedConnectionInput.DeactivateInputField();
+            }
+
+            focusedConnectionInput = null;
+            replaceFocusedInputOnNextCharacter = false;
+            RefreshInputFocusVisuals();
+        }
+
+        private bool IsConnectionInputFocused()
+        {
+            return focusedConnectionInput != null
+                && focusedConnectionInput.isActiveAndEnabled
+                && focusedConnectionInput.interactable;
+        }
+
+        private void RefreshInputFocusVisuals()
+        {
+            SetInputFieldColor(addressInput, focusedConnectionInput == addressInput ? focusedInputColor : inputColor);
+            SetInputFieldColor(portInput, focusedConnectionInput == portInput ? focusedInputColor : inputColor);
+        }
+
+        private static void SetInputFieldColor(InputField inputField, Color color)
+        {
+            if (inputField != null && inputField.targetGraphic != null)
+            {
+                inputField.targetGraphic.color = color;
+            }
+        }
+
+        private static void ForceInputLabelUpdate(InputField inputField)
+        {
+            if (inputField == null)
+            {
+                return;
+            }
+
+            inputField.ForceLabelUpdate();
+            if (inputField.textComponent != null)
+            {
+                inputField.textComponent.SetAllDirty();
+            }
+        }
+
+        private void RemoveLastCharacterFromFocusedInput()
+        {
+            if (!IsConnectionInputFocused())
+            {
+                return;
+            }
+
+            string currentText = focusedConnectionInput.text ?? string.Empty;
+            if (currentText.Length <= 0)
+            {
+                return;
+            }
+
+            SetFocusedInputText(currentText.Substring(0, currentText.Length - 1));
+        }
+
+        private void AppendCharacterToFocusedInput(char character)
+        {
+            if (!IsConnectionInputFocused())
+            {
+                return;
+            }
+
+            string currentText = focusedConnectionInput.text ?? string.Empty;
+            if (replaceFocusedInputOnNextCharacter)
+            {
+                currentText = string.Empty;
+                replaceFocusedInputOnNextCharacter = false;
+            }
+
+            if (focusedConnectionInput == portInput)
+            {
+                if (!char.IsDigit(character) || currentText.Length >= MaxPortLength)
+                {
+                    return;
+                }
+            }
+            else if (!IsAllowedAddressCharacter(character) || currentText.Length >= MaxAddressLength)
+            {
+                return;
+            }
+
+            SetFocusedInputText(currentText + character);
+        }
+
+        private void PasteClipboardIntoFocusedInput()
+        {
+            if (!IsConnectionInputFocused())
+            {
+                return;
+            }
+
+            string clipboardText = GUIUtility.systemCopyBuffer;
+            if (string.IsNullOrEmpty(clipboardText))
+            {
+                return;
+            }
+
+            string currentText = replaceFocusedInputOnNextCharacter
+                ? string.Empty
+                : focusedConnectionInput.text ?? string.Empty;
+            replaceFocusedInputOnNextCharacter = false;
+
+            int maxLength = focusedConnectionInput == portInput ? MaxPortLength : MaxAddressLength;
+            System.Text.StringBuilder builder = new System.Text.StringBuilder(currentText, maxLength);
+            for (int i = 0; i < clipboardText.Length && builder.Length < maxLength; i++)
+            {
+                char character = clipboardText[i];
+                if (focusedConnectionInput == portInput)
+                {
+                    if (char.IsDigit(character))
+                    {
+                        builder.Append(character);
+                    }
+
+                    continue;
+                }
+
+                if (IsAllowedAddressCharacter(character))
+                {
+                    builder.Append(character);
+                }
+            }
+
+            SetFocusedInputText(builder.ToString());
+        }
+
+        private void SetFocusedInputText(string text)
+        {
+            if (!IsConnectionInputFocused())
+            {
+                return;
+            }
+
+            focusedConnectionInput.text = text ?? string.Empty;
+            focusedConnectionInput.MoveTextEnd(false);
+            ForceInputLabelUpdate(focusedConnectionInput);
+        }
+
+        private static bool IsAllowedAddressCharacter(char character)
+        {
+            return char.IsLetterOrDigit(character)
+                || character == '.'
+                || character == ':'
+                || character == '-'
+                || character == '_'
+                || character == '['
+                || character == ']';
         }
 
         private void HandleFallbackKeyboardInput()
@@ -832,16 +1285,20 @@ namespace FlickDom.Gameplay
             }
 
 #if ENABLE_INPUT_SYSTEM
-            if (eventSystemObject.GetComponent<InputSystemUIInputModule>() == null)
+            StandaloneInputModule legacyModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+            if (legacyModule != null)
             {
-                StandaloneInputModule legacyModule = eventSystemObject.GetComponent<StandaloneInputModule>();
-                if (legacyModule != null)
-                {
-                    legacyModule.enabled = false;
-                }
-
-                eventSystemObject.AddComponent<InputSystemUIInputModule>();
+                legacyModule.enabled = false;
             }
+
+            InputSystemUIInputModule inputModule = eventSystemObject.GetComponent<InputSystemUIInputModule>();
+            if (inputModule == null)
+            {
+                inputModule = eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            }
+
+            inputModule.enabled = true;
+            inputModule.AssignDefaultActions();
 #else
             if (eventSystemObject.GetComponent<StandaloneInputModule>() == null)
             {
