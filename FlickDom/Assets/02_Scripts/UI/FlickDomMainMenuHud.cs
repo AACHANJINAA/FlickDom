@@ -368,6 +368,7 @@ namespace FlickDom.Gameplay
 
             Button button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
+            UiButtonClickSound.Attach(button);
             button.onClick.AddListener(onClick);
 
             ColorBlock colors = button.colors;
