@@ -50,10 +50,10 @@ namespace FlickDom.Gameplay
         [Header("Art Skin (optional)")]
         [SerializeField] private Sprite panelSprite;
         [SerializeField] private Sprite dialogPanelSprite;
-        [SerializeField] private Vector2 dialogPanelSize = new Vector2(560f, 430f);
+        [SerializeField] private Vector2 dialogPanelSize = new Vector2(680f, 464f);
+        [SerializeField] private Vector2 rulesPanelSize = new Vector2(880f, 601f);
         [SerializeField] private Color dialogPanelColor = new Color(0.35f, 0.20f, 0.09f, 0.85f);
         // 9-slice 테두리는 원본 픽셀 크기 그대로 그려진다. 1보다 크게 하면 화면상 테두리가 얇아진다.
-        [SerializeField] private float dialogPanelBorderScale = 2.2f;
         [SerializeField] private Sprite buttonSprite;
         [SerializeField] private Sprite singleModeButtonSprite;
         [SerializeField] private Sprite multiplayerButtonSprite;
@@ -64,7 +64,7 @@ namespace FlickDom.Gameplay
         [SerializeField] private Sprite rulesImageSprite;
         [SerializeField] private Vector2 rulesImageSize = new Vector2(660f, 372f);
 
-        private static void ApplySkin(Image image, Sprite sprite)
+        private static void ApplyFixedSkin(Image image, Sprite sprite)
         {
             if (image == null || sprite == null)
             {
@@ -82,38 +82,53 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            image.type = Image.Type.Sliced;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
 
-            // 9-slice 의 함정: 목표 크기가 테두리 합보다 작으면 테두리끼리 겹쳐 뭉개진다.
-            // 예) UI_Btn_Wide 는 위아래 테두리가 41+41=82px 인데 버튼을 60px 로 만들면 깨진다.
-            // pixelsPerUnitMultiplier 를 올려 테두리를 화면상에서 축소해 맞춘다.
-            RectTransform rt = image.rectTransform;
-            float targetH = rt.rect.height > 1f ? rt.rect.height : rt.sizeDelta.y;
-            float targetW = rt.rect.width > 1f ? rt.rect.width : rt.sizeDelta.x;
-            float borderH = sprite.border.y + sprite.border.w;
-            float borderW = sprite.border.x + sprite.border.z;
-
-            float need = 1f;
-            if (targetH > 1f && borderH > targetH * 0.8f)
-            {
-                need = Mathf.Max(need, borderH / (targetH * 0.8f));
-            }
-            if (targetW > 1f && borderW > targetW * 0.8f)
-            {
-                need = Mathf.Max(need, borderW / (targetW * 0.8f));
-            }
-
-            image.pixelsPerUnitMultiplier = need;
         }
 
-        private static void ApplyButtonSkin(Button button, Sprite sprite)
+        private static Vector2 ResolveFixedSpriteSize(Vector2 requestedSize, Sprite sprite)
+        {
+            if (sprite == null || sprite.rect.width <= 0f || sprite.rect.height <= 0f)
+            {
+                return requestedSize;
+            }
+
+            float width = Mathf.Max(1f, requestedSize.x);
+            return new Vector2(width, width * (sprite.rect.height / sprite.rect.width));
+        }
+
+        private static Vector2 FitFixedSpriteInside(Vector2 bounds, Sprite sprite)
+        {
+            if (sprite == null || sprite.rect.width <= 0f || sprite.rect.height <= 0f)
+            {
+                return bounds;
+            }
+
+            float scale = Mathf.Min(
+                Mathf.Max(1f, bounds.x) / sprite.rect.width,
+                Mathf.Max(1f, bounds.y) / sprite.rect.height);
+            return new Vector2(sprite.rect.width * scale, sprite.rect.height * scale);
+        }
+
+        private void ApplyButtonSkin(Button button, Sprite sprite)
         {
             if (button == null || sprite == null)
             {
                 return;
             }
 
-            ApplySkin(button.GetComponent<Image>(), sprite);
+            ApplyFixedSkin(button.GetComponent<Image>(), sprite);
+            Vector2 fixedSize = FitFixedSpriteInside(buttonSize, sprite);
+            button.GetComponent<RectTransform>().sizeDelta = fixedSize;
+            LayoutElement layout = button.GetComponent<LayoutElement>();
+            if (layout != null)
+            {
+                layout.minWidth = fixedSize.x;
+                layout.minHeight = fixedSize.y;
+                layout.preferredWidth = fixedSize.x;
+                layout.preferredHeight = fixedSize.y;
+            }
 
             // 글자가 구워진 스프라이트라 라벨을 겹쳐 그리면 두 번 보인다.
             Text label = button.GetComponentInChildren<Text>(true);
@@ -336,7 +351,11 @@ namespace FlickDom.Gameplay
             else
             {
                 Text title = CreateText("Title", titleText, panel.transform, titleFontSize, lightTextColor, TextAnchor.MiddleCenter);
+                title.fontStyle = FontStyle.Bold;
+                title.verticalOverflow = VerticalWrapMode.Overflow;
                 LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
+                titleLayout.minWidth = 300f;
+                titleLayout.preferredWidth = 300f;
                 titleLayout.preferredHeight = 86f;
             }
 
@@ -360,17 +379,24 @@ namespace FlickDom.Gameplay
             ConfigureVerticalLayout(panel, 22, 18, 8f);
 
             Text title = CreateText("Multiplayer Title", multiplayerText, panel.transform, 34, lightTextColor, TextAnchor.MiddleCenter);
+            title.fontStyle = FontStyle.Bold;
+            title.verticalOverflow = VerticalWrapMode.Overflow;
             LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
+            titleLayout.minWidth = 300f;
+            titleLayout.preferredWidth = 300f;
+            titleLayout.minHeight = 40f;
             titleLayout.preferredHeight = 40f;
 
             bool useRelay = bootstrap == null || bootstrap.UsesUnityRelay;
             Text addressLabel = CreateText("Address Label", useRelay ? "Join Code" : addressLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
             LayoutElement addressLabelLayout = addressLabel.gameObject.AddComponent<LayoutElement>();
+            addressLabelLayout.minHeight = 22f;
             addressLabelLayout.preferredHeight = 22f;
             addressInput = CreateInputField("Address Input", panel.transform, useRelay ? string.Empty : bootstrap != null ? bootstrap.CurrentConnectAddress : "127.0.0.1");
 
             portLabelTextComponent = CreateText("Port Label", portLabelText, panel.transform, 18, lightTextColor, TextAnchor.LowerLeft);
             LayoutElement portLabelLayout = portLabelTextComponent.gameObject.AddComponent<LayoutElement>();
+            portLabelLayout.minHeight = 22f;
             portLabelLayout.preferredHeight = 22f;
             portInput = CreateInputField("Port Input", panel.transform, bootstrap != null ? bootstrap.CurrentPort.ToString() : "7777");
             SetPortInputVisible(!useRelay);
@@ -389,7 +415,8 @@ namespace FlickDom.Gameplay
             rowLayout.childForceExpandWidth = true;
             rowLayout.childForceExpandHeight = true;
             LayoutElement rowElement = row.AddComponent<LayoutElement>();
-            rowElement.preferredHeight = 44f;
+            rowElement.minHeight = 58f;
+            rowElement.preferredHeight = 58f;
 
             createRoomButton = CreateMenuButton("Create Room Button", createRoomText, row.transform, HandleCreateRoomClicked);
             joinRoomButton = CreateMenuButton("Join Room Button", joinRoomText, row.transform, HandleJoinRoomClicked);
@@ -397,6 +424,7 @@ namespace FlickDom.Gameplay
             startGameButton = CreateMenuButton("Start Game Button", startGameText, panel.transform, HandleStartGameClicked);
             multiplayerStatusText = CreateText("Multiplayer Status", string.Empty, panel.transform, 18, lightTextColor, TextAnchor.UpperLeft);
             LayoutElement statusLayout = multiplayerStatusText.gameObject.AddComponent<LayoutElement>();
+            statusLayout.minHeight = 50f;
             statusLayout.preferredHeight = 50f;
 
             multiplayerBackButton = CreateMenuButton("Multiplayer Back Button", backText, panel.transform, ShowMainMenu);
@@ -409,7 +437,12 @@ namespace FlickDom.Gameplay
             ConfigureVerticalLayout(panel, 24, 24, 18f);
 
             Text title = CreateText("Rules Title", gameRulesText, panel.transform, 34, lightTextColor, TextAnchor.MiddleCenter);
+            title.fontStyle = FontStyle.Bold;
+            title.verticalOverflow = VerticalWrapMode.Overflow;
             LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
+            titleLayout.minWidth = 300f;
+            titleLayout.preferredWidth = 300f;
+            titleLayout.minHeight = 58f;
             titleLayout.preferredHeight = 58f;
 
             if (rulesImageSprite != null)
@@ -457,6 +490,7 @@ namespace FlickDom.Gameplay
             // 메인 패널은 배경 없이 왼쪽에 붙고, 나머지(멀티·룰)는 나무 프레임을 두르고 가운데에 뜬다.
             // 원래는 셋이 같은 크기·색을 공유해서 한쪽을 맞추면 다른 쪽이 깨졌다.
             bool isMain = objectName == "Main Menu Panel";
+            bool isRules = objectName == "Game Rules Panel";
 
             RectTransform rectTransform = panel.AddComponent<RectTransform>();
             float anchor = isMain ? 0f : 0.5f;
@@ -464,15 +498,15 @@ namespace FlickDom.Gameplay
             rectTransform.anchorMax = new Vector2(anchor, 0.5f);
             rectTransform.pivot = new Vector2(anchor, 0.5f);
             rectTransform.anchoredPosition = isMain ? menuPanelOffset : Vector2.zero;
-            rectTransform.sizeDelta = isMain ? menuPanelSize : dialogPanelSize;
+            Sprite panelArt = isMain ? panelSprite : dialogPanelSprite;
+            Vector2 requestedPanelSize = isMain
+                ? menuPanelSize
+                : isRules ? rulesPanelSize : dialogPanelSize;
+            rectTransform.sizeDelta = ResolveFixedSpriteSize(requestedPanelSize, panelArt);
 
             Image image = panel.AddComponent<Image>();
             image.color = isMain ? panelColor : dialogPanelColor;
-            ApplySkin(image, isMain ? panelSprite : dialogPanelSprite);
-            if (!isMain && image.sprite != null && image.type == Image.Type.Sliced)
-            {
-                image.pixelsPerUnitMultiplier = Mathf.Max(image.pixelsPerUnitMultiplier, dialogPanelBorderScale);
-            }
+            ApplyFixedSkin(image, panelArt);
             image.raycastTarget = true;
             return panel;
         }
@@ -499,19 +533,20 @@ namespace FlickDom.Gameplay
             buttonObject.transform.SetParent(parent, false);
 
             RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
-            rectTransform.sizeDelta = buttonSize;
+            Vector2 fixedSize = FitFixedSpriteInside(buttonSize, buttonSprite);
+            rectTransform.sizeDelta = fixedSize;
 
             LayoutElement layoutElement = buttonObject.AddComponent<LayoutElement>();
-            layoutElement.preferredWidth = buttonSize.x;
-            layoutElement.preferredHeight = buttonSize.y;
-            layoutElement.minWidth = buttonSize.x;
-            layoutElement.minHeight = buttonSize.y;
+            layoutElement.preferredWidth = fixedSize.x;
+            layoutElement.preferredHeight = fixedSize.y;
+            layoutElement.minWidth = fixedSize.x;
+            layoutElement.minHeight = fixedSize.y;
             layoutElement.flexibleWidth = 0f;
             layoutElement.flexibleHeight = 0f;
 
             Image image = buttonObject.AddComponent<Image>();
             image.color = buttonColor;
-            ApplySkin(image, buttonSprite);
+            ApplyFixedSkin(image, buttonSprite);
             bool skinned = image.sprite != null;
 
             Button button = buttonObject.AddComponent<Button>();
@@ -542,6 +577,7 @@ namespace FlickDom.Gameplay
             button.colors = colors;
 
             Text buttonText = CreateText("Text", text, buttonObject.transform, buttonFontSize, textColor, TextAnchor.MiddleCenter);
+            buttonText.fontStyle = FontStyle.Bold;
             RectTransform textRect = buttonText.GetComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
@@ -551,17 +587,26 @@ namespace FlickDom.Gameplay
             return button;
         }
 
-        private static void SetButtonPreferredHeight(Button button, float height)
+        private void SetButtonPreferredHeight(Button button, float height)
         {
             if (button == null)
             {
                 return;
             }
 
+            Image image = button.GetComponent<Image>();
+            Vector2 fixedSize = FitFixedSpriteInside(
+                new Vector2(buttonSize.x, height),
+                image != null ? image.sprite : buttonSprite);
+            button.GetComponent<RectTransform>().sizeDelta = fixedSize;
+
             LayoutElement layoutElement = button.GetComponent<LayoutElement>();
             if (layoutElement != null)
             {
-                layoutElement.preferredHeight = height;
+                layoutElement.minWidth = fixedSize.x;
+                layoutElement.minHeight = fixedSize.y;
+                layoutElement.preferredWidth = fixedSize.x;
+                layoutElement.preferredHeight = fixedSize.y;
             }
         }
 
@@ -571,15 +616,18 @@ namespace FlickDom.Gameplay
             inputObject.transform.SetParent(parent, false);
 
             RectTransform rectTransform = inputObject.AddComponent<RectTransform>();
-            rectTransform.sizeDelta = new Vector2(buttonSize.x, 36f);
+            Vector2 inputSize = FitFixedSpriteInside(new Vector2(buttonSize.x, 54f), inputSlotSprite);
+            rectTransform.sizeDelta = inputSize;
 
             LayoutElement layoutElement = inputObject.AddComponent<LayoutElement>();
-            layoutElement.preferredWidth = buttonSize.x;
-            layoutElement.preferredHeight = 36f;
+            layoutElement.preferredWidth = inputSize.x;
+            layoutElement.preferredHeight = inputSize.y;
+            layoutElement.minWidth = inputSize.x;
+            layoutElement.minHeight = inputSize.y;
 
             Image image = inputObject.AddComponent<Image>();
             image.color = inputColor;
-            ApplySkin(image, inputSlotSprite);
+            ApplyFixedSkin(image, inputSlotSprite);
 
             InputField inputField = inputObject.AddComponent<InputField>();
             inputField.targetGraphic = image;
