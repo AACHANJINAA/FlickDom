@@ -1030,7 +1030,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 39a4bdf1d54dfcc49a48e99e30680ea0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TokenSetup
-  tokenData: {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
+  tokenData: {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
 --- !u!114 &1305843888
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1381,13 +1381,13 @@ MonoBehaviour:
   player2PieceObjects: []
   configureAuthoredPieceComponents: 1
   player1TokenDataSequence:
-  - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
-  - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
   - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
   player2TokenDataSequence:
   - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
-  - {fileID: 11400000, guid: 9440c8bda743d1f41be77154659fa39a, type: 2}
-  - {fileID: 11400000, guid: ca28749210d05074a876a69efeda9b28, type: 2}
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
+  - {fileID: 11400000, guid: fb67478e9f3b1b0489d844b6fb3e1b5e, type: 2}
   player1PieceMaterialOverride: {fileID: 2100000, guid: e5fd0ccf0abfe064db017f8af834fffe, type: 2}
   player2PieceMaterialOverride: {fileID: 2100000, guid: 615519a92c1a8474c8a124080188a5ba, type: 2}
   startTrayPrefab: {fileID: 3580514821724020511, guid: d79dd2f394717824dbd357d05de38f71, type: 3}
