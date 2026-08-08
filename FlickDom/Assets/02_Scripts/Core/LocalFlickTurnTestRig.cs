@@ -348,12 +348,17 @@ namespace FlickDom.Gameplay
             }
 
             Mouse mouse = Mouse.current;
-            if (mouse == null || inputCamera == null || !mouse.leftButton.wasPressedThisFrame)
+            if (mouse == null || inputCamera == null)
             {
                 return;
             }
 
-            if (ShouldSuppressPieceOrderInput(mouse))
+            if (ShouldSuppressPieceOrderInput(mouse) || !mouse.leftButton.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            if (IsPointerOverUi())
             {
                 return;
             }
@@ -1222,12 +1227,6 @@ namespace FlickDom.Gameplay
 
         private bool ShouldSuppressPieceOrderInput(Mouse mouse)
         {
-            EventSystem eventSystem = EventSystem.current;
-            if (eventSystem != null && eventSystem.IsPointerOverGameObject())
-            {
-                return true;
-            }
-
             if (!suppressPieceOrderInputUntilPointerReleased)
             {
                 return false;
@@ -1240,6 +1239,12 @@ namespace FlickDom.Gameplay
 
             suppressPieceOrderInputUntilPointerReleased = false;
             return false;
+        }
+
+        private static bool IsPointerOverUi()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
         }
 
         private void BeginNoPlacementAdvanceIfNeeded()
