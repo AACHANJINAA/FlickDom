@@ -2874,6 +2874,15 @@ namespace FlickDom.Networking
                 }
             }
 
+            ResolveGameModeManager();
+            ResolvePlacementSelector();
+            if (placementSelector != null
+                && gameModeManager != null
+                && gameModeManager.CurrentState == FlickDomGameState.PlacementSelection)
+            {
+                placementSelector.RefreshNetworkPlacementCandidates();
+            }
+
             Debug.Log("[Network] Board state received from Host. P1 cells: " + player1Cells.Count + ", P2 cells: " + player2Cells.Count + ".", this);
         }
 
