@@ -82,6 +82,7 @@ namespace FlickDom.Gameplay
         private Vector3 lastSubmittedNetworkMoveDirection;
         private bool lastSubmittedNetworkSprintHeld;
         private float nextNetworkInputSubmitTime;
+        private bool allowLocalStandaloneInput = true;
 
         public FlickDomPlayerId Owner
         {
@@ -111,6 +112,8 @@ namespace FlickDom.Gameplay
 
         private void Awake()
         {
+            owner = ResolveOwnerFromSceneName(owner, gameObject.name);
+            RefreshLocalStandaloneInputPolicy();
             cachedTransform = transform;
             cachedRigidbody = GetComponent<Rigidbody>();
             ConfigureRigidbody(cachedRigidbody);
@@ -171,11 +174,12 @@ namespace FlickDom.Gameplay
 
         public void SetOwner(FlickDomPlayerId playerId)
         {
-            owner = playerId;
+            owner = NormalizeOwner(playerId);
+            RefreshLocalStandaloneInputPolicy();
 
             if (slingshotPresenter != null)
             {
-                slingshotPresenter.SetOwner(playerId);
+                slingshotPresenter.SetOwner(owner);
             }
         }
 
@@ -393,6 +397,11 @@ namespace FlickDom.Gameplay
                 return gameModeManager.CurrentState != FlickDomGameState.PhysicsProcessing
                     && gameModeManager.CurrentState != FlickDomGameState.CardMatch
                     && gameModeManager.CurrentState != FlickDomGameState.RoundEnd;
+            }
+
+            if (!allowLocalStandaloneInput)
+            {
+                return false;
             }
 
             if (!requireActivePlayer || gameModeManager == null)
@@ -822,6 +831,72 @@ namespace FlickDom.Gameplay
             capsuleCollider.height = 1.1f;
             capsuleCollider.radius = 0.35f;
             capsuleCollider.direction = 1;
+        }
+
+        private static FlickDomPlayerId ResolveOwnerFromSceneName(FlickDomPlayerId fallbackOwner, string objectName)
+        {
+            if (string.IsNullOrEmpty(objectName))
+            {
+                return NormalizeOwner(fallbackOwner);
+            }
+
+            string lowerName = objectName.ToLowerInvariant();
+            if (lowerName.Contains("player2") || lowerName.Contains("p2"))
+            {
+                return FlickDomPlayerId.Player2;
+            }
+
+            if (lowerName.Contains("player1") || lowerName.Contains("p1"))
+            {
+                return FlickDomPlayerId.Player1;
+            }
+
+            return NormalizeOwner(fallbackOwner);
+        }
+
+        private static FlickDomPlayerId NormalizeOwner(FlickDomPlayerId playerId)
+        {
+            return playerId == FlickDomPlayerId.Player2
+                ? FlickDomPlayerId.Player2
+                : FlickDomPlayerId.Player1;
+        }
+
+        private static bool HasMultiplePlayerMonkeys()
+        {
+            bool hasPlayer1 = false;
+            bool hasPlayer2 = false;
+            MonkeyThirdPersonController[] monkeys =
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+            for (int i = 0; i < monkeys.Length; i++)
+            {
+                MonkeyThirdPersonController monkey = monkeys[i];
+                if (monkey == null)
+                {
+                    continue;
+                }
+
+                if (monkey.Owner == FlickDomPlayerId.Player1)
+                {
+                    hasPlayer1 = true;
+                }
+                else if (monkey.Owner == FlickDomPlayerId.Player2)
+                {
+                    hasPlayer2 = true;
+                }
+
+                if (hasPlayer1 && hasPlayer2)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void RefreshLocalStandaloneInputPolicy()
+        {
+            allowLocalStandaloneInput = owner != FlickDomPlayerId.Player2 || !HasMultiplePlayerMonkeys();
         }
     }
 }

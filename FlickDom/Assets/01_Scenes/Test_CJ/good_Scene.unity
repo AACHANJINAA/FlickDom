@@ -443,6 +443,10 @@ MonoBehaviour:
   slingshotPresenter: {fileID: 2000000001}
   slingshotLauncherPrefab: {fileID: 0}
   slingshotLauncherMaterial: {fileID: 0}
+  slingshotLauncherScale: {x: 0.4, y: 0.4, z: 0.4}
+  slingshotLauncherEulerOffset: {x: 0, y: 90, z: 0}
+  slingshotLauncherStoneCenterOffset: {x: 0, y: 0, z: 0}
+  slingshotLauncherGripForwardOffset: 0.28
   cameraTransform: {fileID: 961739753}
   walkSpeed: 2.6
   sprintSpeed: 4.2
@@ -459,6 +463,8 @@ MonoBehaviour:
   idleAnimationValue: 1
   walkAnimationValue: 21
   runAnimationValue: 18
+  disableWebGlLocomotionAnimation: 0
+  useWebGlMaterialFallback: 1
 --- !u!136 &738081064
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -955,6 +961,63 @@ MonoBehaviour:
   allowScrollZoom: 1
   aimFocusSharpness: 18
   aimRotationSharpness: 24
+--- !u!1001 &1246881620
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 5058119200980185944, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_Name
+      value: Player2_Monkey
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 5.29
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.049999967
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.51
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5582735318877071842, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 37e6c48943f389d4bb7264be0344ee77, type: 3}
 --- !u!1 &1305843885
 GameObject:
   m_ObjectHideFlags: 0
@@ -1813,6 +1876,8 @@ MonoBehaviour:
   confirmButtonSize: {x: 170, y: 48}
   confirmButtonYOffset: -285
   confirmButtonFontSize: 24
+  bundledFont: {fileID: 0}
+  bundledFontResourcePath: Fonts/NotoSansKR-VF
   fallbackFontNames:
   - Malgun Gothic
   - Segoe UI
@@ -1840,7 +1905,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.36
+      value: -7.45
       objectReference: {fileID: 0}
     - target: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
       propertyPath: m_LocalPosition.y
@@ -1848,7 +1913,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 4.104
+      value: 0.75
       objectReference: {fileID: 0}
     - target: {fileID: 5784911851671085600, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1880,7 +1945,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6558351570595821722, guid: ef862cd3624c70f48ba2e3e54f0d7f21, type: 3}
       propertyPath: m_Name
-      value: Chibi_Monkey_01
+      value: Player1_Monkey
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2101,3 +2166,4 @@ SceneRoots:
   - {fileID: 198216824}
   - {fileID: 1357366719}
   - {fileID: 605210813}
+  - {fileID: 1246881620}

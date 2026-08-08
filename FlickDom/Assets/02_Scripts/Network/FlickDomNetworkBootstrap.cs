@@ -66,6 +66,8 @@ namespace FlickDom.Networking
         private const string AnyListenAddress = "0.0.0.0";
         private const int MaxHostPortSearchAttempts = 64;
         private const string DefaultRelayConnectionType = "wss";
+        private const string Player1MonkeyObjectName = "Player1_Monkey";
+        private const string Player2MonkeyObjectName = "Player2_Monkey";
 
         public event Action<FlickDomPlayerId> LocalPlayerRoleChanged;
 
@@ -242,6 +244,7 @@ namespace FlickDom.Networking
             ResolvePlacementSelector();
             ResolvePatternCardManager();
             ConfigureGameModeAutoStart();
+            EnsureSceneMonkeyControllers();
             addressInput = connectAddress;
             portInput = port.ToString();
 
@@ -258,6 +261,8 @@ namespace FlickDom.Networking
             {
                 return;
             }
+
+            EnsureSceneMonkeyControllers();
 
             if (enableCommandLineAutoStart)
             {
@@ -3161,6 +3166,8 @@ namespace FlickDom.Networking
 
         private static MonkeyThirdPersonController FindMonkey(FlickDomPlayerId owner)
         {
+            EnsureNamedMonkeyController(owner);
+
             MonkeyThirdPersonController[] monkeys =
                 FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             for (int i = 0; i < monkeys.Length; i++)
@@ -3204,6 +3211,9 @@ namespace FlickDom.Networking
 
         private static List<MonkeyThirdPersonController> CollectUniqueMonkeys()
         {
+            EnsureNamedMonkeyController(FlickDomPlayerId.Player1);
+            EnsureNamedMonkeyController(FlickDomPlayerId.Player2);
+
             MonkeyThirdPersonController[] monkeys =
                 FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             List<MonkeyThirdPersonController> uniqueMonkeys = new List<MonkeyThirdPersonController>(monkeys.Length);
@@ -3227,6 +3237,73 @@ namespace FlickDom.Networking
             }
 
             return uniqueMonkeys;
+        }
+
+        private static void EnsureSceneMonkeyControllers()
+        {
+            EnsureNamedMonkeyController(FlickDomPlayerId.Player1);
+            EnsureNamedMonkeyController(FlickDomPlayerId.Player2);
+        }
+
+        private static MonkeyThirdPersonController EnsureNamedMonkeyController(FlickDomPlayerId owner)
+        {
+            string objectName = GetExpectedMonkeyObjectName(owner);
+            if (string.IsNullOrEmpty(objectName))
+            {
+                return null;
+            }
+
+            GameObject monkeyObject = FindSceneGameObjectByName(objectName);
+            if (monkeyObject == null)
+            {
+                return null;
+            }
+
+            MonkeyThirdPersonController controller =
+                monkeyObject.GetComponent<MonkeyThirdPersonController>();
+            if (controller == null)
+            {
+                controller = monkeyObject.AddComponent<MonkeyThirdPersonController>();
+                Debug.Log("[Network] Added MonkeyThirdPersonController to " + objectName + ".", monkeyObject);
+            }
+
+            controller.SetOwner(owner);
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                controller.SetCameraTransform(mainCamera.transform);
+            }
+
+            return controller;
+        }
+
+        private static GameObject FindSceneGameObjectByName(string objectName)
+        {
+            Transform[] transforms =
+                FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < transforms.Length; i++)
+            {
+                Transform candidate = transforms[i];
+                if (candidate != null && candidate.gameObject.scene.IsValid() && candidate.name == objectName)
+                {
+                    return candidate.gameObject;
+                }
+            }
+
+            return null;
+        }
+
+        private static string GetExpectedMonkeyObjectName(FlickDomPlayerId owner)
+        {
+            switch (owner)
+            {
+                case FlickDomPlayerId.Player1:
+                    return Player1MonkeyObjectName;
+                case FlickDomPlayerId.Player2:
+                    return Player2MonkeyObjectName;
+                default:
+                    return string.Empty;
+            }
         }
 
         private void SubscribeGameModeEvents(bool subscribe)

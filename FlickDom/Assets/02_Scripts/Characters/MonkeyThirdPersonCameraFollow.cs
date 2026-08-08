@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using FlickDom.Networking;
 
 namespace FlickDom.Gameplay
 {
@@ -7,6 +8,7 @@ namespace FlickDom.Gameplay
     {
         [SerializeField] private Transform target;
         [SerializeField] private GameModeManager gameModeManager;
+        [SerializeField] private bool followLocalNetworkPlayer = true;
         [SerializeField] private Vector3 targetOffset = new Vector3(0f, 0.75f, 0f);
         [SerializeField] private bool useTopView = true;
         [SerializeField] private float topViewDistance = 8.5f;
@@ -38,6 +40,8 @@ namespace FlickDom.Gameplay
         private Vector3 aimFocusLocalOffset;
         private Transform aimLookTarget;
         private Vector3 aimLookTargetOffset;
+        private FlickDomPlayerId followedNetworkPlayer = FlickDomPlayerId.None;
+        private bool networkRoleSubscribed;
 
         private void Awake()
         {
@@ -47,11 +51,15 @@ namespace FlickDom.Gameplay
             }
 
             cachedTransform = transform;
+            RefreshLocalNetworkTarget();
             SnapToTarget();
         }
 
         private void OnEnable()
         {
+            SubscribeNetworkRoleChanged(true);
+            RefreshLocalNetworkTarget();
+
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged += HandleStateChanged;
@@ -61,6 +69,8 @@ namespace FlickDom.Gameplay
 
         private void OnDisable()
         {
+            SubscribeNetworkRoleChanged(false);
+
             if (gameModeManager != null)
             {
                 gameModeManager.StateChanged -= HandleStateChanged;
@@ -88,6 +98,9 @@ namespace FlickDom.Gameplay
 
         private void LateUpdate()
         {
+            EnsureNetworkRoleSubscription();
+            RefreshLocalNetworkTarget();
+
             if (!followEnabled || !target)
             {
                 return;
@@ -236,8 +249,73 @@ namespace FlickDom.Gameplay
             followEnabled = !UsesBoardView(nextState);
             if (followEnabled)
             {
+                RefreshLocalNetworkTarget();
                 SnapToTarget();
             }
+        }
+
+        private void SubscribeNetworkRoleChanged(bool subscribe)
+        {
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null)
+            {
+                return;
+            }
+
+            if (subscribe)
+            {
+                bootstrap.LocalPlayerRoleChanged -= HandleLocalPlayerRoleChanged;
+                bootstrap.LocalPlayerRoleChanged += HandleLocalPlayerRoleChanged;
+                networkRoleSubscribed = true;
+            }
+            else
+            {
+                bootstrap.LocalPlayerRoleChanged -= HandleLocalPlayerRoleChanged;
+                networkRoleSubscribed = false;
+            }
+        }
+
+        private void EnsureNetworkRoleSubscription()
+        {
+            if (networkRoleSubscribed)
+            {
+                return;
+            }
+
+            SubscribeNetworkRoleChanged(true);
+        }
+
+        private void HandleLocalPlayerRoleChanged(FlickDomPlayerId playerId)
+        {
+            RefreshLocalNetworkTarget();
+            SnapToTarget();
+        }
+
+        private void RefreshLocalNetworkTarget()
+        {
+            if (!followLocalNetworkPlayer)
+            {
+                return;
+            }
+
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || bootstrap.LocalPlayerId == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            if (followedNetworkPlayer == bootstrap.LocalPlayerId && target != null)
+            {
+                return;
+            }
+
+            MonkeyThirdPersonController localMonkey = FindMonkey(bootstrap.LocalPlayerId);
+            if (localMonkey != null && target != localMonkey.transform)
+            {
+                target = localMonkey.transform;
+            }
+
+            followedNetworkPlayer = bootstrap.LocalPlayerId;
         }
 
         private static bool UsesBoardView(FlickDomGameState state)
@@ -305,6 +383,22 @@ namespace FlickDom.Gameplay
         private float GetCameraDistance()
         {
             return useTopView ? topViewDistance : distance;
+        }
+
+        private static MonkeyThirdPersonController FindMonkey(FlickDomPlayerId owner)
+        {
+            MonkeyThirdPersonController[] monkeys =
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < monkeys.Length; i++)
+            {
+                MonkeyThirdPersonController monkey = monkeys[i];
+                if (monkey != null && monkey.Owner == owner)
+                {
+                    return monkey;
+                }
+            }
+
+            return null;
         }
     }
 }
