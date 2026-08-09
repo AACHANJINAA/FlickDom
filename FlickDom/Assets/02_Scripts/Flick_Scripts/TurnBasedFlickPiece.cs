@@ -106,6 +106,7 @@ namespace FlickDom.Gameplay
 
         private const string HitSoundResourcePath = "Audio/Hit";
         private const string FlickFailedSoundResourcePath = "Audio/Flick_Failed";
+        private const string FlickFailedOneHitSoundResourcePath = "Audio/Flick_Failed_oneHit";
         private const string PieceAudioObjectName = "Flick Piece Audio";
         private const float HitSoundVolumeScale = 1.8f;
         private const float HitSoundCooldownSeconds = 0.03f;
@@ -114,6 +115,7 @@ namespace FlickDom.Gameplay
         private static AudioSource sharedAudioSource;
         private static AudioClip hitSoundClip;
         private static AudioClip flickFailedSoundClip;
+        private static AudioClip flickFailedOneHitSoundClip;
         private static float nextHitSoundTime;
 
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
@@ -188,6 +190,7 @@ namespace FlickDom.Gameplay
             ApplyBaseColor();
             PreloadHitSound();
             PreloadFlickFailedSound();
+            PreloadFlickFailedOneHitSound();
             FlickDomCollisionRules.IgnoreMonkeyCollisionsForPiece(this);
         }
 
@@ -736,8 +739,14 @@ namespace FlickDom.Gameplay
 
         private void PlayFlickFailedSoundIfNeeded()
         {
-            if (!launchedThisTurn || touchedRequiredTargetThisFlick)
+            if (!launchedThisTurn)
             {
+                return;
+            }
+
+            if (touchedRequiredTargetThisFlick)
+            {
+                PlaySharedSound(ref flickFailedOneHitSoundClip, FlickFailedOneHitSoundResourcePath, false);
                 return;
             }
 
@@ -748,6 +757,12 @@ namespace FlickDom.Gameplay
         {
             EnsureSharedAudioSource();
             EnsureAudioClip(ref flickFailedSoundClip, FlickFailedSoundResourcePath);
+        }
+
+        private static void PreloadFlickFailedOneHitSound()
+        {
+            EnsureSharedAudioSource();
+            EnsureAudioClip(ref flickFailedOneHitSoundClip, FlickFailedOneHitSoundResourcePath);
         }
 
         private static void EnsureSharedAudioSource()
