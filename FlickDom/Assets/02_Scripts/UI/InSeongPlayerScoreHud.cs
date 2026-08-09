@@ -21,6 +21,8 @@ namespace FlickDom.Gameplay
         [SerializeField] private Vector2 turnLabelSize = new Vector2(260f, 44f);
         [SerializeField] private Vector2 orderLabelSize = new Vector2(260f, 42f);
         [SerializeField] private Vector2 winLabelSize = new Vector2(520f, 120f);
+        [SerializeField] private Vector2 winImageSize = new Vector2(600f, 193f);
+        [SerializeField] private Vector2 winImageOffset = new Vector2(0f, 55f);
         [SerializeField] private Vector2 restartButtonSize = new Vector2(220f, 56f);
         [SerializeField] private Vector2 returnToMenuButtonSize = new Vector2(220f, 56f);
         [SerializeField] private Vector2 player1Offset = new Vector2(28f, -24f);
@@ -59,6 +61,8 @@ namespace FlickDom.Gameplay
         private const string GetPointAudioObjectName = "Player Score Get Point Audio";
         private const string YouWinSoundResourcePath = "Audio/YouWin";
         private const string YouWinAudioObjectName = "Player Score You Win Audio";
+        private const string Player1WinSpriteResourcePath = "UI/Victory/P1_Win";
+        private const string Player2WinSpriteResourcePath = "UI/Victory/P2_Win";
         private static readonly Vector2 RuntimeRestartButtonOffset = new Vector2(0f, -78f);
         private static readonly Vector2 RuntimeReturnToMenuButtonOffset = new Vector2(0f, -142f);
 
@@ -106,6 +110,7 @@ namespace FlickDom.Gameplay
         private Text player2TurnText;
         private Text player1OrderText;
         private Text player2OrderText;
+        private Image winImage;
         private Text winText;
         private Button restartButton;
         private Button returnToMenuButton;
@@ -206,6 +211,8 @@ namespace FlickDom.Gameplay
             orderLabelSize.y = Mathf.Max(20f, orderLabelSize.y);
             winLabelSize.x = Mathf.Max(180f, winLabelSize.x);
             winLabelSize.y = Mathf.Max(48f, winLabelSize.y);
+            winImageSize.x = Mathf.Max(180f, winImageSize.x);
+            winImageSize.y = Mathf.Max(58f, winImageSize.y);
             restartButtonSize.x = Mathf.Max(120f, restartButtonSize.x);
             restartButtonSize.y = Mathf.Max(36f, restartButtonSize.y);
             returnToMenuButtonSize.x = Mathf.Max(120f, returnToMenuButtonSize.x);
@@ -331,7 +338,8 @@ namespace FlickDom.Gameplay
                 player2Offset + new Vector2(82.5f, turnOffset.y));
             player1OrderText = CreateOrderText("Player 1 Order", TextAnchor.UpperLeft, player1Color, player1Offset + orderOffset);
             player2OrderText = CreateOrderText("Player 2 Order", TextAnchor.UpperRight, player2Color, player2Offset + orderOffset);
-            winText = CreateWinText("Winner Text");
+            winImage = CreateWinImage("Winner Image");
+            winText = CreateWinText("Winner Text Fallback");
             restartButton = CreateVictoryButton("Restart Button", restartButtonText, RuntimeRestartButtonOffset, restartButtonSize, RestartCurrentScene);
             returnToMenuButton = CreateVictoryButton("Return To Menu Button", returnToMenuButtonText, RuntimeReturnToMenuButtonOffset, returnToMenuButtonSize, ReturnToMenu);
             SetVictoryButtonsVisible(false);
@@ -563,8 +571,50 @@ namespace FlickDom.Gameplay
             return text;
         }
 
+        private Image CreateWinImage(string objectName)
+        {
+            GameObject imageObject = new GameObject(objectName);
+            imageObject.transform.SetParent(canvas.transform, false);
+
+            RectTransform rectTransform = imageObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.anchoredPosition = winImageOffset;
+            rectTransform.sizeDelta = winImageSize;
+
+            Image image = imageObject.AddComponent<Image>();
+            image.color = Color.white;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            imageObject.SetActive(false);
+            return image;
+        }
+
         private void ShowWinText(FlickDomPlayerId winner)
         {
+            Sprite winnerSprite = Resources.Load<Sprite>(
+                winner == FlickDomPlayerId.Player2
+                    ? Player2WinSpriteResourcePath
+                    : Player1WinSpriteResourcePath);
+
+            if (winImage != null && winnerSprite != null)
+            {
+                winImage.sprite = winnerSprite;
+                winImage.gameObject.SetActive(true);
+                if (winText != null)
+                {
+                    winText.text = string.Empty;
+                }
+                return;
+            }
+
+            if (winImage != null)
+            {
+                winImage.gameObject.SetActive(false);
+            }
+
             if (winText == null)
             {
                 return;
@@ -699,6 +749,11 @@ namespace FlickDom.Gameplay
 
         private void HideVictoryControls()
         {
+            if (winImage != null)
+            {
+                winImage.gameObject.SetActive(false);
+            }
+
             if (winText != null)
             {
                 winText.text = string.Empty;
