@@ -340,8 +340,7 @@ namespace FlickDom.Gameplay
                 slingshotLauncherGripForwardOffset);
             MonkeyThirdPersonController[] sceneMonkeys =
                 FindObjectsByType<MonkeyThirdPersonController>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
+                    FindObjectsInactive.Include);
             slingshotPresenter.SetReactToAllPlayers(sceneMonkeys.Length <= 1);
             slingshotPresenter.UseSuriyunAnimationPreset();
         }
@@ -1116,7 +1115,7 @@ namespace FlickDom.Gameplay
             bool hasPlayer1 = false;
             bool hasPlayer2 = false;
             MonkeyThirdPersonController[] monkeys =
-                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
 
             for (int i = 0; i < monkeys.Length; i++)
             {

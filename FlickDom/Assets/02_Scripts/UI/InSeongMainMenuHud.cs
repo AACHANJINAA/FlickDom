@@ -190,7 +190,7 @@ namespace FlickDom.Gameplay
             // 그 파일은 팀 소유라 건드리지 않고, 생성된 뒤 여기서 걷어낸다.
             // 실행 순서상 Start 시점에는 이미 만들어져 있다.
             FlickDomMainMenuHud[] originals = FindObjectsByType<FlickDomMainMenuHud>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
             for (int i = 0; i < originals.Length; i++)
             {
                 if (originals[i] != null)

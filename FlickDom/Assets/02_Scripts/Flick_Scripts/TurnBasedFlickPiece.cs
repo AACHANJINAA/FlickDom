@@ -555,6 +555,9 @@ namespace FlickDom.Gameplay
             canInteractThisTurn = false;
             waitForPointerReleaseBeforeInput = false;
             stoppedTimer = 0f;
+            pieceSnapshotCount = 0;
+            hasLatestNetworkStateTick = false;
+            latestNetworkStateTick = 0u;
             HideFlickPreview();
             RestorePieceVisual();
             UpdateCollisionForTurnState(false);
@@ -1112,7 +1115,7 @@ namespace FlickDom.Gameplay
             ApplyNetworkPhysicsState(position, rotation, Vector3.zero, Vector3.zero, 0u, Time.unscaledTimeAsDouble, false);
         }
 
-        public void ApplyNetworkPhysicsState(
+        public bool ApplyNetworkPhysicsState(
             Vector3 position,
             Quaternion rotation,
             Vector3 velocity,
@@ -1123,18 +1126,18 @@ namespace FlickDom.Gameplay
         {
             if (!ShouldAcceptNetworkStateTick(serverTick))
             {
-                return;
+                return false;
             }
 
             EnsureCachedComponents();
             if (ShouldIgnoreNetworkPoseWhileLocallyInteractive())
             {
-                return;
+                return false;
             }
 
             if (!isFinal && ShouldKeepLocalPredictionForMovingNetworkState())
             {
-                return;
+                return false;
             }
 
             if (isFinal)
@@ -1147,16 +1150,17 @@ namespace FlickDom.Gameplay
                 queuedFlickShotId = 0u;
                 stoppedTimer = 0f;
                 SnapToNetworkPhysicsState(position, rotation, velocity, angularVelocity);
-                return;
+                return true;
             }
 
             if (ShouldReconcilePredictedPhysics())
             {
                 ReconcilePredictedPhysics(position, rotation, velocity, angularVelocity);
-                return;
+                return true;
             }
 
             AddPieceSnapshot(serverTick, timestamp, position, rotation, velocity, angularVelocity);
+            return true;
         }
 
         public void ApplyNetworkState(bool networkIsDead)

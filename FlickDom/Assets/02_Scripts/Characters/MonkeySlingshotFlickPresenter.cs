@@ -377,8 +377,7 @@ namespace FlickDom.Gameplay
             }
 
             TurnBasedFlickPiece[] scenePieces = FindObjectsByType<TurnBasedFlickPiece>(
-                FindObjectsInactive.Include,
-                FindObjectsSortMode.None);
+                FindObjectsInactive.Include);
 
             for (int i = 0; i < scenePieces.Length; i++)
             {

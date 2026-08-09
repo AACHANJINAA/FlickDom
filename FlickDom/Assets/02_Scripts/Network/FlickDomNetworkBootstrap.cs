@@ -2807,6 +2807,87 @@ namespace FlickDom.Networking
             return "[" + string.Join(",", pieceIds) + "]";
         }
 
+        private void GetSnapshotContext(
+            out FlickDomGameState snapshotState,
+            out int roundNumber,
+            out int turnIndex)
+        {
+            ResolveGameModeManager();
+            snapshotState = gameModeManager != null
+                ? gameModeManager.CurrentState
+                : FlickDomGameState.NotStarted;
+            roundNumber = gameModeManager != null ? gameModeManager.RoundNumber : 0;
+            turnIndex = gameModeManager != null ? gameModeManager.CurrentTurnIndex : 0;
+        }
+
+        private bool ShouldDiscardPieceSnapshot(
+            FlickDomGameState snapshotState,
+            int snapshotRoundNumber,
+            int snapshotTurnIndex,
+            bool isFinal)
+        {
+            ResolveGameModeManager();
+            if (gameModeManager == null || snapshotRoundNumber <= 0)
+            {
+                return false;
+            }
+
+            int localRoundNumber = gameModeManager.RoundNumber;
+            if (localRoundNumber > 0 && snapshotRoundNumber < localRoundNumber)
+            {
+                return true;
+            }
+
+            if (snapshotRoundNumber != localRoundNumber)
+            {
+                return false;
+            }
+
+            int localTurnIndex = gameModeManager.CurrentTurnIndex;
+            if (snapshotTurnIndex < localTurnIndex)
+            {
+                return true;
+            }
+
+            if (isFinal || snapshotTurnIndex != localTurnIndex)
+            {
+                return false;
+            }
+
+            return IsTransientPieceMotionState(snapshotState)
+                && GetGameStateProgressionOrder(gameModeManager.CurrentState) > GetGameStateProgressionOrder(snapshotState);
+        }
+
+        private static bool IsTransientPieceMotionState(FlickDomGameState state)
+        {
+            return state == FlickDomGameState.PlayerFlicking || state == FlickDomGameState.PhysicsProcessing;
+        }
+
+        private static int GetGameStateProgressionOrder(FlickDomGameState state)
+        {
+            switch (state)
+            {
+                case FlickDomGameState.NotStarted:
+                    return 0;
+                case FlickDomGameState.Ready:
+                    return 1;
+                case FlickDomGameState.PieceOrderSelection:
+                    return 2;
+                case FlickDomGameState.PlayerFlicking:
+                    return 3;
+                case FlickDomGameState.PhysicsProcessing:
+                    return 4;
+                case FlickDomGameState.PlacementSelection:
+                    return 5;
+                case FlickDomGameState.CardMatch:
+                    return 6;
+                case FlickDomGameState.RoundEnd:
+                    return 7;
+                default:
+                    return 0;
+            }
+        }
+
         private void BroadcastPieceTransformsIfNeeded()
         {
             if (!networkGameStarted
@@ -2891,12 +2972,19 @@ namespace FlickDom.Networking
                 out Quaternion rotation,
                 out Vector3 velocity,
                 out Vector3 angularVelocity);
-            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) + 64 + sizeof(uint) + sizeof(double) + sizeof(float) * 13 + sizeof(bool) * 2, Allocator.Temp))
+            GetSnapshotContext(
+                out FlickDomGameState snapshotState,
+                out int snapshotRoundNumber,
+                out int snapshotTurnIndex);
+            using (FastBufferWriter writer = new FastBufferWriter(sizeof(int) * 4 + 64 + sizeof(uint) + sizeof(double) + sizeof(float) * 13 + sizeof(bool) * 2, Allocator.Temp))
             {
                 writer.WriteValueSafe((int)piece.Owner);
                 writer.WriteValueSafe(fixedPieceId);
                 writer.WriteValueSafe(tick);
                 writer.WriteValueSafe(timestamp);
+                writer.WriteValueSafe((int)snapshotState);
+                writer.WriteValueSafe(snapshotRoundNumber);
+                writer.WriteValueSafe(snapshotTurnIndex);
                 writer.WriteValueSafe(position);
                 writer.WriteValueSafe(rotation);
                 writer.WriteValueSafe(velocity);
@@ -2935,11 +3023,18 @@ namespace FlickDom.Networking
             List<TurnBasedFlickPiece> pieces = CollectUniqueFlickPieces();
             uint tick = NextServerTick();
             double timestamp = GetNetworkTimestamp();
+            GetSnapshotContext(
+                out FlickDomGameState snapshotState,
+                out int snapshotRoundNumber,
+                out int snapshotTurnIndex);
             FastBufferWriter writer = new FastBufferWriter(CalculatePhysicsSettledCapacity(pieces), Allocator.Temp);
             try
             {
                 writer.WriteValueSafe(tick);
                 writer.WriteValueSafe(timestamp);
+                writer.WriteValueSafe((int)snapshotState);
+                writer.WriteValueSafe(snapshotRoundNumber);
+                writer.WriteValueSafe(snapshotTurnIndex);
                 writer.WriteValueSafe(pieces.Count);
                 for (int i = 0; i < pieces.Count; i++)
                 {
@@ -3023,6 +3118,9 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out FixedString64Bytes fixedPieceId);
             reader.ReadValueSafe(out uint serverTickValue);
             reader.ReadValueSafe(out double timestamp);
+            reader.ReadValueSafe(out int snapshotStateValue);
+            reader.ReadValueSafe(out int snapshotRoundNumber);
+            reader.ReadValueSafe(out int snapshotTurnIndex);
             reader.ReadValueSafe(out Vector3 position);
             reader.ReadValueSafe(out Quaternion rotation);
             reader.ReadValueSafe(out Vector3 velocity);
@@ -3030,11 +3128,17 @@ namespace FlickDom.Networking
             reader.ReadValueSafe(out bool isDead);
             reader.ReadValueSafe(out bool isFinal);
 
+            FlickDomGameState snapshotState = (FlickDomGameState)snapshotStateValue;
+            if (ShouldDiscardPieceSnapshot(snapshotState, snapshotRoundNumber, snapshotTurnIndex, isFinal))
+            {
+                return;
+            }
+
             TurnBasedFlickPiece piece = FindFlickPiece((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
             if (piece != null)
             {
                 FlickLatencyProbe.RecordClientFirstPieceState((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
-                piece.ApplyNetworkPhysicsState(
+                bool acceptedState = piece.ApplyNetworkPhysicsState(
                     position,
                     rotation,
                     velocity,
@@ -3042,7 +3146,10 @@ namespace FlickDom.Networking
                     serverTickValue,
                     timestamp,
                     isFinal);
-                piece.ApplyNetworkState(isDead);
+                if (acceptedState)
+                {
+                    piece.ApplyNetworkState(isDead);
+                }
             }
         }
 
@@ -3055,8 +3162,18 @@ namespace FlickDom.Networking
 
             reader.ReadValueSafe(out uint tick);
             reader.ReadValueSafe(out double timestamp);
+            reader.ReadValueSafe(out int snapshotStateValue);
+            reader.ReadValueSafe(out int snapshotRoundNumber);
+            reader.ReadValueSafe(out int snapshotTurnIndex);
             reader.ReadValueSafe(out int pieceCount);
             pieceCount = Mathf.Max(0, pieceCount);
+            FlickDomGameState snapshotState = (FlickDomGameState)snapshotStateValue;
+            if (ShouldDiscardPieceSnapshot(snapshotState, snapshotRoundNumber, snapshotTurnIndex, true))
+            {
+                Debug.Log("[Network] Discarded stale physics settled snapshot. State: " + snapshotState + ", Round: " + snapshotRoundNumber + ", TurnIndex: " + snapshotTurnIndex + ".", this);
+                return;
+            }
+
             for (int i = 0; i < pieceCount; i++)
             {
                 ReadAndApplyPiecePhysicsState(ref reader, tick, timestamp, true);
@@ -3548,6 +3665,7 @@ namespace FlickDom.Networking
             int count = pieces != null ? pieces.Count : 0;
             return sizeof(uint)
                 + sizeof(double)
+                + sizeof(int) * 3
                 + sizeof(int)
                 + count * (sizeof(int) + 64 + sizeof(float) * 13 + sizeof(bool));
         }
@@ -3601,7 +3719,7 @@ namespace FlickDom.Networking
             }
 
             FlickLatencyProbe.RecordClientFirstPieceState((FlickDomPlayerId)ownerValue, fixedPieceId.ToString());
-            piece.ApplyNetworkPhysicsState(
+            bool acceptedState = piece.ApplyNetworkPhysicsState(
                 position,
                 rotation,
                 velocity,
@@ -3609,7 +3727,10 @@ namespace FlickDom.Networking
                 tick,
                 timestamp,
                 isFinal);
-            piece.ApplyNetworkState(isDead);
+            if (acceptedState)
+            {
+                piece.ApplyNetworkState(isDead);
+            }
         }
 
         private static void WriteOwnedCells(ref FastBufferWriter writer, IReadOnlyList<Vector2Int> cells)
@@ -3727,7 +3848,7 @@ namespace FlickDom.Networking
 
         private static TurnBasedFlickPiece FindFlickPiece(FlickDomPlayerId owner, string pieceId)
         {
-            TurnBasedFlickPiece[] pieces = FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            TurnBasedFlickPiece[] pieces = FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include);
             for (int i = 0; i < pieces.Length; i++)
             {
                 TurnBasedFlickPiece piece = pieces[i];
@@ -3747,7 +3868,7 @@ namespace FlickDom.Networking
             EnsureNamedMonkeyController(owner);
 
             MonkeyThirdPersonController[] monkeys =
-                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
             for (int i = 0; i < monkeys.Length; i++)
             {
                 MonkeyThirdPersonController monkey = monkeys[i];
@@ -3762,7 +3883,7 @@ namespace FlickDom.Networking
 
         private static List<TurnBasedFlickPiece> CollectUniqueFlickPieces()
         {
-            TurnBasedFlickPiece[] pieces = FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            TurnBasedFlickPiece[] pieces = FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include);
             List<TurnBasedFlickPiece> uniquePieces = new List<TurnBasedFlickPiece>(pieces.Length);
             HashSet<string> seenPieceKeys = new HashSet<string>();
 
@@ -3793,7 +3914,7 @@ namespace FlickDom.Networking
             EnsureNamedMonkeyController(FlickDomPlayerId.Player2);
 
             MonkeyThirdPersonController[] monkeys =
-                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
             List<MonkeyThirdPersonController> uniqueMonkeys = new List<MonkeyThirdPersonController>(monkeys.Length);
             HashSet<FlickDomPlayerId> seenOwners = new HashSet<FlickDomPlayerId>();
 
@@ -3859,7 +3980,7 @@ namespace FlickDom.Networking
         private static GameObject FindSceneGameObjectByName(string objectName)
         {
             Transform[] transforms =
-                FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsByType<Transform>(FindObjectsInactive.Include);
             for (int i = 0; i < transforms.Length; i++)
             {
                 Transform candidate = transforms[i];

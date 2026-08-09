@@ -378,7 +378,7 @@ namespace FlickDom.Gameplay
         private static MonkeyThirdPersonController FindMonkey(FlickDomPlayerId owner)
         {
             MonkeyThirdPersonController[] monkeys =
-                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                FindObjectsByType<MonkeyThirdPersonController>(FindObjectsInactive.Include);
             for (int i = 0; i < monkeys.Length; i++)
             {
                 MonkeyThirdPersonController monkey = monkeys[i];
