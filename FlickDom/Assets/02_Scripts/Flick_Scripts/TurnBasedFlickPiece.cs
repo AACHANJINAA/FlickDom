@@ -979,6 +979,12 @@ namespace FlickDom.Gameplay
             stoppedTimer = 0f;
             pieceSnapshotCount = 0;
 
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap != null)
+            {
+                bootstrap.BeginLocalFlickPrediction(owner, shotId);
+            }
+
             launchPosition = PreserveCurrentHeight(launchPosition);
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
@@ -1325,10 +1331,17 @@ namespace FlickDom.Gameplay
         private bool ShouldKeepLocalPredictionForMovingNetworkState()
         {
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
-            return usingLocalFlickPrediction
-                && bootstrap != null
-                && bootstrap.IsClientOnly
-                && bootstrap.LocalPlayerId == owner;
+            if (bootstrap == null || !bootstrap.IsClientOnly)
+            {
+                return false;
+            }
+
+            if (usingLocalFlickPrediction && bootstrap.LocalPlayerId == owner)
+            {
+                return true;
+            }
+
+            return bootstrap.ShouldKeepLocalFlickPredictionForMovingPiece(owner);
         }
 
         private void ReconcilePredictedPhysics(

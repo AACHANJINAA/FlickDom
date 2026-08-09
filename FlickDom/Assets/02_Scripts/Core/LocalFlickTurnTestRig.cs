@@ -364,6 +364,7 @@ namespace FlickDom.Gameplay
             {
                 if (TrySubmitNetworkPieceOrderSelection(activePlayer, piece))
                 {
+                    SelectPieceForPredictedNetworkOrder(activePlayer, piece);
                     return;
                 }
 
@@ -531,6 +532,20 @@ namespace FlickDom.Gameplay
 
         private void SelectPieceForCurrentOrder(FlickDomPlayerId player, TurnBasedFlickPiece piece)
         {
+            SelectPieceForCurrentOrder(player, piece, true, true);
+        }
+
+        private void SelectPieceForPredictedNetworkOrder(FlickDomPlayerId player, TurnBasedFlickPiece piece)
+        {
+            SelectPieceForCurrentOrder(player, piece, false, false);
+        }
+
+        private void SelectPieceForCurrentOrder(
+            FlickDomPlayerId player,
+            TurnBasedFlickPiece piece,
+            bool notifyNetwork,
+            bool advanceStateWhenComplete)
+        {
             List<TurnBasedFlickPiece> order = GetOrderForPlayer(player);
             if (order == null || piece == null || order.Contains(piece))
             {
@@ -548,9 +563,12 @@ namespace FlickDom.Gameplay
 
             RefreshPieceHighlights();
             NotifyPieceOrderChanged(player);
-            NotifyNetworkPieceOrderSelected(player, piece);
+            if (notifyNetwork)
+            {
+                NotifyNetworkPieceOrderSelected(player, piece);
+            }
 
-            if (order.Count >= CountPieces(GetPiecesForPlayer(player)))
+            if (advanceStateWhenComplete && order.Count >= CountPieces(GetPiecesForPlayer(player)))
             {
                 gameModeManager.CompleteCurrentPlayerPieceOrderSelection();
                 RefreshPieceHighlights();
@@ -1717,6 +1735,12 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            bool preservePredictedSuffix = TryGetPredictedOrderWithAuthoritativePrefix(
+                player,
+                pieceIds,
+                out List<TurnBasedFlickPiece> predictedOrder);
+            int authoritativeCount = pieceIds != null ? pieceIds.Count : 0;
+
             order.Clear();
             if (pieceIds != null)
             {
@@ -1730,7 +1754,52 @@ namespace FlickDom.Gameplay
                 }
             }
 
+            if (preservePredictedSuffix)
+            {
+                for (int i = authoritativeCount; i < predictedOrder.Count; i++)
+                {
+                    TurnBasedFlickPiece piece = predictedOrder[i];
+                    if (piece != null && !order.Contains(piece))
+                    {
+                        order.Add(piece);
+                    }
+                }
+            }
+
             SetNextOrderIndex(player, Mathf.Clamp(nextIndex, 0, order.Count));
+        }
+
+        private bool TryGetPredictedOrderWithAuthoritativePrefix(
+            FlickDomPlayerId player,
+            IReadOnlyList<string> authoritativePieceIds,
+            out List<TurnBasedFlickPiece> predictedOrder)
+        {
+            predictedOrder = null;
+
+            FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
+            if (bootstrap == null || !bootstrap.IsClientOnly || bootstrap.LocalPlayerId != player)
+            {
+                return false;
+            }
+
+            List<TurnBasedFlickPiece> currentOrder = GetOrderForPlayer(player);
+            int authoritativeCount = authoritativePieceIds != null ? authoritativePieceIds.Count : 0;
+            if (currentOrder == null || currentOrder.Count <= authoritativeCount)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < authoritativeCount; i++)
+            {
+                TurnBasedFlickPiece piece = currentOrder[i];
+                if (piece == null || !string.Equals(piece.PieceId, authoritativePieceIds[i], System.StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            predictedOrder = new List<TurnBasedFlickPiece>(currentOrder);
+            return true;
         }
 
         private bool IsPieceAlreadyOrdered(FlickDomPlayerId player, TurnBasedFlickPiece piece)

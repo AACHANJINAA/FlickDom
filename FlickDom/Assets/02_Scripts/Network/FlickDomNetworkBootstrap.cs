@@ -123,7 +123,9 @@ namespace FlickDom.Networking
         private uint lastPlayer1MonkeyInputSequence;
         private uint lastPlayer2MonkeyInputSequence;
         private uint clientFlickShotSequence;
+        private uint localPredictedFlickShotId;
         private uint latencyPingSequence;
+        private FlickDomPlayerId localPredictedFlickOwner = FlickDomPlayerId.None;
         private readonly Dictionary<uint, double> pendingLatencyPings = new Dictionary<uint, double>();
         private bool hasPlayer1MonkeyInputSequence;
         private bool hasPlayer2MonkeyInputSequence;
@@ -148,6 +150,11 @@ namespace FlickDom.Networking
         public bool IsClientOnly
         {
             get { return networkManager != null && networkManager.IsClient && !networkManager.IsHost; }
+        }
+
+        public bool IsLocalFlickPredictionActive
+        {
+            get { return IsClientOnly && localPredictedFlickShotId != 0u; }
         }
 
         public bool IsLocalSinglePlayerModeActive
@@ -899,6 +906,30 @@ namespace FlickDom.Networking
             uint shotId = clientFlickShotSequence;
             FlickLatencyProbe.RecordClientPointerUp(shotId, owner, pieceId);
             return shotId;
+        }
+
+        public void BeginLocalFlickPrediction(FlickDomPlayerId owner, uint shotId)
+        {
+            if (!IsClientOnly || LocalPlayerId != owner || shotId == 0u)
+            {
+                return;
+            }
+
+            localPredictedFlickOwner = owner;
+            localPredictedFlickShotId = shotId;
+        }
+
+        public bool ShouldKeepLocalFlickPredictionForMovingPiece(FlickDomPlayerId pieceOwner)
+        {
+            return IsLocalFlickPredictionActive
+                && localPredictedFlickOwner != FlickDomPlayerId.None
+                && pieceOwner != FlickDomPlayerId.None;
+        }
+
+        public void CompleteLocalFlickPrediction()
+        {
+            localPredictedFlickOwner = FlickDomPlayerId.None;
+            localPredictedFlickShotId = 0u;
         }
 
         public void NotifyHostPlacementApplied(FlickDomPlayerId owner, string pieceId, Vector2Int destination, Vector2Int? relocationSource)
@@ -2312,6 +2343,11 @@ namespace FlickDom.Networking
             FlickDomGameState state = (FlickDomGameState)stateValue;
             FlickDomPlayerId activePlayer = (FlickDomPlayerId)activePlayerValue;
             gameModeManager.ApplyNetworkStateSnapshot(state, activePlayer, roundNumber, turnIndex);
+            if (state != FlickDomGameState.PlayerFlicking && state != FlickDomGameState.PhysicsProcessing)
+            {
+                CompleteLocalFlickPrediction();
+            }
+
             Debug.Log("[Network] Game state received from client " + senderClientId + ". State: " + state + ", Active: " + activePlayer + ", Round: " + roundNumber + ", TurnIndex: " + turnIndex + ".", this);
         }
 
@@ -3026,6 +3062,7 @@ namespace FlickDom.Networking
                 ReadAndApplyPiecePhysicsState(ref reader, tick, timestamp, true);
             }
 
+            CompleteLocalFlickPrediction();
             Debug.Log("[Network] Physics settled snapshot received from Host. Pieces: " + pieceCount + ".", this);
         }
 
@@ -3455,6 +3492,8 @@ namespace FlickDom.Networking
         {
             serverTick = 0u;
             clientFlickShotSequence = 0u;
+            localPredictedFlickShotId = 0u;
+            localPredictedFlickOwner = FlickDomPlayerId.None;
             latencyPingSequence = 0u;
             pendingLatencyPings.Clear();
             lastPlayer1MonkeyInputSequence = 0u;

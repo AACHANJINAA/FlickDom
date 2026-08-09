@@ -196,3 +196,10 @@
   - 움직이는 알만 주기적으로 `PieceTransform` 상태를 보내고, 모든 알이 정지하면 `PhysicsSettled` reliable final snapshot으로 Host 상태에 완전히 맞추도록 했다.
   - P2 클라이언트 예측 중 로컬 PhysX 결과만으로 알을 사망 처리해 숨기지 않고 Host의 최종 dead/alive 상태를 따르도록 보정했다.
   - Client-only에서 상대 원숭이 Rigidbody를 kinematic 프레젠테이션 모드로 전환해 snapshot pose와 로컬 물리 시뮬레이션이 서로 충돌하지 않도록 했다.
+
+## 2026-08-09
+
+- [2026-08-09 13시]
+  - Client-only 말 순서 선택이 Host 승인 메시지를 기다리지 않고 클릭 즉시 로컬 선택 하이라이트와 순서 UI에 반영되도록 예측 표시를 추가했다.
+  - P2 로컬 플릭 예측 중에는 중간 `PieceTransform` 스냅샷이 발사된 알과 맞은 알의 즉시 물리 반응을 덮어쓰지 않도록 전체 피스의 로컬 예측 우선 구간을 추가했다.
+  - Host의 `PhysicsSettled` 최종 스냅샷을 받으면 로컬 예측 구간을 종료하고 모든 알 위치, 회전, 속도, 생존 상태를 권위 상태로 재정렬하도록 정리했다.
