@@ -109,6 +109,7 @@ namespace FlickDom.Gameplay
         private Text winText;
         private Button restartButton;
         private Button returnToMenuButton;
+        private ScoreCardCollectAnimator scoreCardCollectAnimator;
         private LocalFlickTurnTestRig turnTestRig;
         private int lastPlayer1Score;
         private int lastPlayer2Score;
@@ -141,6 +142,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged += HandleScoreChanged;
+                cardManager.CardCompleted += HandleCardCompleted;
                 cardManager.MatchWon += HandleMatchWon;
             }
 
@@ -167,6 +169,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged -= HandleScoreChanged;
+                cardManager.CardCompleted -= HandleCardCompleted;
                 cardManager.MatchWon -= HandleMatchWon;
             }
 
@@ -224,6 +227,24 @@ namespace FlickDom.Gameplay
             {
                 HideVictoryControls();
             }
+        }
+
+        private void HandleCardCompleted(
+            PatternCardData card,
+            FlickDomPlayerId player,
+            int gainedScore,
+            Vector2Int matchOrigin)
+        {
+            if (scoreCardCollectAnimator == null)
+            {
+                return;
+            }
+
+            scoreCardCollectAnimator.Play(
+                card,
+                player,
+                player1Text != null ? player1Text.rectTransform : null,
+                player2Text != null ? player2Text.rectTransform : null);
         }
 
         private void RefreshScores()
@@ -287,6 +308,8 @@ namespace FlickDom.Gameplay
             scaler.referenceResolution = new Vector2(1280f, 720f);
             scaler.matchWidthOrHeight = 0.5f;
             canvasObject.AddComponent<GraphicRaycaster>();
+            scoreCardCollectAnimator = canvasObject.AddComponent<ScoreCardCollectAnimator>();
+            scoreCardCollectAnimator.Initialize(canvas);
 
             // 점수 카드 배경. 텍스트보다 먼저 만들어야 뒤에 깔린다.
             CreateScoreCard("Player 1 Card", TextAnchor.UpperLeft,

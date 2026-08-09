@@ -67,6 +67,7 @@ namespace FlickDom.Gameplay
         private Text winText;
         private Button restartButton;
         private Button returnToMenuButton;
+        private ScoreCardCollectAnimator scoreCardCollectAnimator;
         private LocalFlickTurnTestRig turnTestRig;
         private int lastPlayer1Score;
         private int lastPlayer2Score;
@@ -99,6 +100,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged += HandleScoreChanged;
+                cardManager.CardCompleted += HandleCardCompleted;
                 cardManager.MatchWon += HandleMatchWon;
             }
 
@@ -125,6 +127,7 @@ namespace FlickDom.Gameplay
             if (cardManager != null)
             {
                 cardManager.ScoreChanged -= HandleScoreChanged;
+                cardManager.CardCompleted -= HandleCardCompleted;
                 cardManager.MatchWon -= HandleMatchWon;
             }
 
@@ -182,6 +185,24 @@ namespace FlickDom.Gameplay
             {
                 HideVictoryControls();
             }
+        }
+
+        private void HandleCardCompleted(
+            PatternCardData card,
+            FlickDomPlayerId player,
+            int gainedScore,
+            Vector2Int matchOrigin)
+        {
+            if (scoreCardCollectAnimator == null)
+            {
+                return;
+            }
+
+            scoreCardCollectAnimator.Play(
+                card,
+                player,
+                player1Text != null ? player1Text.rectTransform : null,
+                player2Text != null ? player2Text.rectTransform : null);
         }
 
         private void RefreshScores()
@@ -245,6 +266,8 @@ namespace FlickDom.Gameplay
             scaler.referenceResolution = new Vector2(1280f, 720f);
             scaler.matchWidthOrHeight = 0.5f;
             canvasObject.AddComponent<GraphicRaycaster>();
+            scoreCardCollectAnimator = canvasObject.AddComponent<ScoreCardCollectAnimator>();
+            scoreCardCollectAnimator.Initialize(canvas);
 
             player1Text = CreateScoreText("Player 1 Score", TextAnchor.UpperLeft, player1Color, player1Offset);
             player2Text = CreateScoreText("Player 2 Score", TextAnchor.UpperRight, player2Color, player2Offset);
