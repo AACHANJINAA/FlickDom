@@ -485,6 +485,39 @@ namespace FlickDom.Gameplay
             int nextCardDrawSeed,
             IReadOnlyList<bool> nextClaimedCards)
         {
+            ApplyNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed);
+
+            int count = Mathf.Min(claimedCards.Length, nextClaimedCards != null ? nextClaimedCards.Count : 0);
+            for (int i = 0; i < claimedCards.Length; i++)
+            {
+                claimedCards[i] = i < count && nextClaimedCards[i];
+            }
+
+            ActiveCardChanged?.Invoke(ActiveCard);
+            Debug.Log("[PatternCard] Network card snapshot applied. Stage: " + CurrentStageNumber + ", DrawSeed: " + cardDrawSeed + ", Remaining: " + RemainingCardCount + ".", this);
+        }
+
+        public void ApplyNetworkCardCompletedPresentation(
+            int nextFallbackDeckIndex,
+            int nextCardDrawSeed,
+            string cardId,
+            FlickDomPlayerId player,
+            int gainedScore,
+            Vector2Int matchOrigin)
+        {
+            ApplyNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed);
+            PatternCardData card = FindRuntimeCardById(cardId);
+            if (card == null)
+            {
+                Debug.LogWarning("[PatternCard] Ignored network card completion for unknown card " + cardId + ".", this);
+                return;
+            }
+
+            CardCompleted?.Invoke(card, player, Mathf.Max(0, gainedScore), matchOrigin);
+        }
+
+        private void ApplyNetworkCardDeckSnapshot(int nextFallbackDeckIndex, int nextCardDrawSeed)
+        {
             int clampedDeckIndex = Mathf.Max(0, nextFallbackDeckIndex);
             bool drawChanged = cardDrawSeed != nextCardDrawSeed;
             if (drawChanged)
@@ -507,15 +540,25 @@ namespace FlickDom.Gameplay
             {
                 RefreshRuntimeCards();
             }
+        }
 
-            int count = Mathf.Min(claimedCards.Length, nextClaimedCards != null ? nextClaimedCards.Count : 0);
-            for (int i = 0; i < claimedCards.Length; i++)
+        private PatternCardData FindRuntimeCardById(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId) || runtimeCards == null)
             {
-                claimedCards[i] = i < count && nextClaimedCards[i];
+                return null;
             }
 
-            ActiveCardChanged?.Invoke(ActiveCard);
-            Debug.Log("[PatternCard] Network card snapshot applied. Stage: " + CurrentStageNumber + ", DrawSeed: " + cardDrawSeed + ", Remaining: " + RemainingCardCount + ".", this);
+            for (int i = 0; i < runtimeCards.Length; i++)
+            {
+                PatternCardData card = runtimeCards[i];
+                if (card != null && string.Equals(card.CardId, cardId, StringComparison.Ordinal))
+                {
+                    return card;
+                }
+            }
+
+            return null;
         }
 
         private static bool CanControlScoreState()

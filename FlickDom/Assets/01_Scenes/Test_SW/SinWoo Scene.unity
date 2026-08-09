@@ -2285,7 +2285,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapManager
   boardSize: 5
   limitOwnedCellsPerPlayer: 1
-  maxTokensPerPlayer: 5
+  maxTokensPerPlayer: 7
 --- !u!114 &1371976853
 MonoBehaviour:
   m_ObjectHideFlags: 0

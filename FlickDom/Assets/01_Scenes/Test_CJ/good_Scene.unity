@@ -1466,7 +1466,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FlickDom.Gameplay.TokenMapManager
   boardSize: 5
   limitOwnedCellsPerPlayer: 1
-  maxTokensPerPlayer: 5
+  maxTokensPerPlayer: 7
 --- !u!114 &1371976853
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1624,14 +1624,14 @@ MonoBehaviour:
   player2PreplacedStars: []
   player1StarMaterial: {fileID: 2100000, guid: ead4f0e983d54c2789675ec4616ce0b9, type: 2}
   player2StarMaterial: {fileID: 2100000, guid: 6800ddfe924e41bc81f15a76a6feac66, type: 2}
-  starPoolSize: 5
-  player1StarTrayStartOffset: {x: -2.65, y: 0.18, z: -1}
-  player2StarTrayStartOffset: {x: 2.65, y: 0.18, z: -1}
+  starPoolSize: 7
+  player1StarTrayStartOffset: {x: -2.65, y: 0.18, z: -1.42}
+  player2StarTrayStartOffset: {x: 2.65, y: 0.18, z: -1.42}
   starTrayStep: {x: 0, y: 0, z: 0.42}
   starMarkerSize: 0.55
   starMarkerHeight: 0.12
   starCellYOffset: 0.22
-  markerTraySize: {x: 0.7, y: 0.04, z: 2.35}
+  markerTraySize: {x: 0.7, y: 0.04, z: 3.2}
   markerTrayYOffset: 0.045
   flickBoardStarSize: 0.5
   flickBoardStarYOffset: 0.13

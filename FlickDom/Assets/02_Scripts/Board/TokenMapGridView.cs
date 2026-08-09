@@ -41,14 +41,14 @@ namespace FlickDom.Gameplay
         [SerializeField] private GameObject[] player2PreplacedStars;
         [SerializeField] private Material player1StarMaterial;
         [SerializeField] private Material player2StarMaterial;
-        [SerializeField] private int starPoolSize = 5;
-        [SerializeField] private Vector3 player1StarTrayStartOffset = new Vector3(-2.65f, 0.18f, -1f);
-        [SerializeField] private Vector3 player2StarTrayStartOffset = new Vector3(2.65f, 0.18f, -1f);
+        [SerializeField] private int starPoolSize = 7;
+        [SerializeField] private Vector3 player1StarTrayStartOffset = new Vector3(-2.65f, 0.18f, -1.42f);
+        [SerializeField] private Vector3 player2StarTrayStartOffset = new Vector3(2.65f, 0.18f, -1.42f);
         [SerializeField] private Vector3 starTrayStep = new Vector3(0f, 0f, 0.42f);
         [SerializeField] private float starMarkerSize = 0.55f;
         [SerializeField] private float starMarkerHeight = 0.12f;
         [SerializeField] private float starCellYOffset = 0.22f;
-        [SerializeField] private Vector3 markerTraySize = new Vector3(0.7f, 0.04f, 2.35f);
+        [SerializeField] private Vector3 markerTraySize = new Vector3(0.7f, 0.04f, 3.2f);
         [SerializeField] private float markerTrayYOffset = 0.045f;
         [SerializeField] private float flickBoardStarSize = 0.5f;
         [SerializeField] private float flickBoardStarYOffset = 0.13f;

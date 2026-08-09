@@ -8,7 +8,7 @@ namespace FlickDom.Gameplay
     {
         [SerializeField] private int boardSize = 5;
         [SerializeField] private bool limitOwnedCellsPerPlayer = true;
-        [SerializeField] private int maxTokensPerPlayer = 5;
+        [SerializeField] private int maxTokensPerPlayer = 7;
 
         private FlickDomPlayerId[,] owners;
         private readonly List<Vector2Int> player1Cells = new List<Vector2Int>();

@@ -63,6 +63,7 @@ namespace FlickDom.Networking
         private const string BoardStateMessageName = "FlickDom.BoardState";
         private const string ScoreStateMessageName = "FlickDom.ScoreState";
         private const string CardStateMessageName = "FlickDom.CardState";
+        private const string CardCompletedMessageName = "FlickDom.CardCompleted";
         private const string RestartRequestMessageName = "FlickDom.RestartRequest";
         private const string RestartMatchMessageName = "FlickDom.RestartMatch";
         private const string ReturnToLobbyRequestMessageName = "FlickDom.ReturnToLobbyRequest";
@@ -107,6 +108,7 @@ namespace FlickDom.Networking
         private bool boardStateMessageHandlerRegistered;
         private bool scoreStateMessageHandlerRegistered;
         private bool cardStateMessageHandlerRegistered;
+        private bool cardCompletedMessageHandlerRegistered;
         private bool restartRequestMessageHandlerRegistered;
         private bool restartMatchMessageHandlerRegistered;
         private bool returnToLobbyRequestMessageHandlerRegistered;
@@ -2066,6 +2068,13 @@ namespace FlickDom.Networking
                 Debug.Log("[Network] Card state message handler registered.", this);
             }
 
+            if (!cardCompletedMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CardCompletedMessageName, HandleCardCompletedMessage);
+                cardCompletedMessageHandlerRegistered = true;
+                Debug.Log("[Network] Card completed message handler registered.", this);
+            }
+
             if (!restartRequestMessageHandlerRegistered)
             {
                 networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RestartRequestMessageName, HandleRestartRequestMessage);
@@ -2214,6 +2223,12 @@ namespace FlickDom.Networking
             {
                 networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CardStateMessageName);
                 cardStateMessageHandlerRegistered = false;
+            }
+
+            if (cardCompletedMessageHandlerRegistered)
+            {
+                networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CardCompletedMessageName);
+                cardCompletedMessageHandlerRegistered = false;
             }
 
             if (restartRequestMessageHandlerRegistered)
@@ -3583,6 +3598,83 @@ namespace FlickDom.Networking
             Debug.Log("[Network] Card state received from Host. StageIndex: " + deckIndex + ", DrawSeed: " + cardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
         }
 
+        private void BroadcastCardCompleted(
+            PatternCardData card,
+            FlickDomPlayerId player,
+            int score,
+            Vector2Int matchOrigin)
+        {
+            if (networkManager == null
+                || !networkManager.IsHost
+                || networkManager.CustomMessagingManager == null
+                || card == null
+                || string.IsNullOrEmpty(card.CardId))
+            {
+                return;
+            }
+
+            List<ulong> clients = GetRemoteClientIds();
+            if (clients.Count <= 0)
+            {
+                return;
+            }
+
+            ResolvePatternCardManager();
+            if (patternCardManager == null)
+            {
+                return;
+            }
+
+            FixedString64Bytes fixedCardId = new FixedString64Bytes(card.CardId);
+            using (FastBufferWriter writer = new FastBufferWriter(64 + sizeof(int) * 6, Allocator.Temp))
+            {
+                writer.WriteValueSafe(patternCardManager.CurrentFallbackDeckIndex);
+                writer.WriteValueSafe(patternCardManager.CardDrawSeed);
+                writer.WriteValueSafe(fixedCardId);
+                writer.WriteValueSafe((int)player);
+                writer.WriteValueSafe(score);
+                writer.WriteValueSafe(matchOrigin.x);
+                writer.WriteValueSafe(matchOrigin.y);
+                networkManager.CustomMessagingManager.SendNamedMessage(CardCompletedMessageName, clients, writer);
+            }
+
+            Debug.Log("[Network] Card completed broadcast. Player: " + player + ", Card: " + card.CardId + ", Score: " + score + ".", this);
+        }
+
+        private void HandleCardCompletedMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (networkManager != null && networkManager.IsHost)
+            {
+                return;
+            }
+
+            reader.ReadValueSafe(out int deckIndex);
+            reader.ReadValueSafe(out int cardDrawSeed);
+            reader.ReadValueSafe(out FixedString64Bytes fixedCardId);
+            reader.ReadValueSafe(out int playerValue);
+            reader.ReadValueSafe(out int score);
+            reader.ReadValueSafe(out int matchOriginX);
+            reader.ReadValueSafe(out int matchOriginY);
+
+            string cardId = fixedCardId.ToString();
+            FlickDomPlayerId player = (FlickDomPlayerId)playerValue;
+            Vector2Int matchOrigin = new Vector2Int(matchOriginX, matchOriginY);
+
+            ResolvePatternCardManager();
+            if (patternCardManager != null)
+            {
+                patternCardManager.ApplyNetworkCardCompletedPresentation(
+                    deckIndex,
+                    cardDrawSeed,
+                    cardId,
+                    player,
+                    score,
+                    matchOrigin);
+            }
+
+            Debug.Log("[Network] Card completed received from Host. Player: " + player + ", Card: " + cardId + ", Score: " + score + ".", this);
+        }
+
         private static string BuildClaimedCardsLog(IReadOnlyList<bool> claimedCards)
         {
             if (claimedCards == null || claimedCards.Count <= 0)
@@ -4110,6 +4202,7 @@ namespace FlickDom.Networking
         private void HandlePatternCardCompleted(PatternCardData card, FlickDomPlayerId player, int score, Vector2Int matchOrigin)
         {
             BroadcastCardState();
+            BroadcastCardCompleted(card, player, score, matchOrigin);
         }
 
         private void HandlePatternCardsExhausted()
