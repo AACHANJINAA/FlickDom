@@ -839,6 +839,15 @@ namespace FlickDom.Networking
 
         public void NotifyHostFlickAccepted(FlickDomPlayerId owner, string pieceId)
         {
+            NotifyHostFlickAccepted(owner, pieceId, Vector3.zero, Vector3.zero);
+        }
+
+        public void NotifyHostFlickAccepted(
+            FlickDomPlayerId owner,
+            string pieceId,
+            Vector3 impulse,
+            Vector3 launchPosition)
+        {
             if (networkManager == null
                 || !networkManager.IsHost
                 || networkManager.CustomMessagingManager == null)
@@ -846,7 +855,12 @@ namespace FlickDom.Networking
                 return;
             }
 
-            SendFlickAcceptedToClients(owner, pieceId);
+            if (!IsFiniteVector(launchPosition))
+            {
+                launchPosition = Vector3.zero;
+            }
+
+            SendFlickAcceptedToClients(owner, pieceId, impulse, launchPosition, 0u);
             BroadcastPieceOrderState();
             SendAllPieceTransformsToClients();
             SendAllMonkeyPosesToClients();

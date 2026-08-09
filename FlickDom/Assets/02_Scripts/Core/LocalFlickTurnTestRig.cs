@@ -1053,6 +1053,12 @@ namespace FlickDom.Gameplay
                 return;
             }
 
+            if (piece.TryGetLastQueuedFlickCommand(out Vector3 impulse, out Vector3 launchPosition))
+            {
+                bootstrap.NotifyHostFlickAccepted(piece.Owner, piece.PieceId, impulse, launchPosition);
+                return;
+            }
+
             bootstrap.NotifyHostFlickAccepted(piece.Owner, piece.PieceId);
         }
 

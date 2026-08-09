@@ -71,6 +71,7 @@ namespace FlickDom.Gameplay
         private Vector3 characterAimVector;
         private Vector3 characterAimPiecePosition;
         private Vector3 queuedImpulse;
+        private Vector3 queuedLaunchPosition;
         private Vector3 flickStartPosition;
         private Quaternion flickStartRotation;
 
@@ -87,6 +88,7 @@ namespace FlickDom.Gameplay
         private bool touchedRequiredTargetThisFlick;
         private bool canInteractThisTurn = true;
         private bool waitForPointerReleaseBeforeInput;
+        private bool hasQueuedLaunchPosition;
         private float stoppedTimer;
         private uint queuedFlickShotId;
         private uint pendingNetworkFlickShotId;
@@ -547,6 +549,7 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
             waitingForStop = false;
+            hasQueuedLaunchPosition = false;
             launchedThisTurn = false;
             isDead = false;
             invalidatedThisTurn = false;
@@ -813,6 +816,7 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
             usingLocalFlickPrediction = false;
+            hasQueuedLaunchPosition = false;
             HideFlickPreview();
         }
 
@@ -975,6 +979,8 @@ namespace FlickDom.Gameplay
 
             queuedImpulse = forceVector * forceMultiplier;
             Vector3 launchPosition = CalculateLaunchPositionFromForceVector(forceVector);
+            queuedLaunchPosition = launchPosition;
+            hasQueuedLaunchPosition = true;
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
             FlickReleased?.Invoke(this, queuedImpulse);
@@ -1007,6 +1013,8 @@ namespace FlickDom.Gameplay
             cachedRigidbody.position = launchPosition;
             transform.position = launchPosition;
             queuedImpulse = impulse;
+            queuedLaunchPosition = launchPosition;
+            hasQueuedLaunchPosition = true;
         }
 
         private void CancelDragPresentation()
@@ -1105,9 +1113,23 @@ namespace FlickDom.Gameplay
             cachedRigidbody.position = safeLaunchPosition;
             transform.position = safeLaunchPosition;
             queuedImpulse = impulse;
+            queuedLaunchPosition = safeLaunchPosition;
+            hasQueuedLaunchPosition = true;
             queuedFlickShotId = shotId;
             launchQueued = true;
             return true;
+        }
+
+        public bool TryGetLastQueuedFlickCommand(out Vector3 impulse, out Vector3 launchPosition)
+        {
+            impulse = queuedImpulse;
+            launchPosition = hasQueuedLaunchPosition && IsFinite(queuedLaunchPosition)
+                ? PreserveCurrentHeight(queuedLaunchPosition)
+                : (cachedRigidbody != null ? cachedRigidbody.position : transform.position);
+
+            return IsFinite(impulse)
+                && IsFinite(launchPosition)
+                && impulse.sqrMagnitude > 0.0001f;
         }
 
         public void ApplyNetworkPose(Vector3 position, Quaternion rotation)
@@ -1147,6 +1169,7 @@ namespace FlickDom.Gameplay
                 awaitingNetworkFlickAcceptance = false;
                 launchQueued = false;
                 waitingForStop = false;
+                hasQueuedLaunchPosition = false;
                 queuedFlickShotId = 0u;
                 stoppedTimer = 0f;
                 SnapToNetworkPhysicsState(position, rotation, velocity, angularVelocity);
@@ -1225,7 +1248,7 @@ namespace FlickDom.Gameplay
                     return;
                 }
 
-                if (acceptedImpulse.sqrMagnitude > 0.0001f && IsFinite(acceptedLaunchPosition))
+                if (IsFinite(acceptedImpulse) && acceptedImpulse.sqrMagnitude > 0.0001f && IsFinite(acceptedLaunchPosition))
                 {
                     BeginAcceptedNetworkPrediction(acceptedImpulse, acceptedLaunchPosition, shotId);
                 }
@@ -1253,6 +1276,12 @@ namespace FlickDom.Gameplay
                 characterAimActive = false;
                 characterAimVector = Vector3.zero;
                 HideFlickPreview();
+                return;
+            }
+
+            if (IsFinite(acceptedImpulse) && acceptedImpulse.sqrMagnitude > 0.0001f && IsFinite(acceptedLaunchPosition))
+            {
+                BeginAcceptedNetworkPrediction(acceptedImpulse, acceptedLaunchPosition, shotId);
                 return;
             }
 
@@ -1294,6 +1323,8 @@ namespace FlickDom.Gameplay
             cachedRigidbody.position = acceptedLaunchPosition;
             transform.position = acceptedLaunchPosition;
             queuedImpulse = acceptedImpulse;
+            queuedLaunchPosition = acceptedLaunchPosition;
+            hasQueuedLaunchPosition = true;
             HideFlickPreview();
         }
 
@@ -1343,8 +1374,9 @@ namespace FlickDom.Gameplay
             FlickDomNetworkBootstrap bootstrap = FlickDomNetworkBootstrap.Active;
             return bootstrap != null
                 && bootstrap.IsClientOnly
-                && bootstrap.LocalPlayerId == owner
-                && (awaitingNetworkFlickAcceptance || usingLocalFlickPrediction || waitingForStop || launchQueued);
+                && (usingLocalFlickPrediction
+                    || (bootstrap.LocalPlayerId == owner
+                        && (awaitingNetworkFlickAcceptance || waitingForStop || launchQueued)));
         }
 
         private bool ShouldKeepLocalPredictionForMovingNetworkState()
@@ -1597,6 +1629,7 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
             usingLocalFlickPrediction = false;
+            hasQueuedLaunchPosition = false;
             waitingForStop = false;
             invalidatedThisTurn = true;
             stoppedTimer = 0f;
@@ -1640,6 +1673,7 @@ namespace FlickDom.Gameplay
             launchQueued = false;
             awaitingNetworkFlickAcceptance = false;
             usingLocalFlickPrediction = false;
+            hasQueuedLaunchPosition = false;
             waitingForStop = false;
             stoppedTimer = 0f;
             HideFlickPreview();
