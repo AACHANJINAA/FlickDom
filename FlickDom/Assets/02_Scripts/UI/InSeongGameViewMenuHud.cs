@@ -411,7 +411,7 @@ namespace FlickDom.Gameplay
             rectTransform.anchoredPosition = anchoredPosition;
             rectTransform.sizeDelta = ResolveFixedSpriteSize(size, buttonSprite);
 
-            CreateButtonComponents(buttonObject, text, onClick);
+            CreateButtonComponents(buttonObject, text, onClick, false);
             Text buttonText = buttonObject.GetComponentInChildren<Text>();
             if (buttonText != null)
             {
@@ -453,7 +453,8 @@ namespace FlickDom.Gameplay
         private Button CreateButtonComponents(
             GameObject buttonObject,
             string text,
-            UnityEngine.Events.UnityAction onClick)
+            UnityEngine.Events.UnityAction onClick,
+            bool attachClickSound = true)
         {
             Image image = buttonObject.AddComponent<Image>();
             image.color = buttonColor;
@@ -461,7 +462,11 @@ namespace FlickDom.Gameplay
 
             Button button = buttonObject.AddComponent<Button>();
             button.targetGraphic = image;
-            UiButtonClickSound.Attach(button);
+            if (attachClickSound)
+            {
+                UiButtonClickSound.Attach(button);
+            }
+
             button.onClick.AddListener(onClick);
 
             ColorBlock colors = button.colors;
@@ -506,6 +511,7 @@ namespace FlickDom.Gameplay
 
         private void ShowMenuPanel()
         {
+            UiButtonClickSound.Play();
             ClosePlacementPreview();
             screenBlocker.SetActive(true);
             menuButtonObject.SetActive(false);
