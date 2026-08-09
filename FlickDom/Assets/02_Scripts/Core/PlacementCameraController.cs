@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -20,6 +21,12 @@ namespace FlickDom.Gameplay
         [SerializeField] private bool allowRightMouseFlickOrbit = true;
         [SerializeField] private float flickOrbitSensitivity = 0.18f;
 
+        [Header("Flick Pull Zoom")]
+        [SerializeField] private bool enableFlickPullZoomOut = true;
+        [SerializeField, Range(0f, 0.45f)] private float pullZoomOutDistanceRatio = 0.18f;
+        [SerializeField] private float pullZoomOutOrthographicSize = 0.55f;
+        [SerializeField] private float pullZoomSharpness = 16f;
+
         [Header("Placement View")]
         [SerializeField] private Vector3 placementOffset = new Vector3(0f, 6f, 0f);
         [SerializeField] private Vector3 placementEulerAngles = new Vector3(90f, 0f, 0f);
@@ -39,6 +46,11 @@ namespace FlickDom.Gameplay
         private bool hasManualPreviewPose;
         private Coroutine activeTransition;
         private float flickOrbitYaw;
+        private readonly List<TurnBasedFlickPiece> boundFlickPieces = new List<TurnBasedFlickPiece>(8);
+        private TurnBasedFlickPiece activePullPiece;
+        private float targetPullZoom;
+        private float currentPullZoom;
+        private bool pullZoomPoseApplied;
 
         private void Awake()
         {
@@ -99,6 +111,8 @@ namespace FlickDom.Gameplay
                 gameModeManager.StateChanged += HandleStateChanged;
                 SetPlacementBoardVisible(!IsFlickViewState(gameModeManager.CurrentState));
             }
+
+            BindFlickPieces();
         }
 
         private void OnDisable()
@@ -109,6 +123,8 @@ namespace FlickDom.Gameplay
             }
 
             StopActiveTransition();
+            UnbindFlickPieces();
+            ResetFlickPullZoom();
         }
 
         private void OnValidate()
@@ -116,7 +132,20 @@ namespace FlickDom.Gameplay
             transitionDuration = Mathf.Max(0f, transitionDuration);
             flickOrthographicSize = Mathf.Max(0.1f, flickOrthographicSize);
             flickOrbitSensitivity = Mathf.Max(0.01f, flickOrbitSensitivity);
+            pullZoomOutDistanceRatio = Mathf.Max(0f, pullZoomOutDistanceRatio);
+            pullZoomOutOrthographicSize = Mathf.Max(0f, pullZoomOutOrthographicSize);
+            pullZoomSharpness = Mathf.Max(0.01f, pullZoomSharpness);
             placementOrthographicSize = Mathf.Max(0.1f, placementOrthographicSize);
+        }
+
+        private void Start()
+        {
+            BindFlickPieces();
+        }
+
+        private void LateUpdate()
+        {
+            UpdateFlickPullZoom(Time.deltaTime);
         }
 
         public void ShowPlacementBoardPreview()
@@ -169,10 +198,13 @@ namespace FlickDom.Gameplay
 
             if (IsFlickViewState(nextState))
             {
+                BindFlickPieces();
+                ResetFlickPullZoom();
                 MoveToFlickView();
                 return;
             }
 
+            ResetFlickPullZoom();
             if (nextState == FlickDomGameState.PlacementSelection)
             {
                 MoveToPlacementView();
@@ -226,7 +258,7 @@ namespace FlickDom.Gameplay
             SetPlacementBoardVisible(false);
             Vector3 focus = GetFlickBoardCenter();
             flickOrbitYaw = flickEulerAngles.y;
-            Vector3 targetPosition = GetFlickOrbitPosition(focus);
+            Vector3 targetPosition = GetFlickOrbitPosition(focus, 0f);
             Quaternion targetRotation = GetFlickOrbitRotation(focus, targetPosition);
             BeginTransition(
                 targetPosition,
@@ -238,10 +270,7 @@ namespace FlickDom.Gameplay
         private void ApplyFlickOrbitPose()
         {
             StopActiveTransition();
-            Vector3 focus = GetFlickBoardCenter();
-            Vector3 targetPosition = GetFlickOrbitPosition(focus);
-            Quaternion targetRotation = GetFlickOrbitRotation(focus, targetPosition);
-            ApplyCameraPose(targetPosition, targetRotation, useOrthographicDuringFlick, flickOrthographicSize);
+            ApplyFlickCameraPose(currentPullZoom);
         }
 
         private void MoveToGameplayView()
@@ -339,8 +368,19 @@ namespace FlickDom.Gameplay
 
         private Vector3 GetFlickOrbitPosition(Vector3 focus)
         {
+            return GetFlickOrbitPosition(focus, 0f);
+        }
+
+        private Vector3 GetFlickOrbitPosition(Vector3 focus, float pullZoom)
+        {
             Quaternion yawRotation = Quaternion.Euler(0f, flickOrbitYaw, 0f);
-            return focus + (yawRotation * flickOffset);
+            Vector3 offset = yawRotation * flickOffset;
+            if (enableFlickPullZoomOut && pullZoom > 0f)
+            {
+                offset *= 1f + pullZoomOutDistanceRatio * Mathf.Clamp01(pullZoom);
+            }
+
+            return focus + offset;
         }
 
         private static Quaternion GetFlickOrbitRotation(Vector3 focus, Vector3 cameraPosition)
@@ -367,6 +407,150 @@ namespace FlickDom.Gameplay
             }
 
             return tokenMapGridView != null ? tokenMapGridView.GridCenter : Vector3.zero;
+        }
+
+        private void BindFlickPieces()
+        {
+            TurnBasedFlickPiece[] pieces =
+                FindObjectsByType<TurnBasedFlickPiece>(FindObjectsInactive.Include);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                TryBindFlickPiece(pieces[i]);
+            }
+        }
+
+        private void TryBindFlickPiece(TurnBasedFlickPiece piece)
+        {
+            if (piece == null || boundFlickPieces.Contains(piece))
+            {
+                return;
+            }
+
+            boundFlickPieces.Add(piece);
+            piece.FlickDragStarted += HandleFlickDragStarted;
+            piece.FlickDragUpdated += HandleFlickDragUpdated;
+            piece.FlickDragCancelled += HandleFlickDragEnded;
+            piece.FlickReleased += HandleFlickReleased;
+        }
+
+        private void UnbindFlickPieces()
+        {
+            for (int i = 0; i < boundFlickPieces.Count; i++)
+            {
+                TurnBasedFlickPiece piece = boundFlickPieces[i];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                piece.FlickDragStarted -= HandleFlickDragStarted;
+                piece.FlickDragUpdated -= HandleFlickDragUpdated;
+                piece.FlickDragCancelled -= HandleFlickDragEnded;
+                piece.FlickReleased -= HandleFlickReleased;
+            }
+
+            boundFlickPieces.Clear();
+        }
+
+        private void HandleFlickDragStarted(TurnBasedFlickPiece piece)
+        {
+            if (!CanApplyFlickPullZoom(piece))
+            {
+                return;
+            }
+
+            activePullPiece = piece;
+            targetPullZoom = 0f;
+        }
+
+        private void HandleFlickDragUpdated(TurnBasedFlickPiece piece, Vector3 launchVector, float normalizedPower)
+        {
+            if (piece != activePullPiece && !CanApplyFlickPullZoom(piece))
+            {
+                return;
+            }
+
+            activePullPiece = piece;
+            targetPullZoom = Mathf.Clamp01(normalizedPower);
+        }
+
+        private void HandleFlickDragEnded(TurnBasedFlickPiece piece)
+        {
+            if (piece == activePullPiece)
+            {
+                activePullPiece = null;
+            }
+
+            targetPullZoom = 0f;
+        }
+
+        private void HandleFlickReleased(TurnBasedFlickPiece piece, Vector3 impulse)
+        {
+            HandleFlickDragEnded(piece);
+        }
+
+        private bool CanApplyFlickPullZoom(TurnBasedFlickPiece piece)
+        {
+            if (!enableFlickPullZoomOut || piece == null || targetCamera == null)
+            {
+                return false;
+            }
+
+            return gameModeManager == null
+                || gameModeManager.CurrentState == FlickDomGameState.PlayerFlicking;
+        }
+
+        private void UpdateFlickPullZoom(float deltaTime)
+        {
+            bool isFlickViewState = gameModeManager == null
+                || IsFlickViewState(gameModeManager.CurrentState);
+            if (!enableFlickPullZoomOut
+                || targetCamera == null
+                || !isFlickViewState
+                || activeTransition != null)
+            {
+                return;
+            }
+
+            float t = 1f - Mathf.Exp(-pullZoomSharpness * deltaTime);
+            currentPullZoom = Mathf.Lerp(currentPullZoom, targetPullZoom, t);
+            if (Mathf.Abs(currentPullZoom - targetPullZoom) <= 0.001f)
+            {
+                currentPullZoom = targetPullZoom;
+            }
+
+            bool shouldApply = currentPullZoom > 0.0001f
+                || targetPullZoom > 0.0001f
+                || pullZoomPoseApplied;
+            if (!shouldApply)
+            {
+                return;
+            }
+
+            ApplyFlickCameraPose(currentPullZoom);
+            pullZoomPoseApplied = currentPullZoom > 0.0001f;
+        }
+
+        private void ApplyFlickCameraPose(float pullZoom)
+        {
+            Vector3 focus = GetFlickBoardCenter();
+            Vector3 targetPosition = GetFlickOrbitPosition(focus, pullZoom);
+            Quaternion targetRotation = GetFlickOrbitRotation(focus, targetPosition);
+            float targetOrthographicSize = flickOrthographicSize
+                + pullZoomOutOrthographicSize * Mathf.Clamp01(pullZoom);
+            ApplyCameraPose(
+                targetPosition,
+                targetRotation,
+                useOrthographicDuringFlick,
+                targetOrthographicSize);
+        }
+
+        private void ResetFlickPullZoom()
+        {
+            activePullPiece = null;
+            targetPullZoom = 0f;
+            currentPullZoom = 0f;
+            pullZoomPoseApplied = false;
         }
     }
 }
