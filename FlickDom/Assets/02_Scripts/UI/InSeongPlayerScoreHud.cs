@@ -328,7 +328,7 @@ namespace FlickDom.Gameplay
                 "Player 2 Turn",
                 TextAnchor.UpperRight,
                 turnTextColor,
-                player2Offset + new Vector2(-turnOffset.x, turnOffset.y));
+                player2Offset + new Vector2(82.5f, turnOffset.y));
             player1OrderText = CreateOrderText("Player 1 Order", TextAnchor.UpperLeft, player1Color, player1Offset + orderOffset);
             player2OrderText = CreateOrderText("Player 2 Order", TextAnchor.UpperRight, player2Color, player2Offset + orderOffset);
             winText = CreateWinText("Winner Text");
