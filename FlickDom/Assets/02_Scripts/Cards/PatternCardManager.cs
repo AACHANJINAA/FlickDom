@@ -14,6 +14,8 @@ namespace FlickDom.Gameplay
 
         private const int StageCount = 3;
         private const int CardsPerStage = 3;
+        private const float NetworkCardPresentationDuplicateWindowSeconds = 1.5f;
+        private const float PendingNetworkCardSnapshotWindowSeconds = 3f;
 
         [Header("Stage Cards")]
         [SerializeField] private PatternCardData activeCard;
@@ -41,6 +43,15 @@ namespace FlickDom.Gameplay
         private int player2Score;
         private bool isClearingMapForCardRoundChange;
         private FlickDomPlayerId winner = FlickDomPlayerId.None;
+        private FlickDomPlayerId pendingNetworkScorePlayer = FlickDomPlayerId.None;
+        private int pendingNetworkScoreGain;
+        private PatternCardData pendingNetworkClaimedCard;
+        private float pendingNetworkClaimedCardAt = -999f;
+        private string lastNetworkPresentedCardId = string.Empty;
+        private FlickDomPlayerId lastNetworkPresentedPlayer = FlickDomPlayerId.None;
+        private int lastNetworkPresentedDeckIndex = -1;
+        private int lastNetworkPresentedDrawSeed;
+        private float lastNetworkPresentedAt = -999f;
 
         public event Action<PatternCardData> ActiveCardChanged;
         public event Action<FlickDomPlayerId, int, int, int> ScoreChanged;
@@ -458,10 +469,15 @@ namespace FlickDom.Gameplay
 
         public void ApplyNetworkScoreSnapshot(int nextPlayer1Score, int nextPlayer2Score, FlickDomPlayerId nextWinner)
         {
+            int previousPlayer1Score = player1Score;
+            int previousPlayer2Score = player2Score;
+
             player1Score = Mathf.Max(0, nextPlayer1Score);
             player2Score = Mathf.Max(0, nextPlayer2Score);
             winner = nextWinner;
+            CapturePendingNetworkScoreGain(previousPlayer1Score, previousPlayer2Score);
             ScoreChanged?.Invoke(FlickDomPlayerId.None, 0, player1Score, player2Score);
+            PresentPendingNetworkCardCompletion(null);
 
             if (winner != FlickDomPlayerId.None)
             {
@@ -486,6 +502,8 @@ namespace FlickDom.Gameplay
             IReadOnlyList<bool> nextClaimedCards)
         {
             ApplyNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed);
+            PatternCardData newlyClaimedCard = FindFirstNewlyClaimedCard(nextClaimedCards);
+            StorePendingNetworkClaimedCard(newlyClaimedCard);
 
             int count = Mathf.Min(claimedCards.Length, nextClaimedCards != null ? nextClaimedCards.Count : 0);
             for (int i = 0; i < claimedCards.Length; i++)
@@ -493,6 +511,7 @@ namespace FlickDom.Gameplay
                 claimedCards[i] = i < count && nextClaimedCards[i];
             }
 
+            PresentPendingNetworkCardCompletion(newlyClaimedCard);
             ActiveCardChanged?.Invoke(ActiveCard);
             Debug.Log("[PatternCard] Network card snapshot applied. Stage: " + CurrentStageNumber + ", DrawSeed: " + cardDrawSeed + ", Remaining: " + RemainingCardCount + ".", this);
         }
@@ -513,20 +532,26 @@ namespace FlickDom.Gameplay
                 return;
             }
 
-            CardCompleted?.Invoke(card, player, Mathf.Max(0, gainedScore), matchOrigin);
+            PresentNetworkCardCompletion(card, player, Mathf.Max(0, gainedScore), matchOrigin);
         }
 
         private void ApplyNetworkCardDeckSnapshot(int nextFallbackDeckIndex, int nextCardDrawSeed)
         {
             int clampedDeckIndex = Mathf.Max(0, nextFallbackDeckIndex);
             bool drawChanged = cardDrawSeed != nextCardDrawSeed;
+            bool deckChanged = drawChanged || clampedDeckIndex != currentFallbackDeckIndex;
+            if (deckChanged)
+            {
+                ClearPendingNetworkClaimedCard();
+            }
+
             if (drawChanged)
             {
                 cardDrawSeed = nextCardDrawSeed;
                 RebuildRuntimeFallbackDecks();
             }
 
-            if (drawChanged || clampedDeckIndex != currentFallbackDeckIndex)
+            if (deckChanged)
             {
                 EnsureRuntimeFallbackDecks();
                 if (runtimeFallbackDecks != null && clampedDeckIndex < runtimeFallbackDecks.Length)
@@ -559,6 +584,145 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        private PatternCardData FindFirstNewlyClaimedCard(IReadOnlyList<bool> nextClaimedCards)
+        {
+            if (runtimeCards == null || claimedCards == null || nextClaimedCards == null)
+            {
+                return null;
+            }
+
+            int count = Mathf.Min(runtimeCards.Length, Mathf.Min(claimedCards.Length, nextClaimedCards.Count));
+            for (int i = 0; i < count; i++)
+            {
+                if (!claimedCards[i] && nextClaimedCards[i] && runtimeCards[i] != null)
+                {
+                    return runtimeCards[i];
+                }
+            }
+
+            return null;
+        }
+
+        private void CapturePendingNetworkScoreGain(int previousPlayer1Score, int previousPlayer2Score)
+        {
+            ClearPendingNetworkScoreGain();
+
+            int player1Gain = player1Score - previousPlayer1Score;
+            int player2Gain = player2Score - previousPlayer2Score;
+            if (player1Gain > 0 && player2Gain <= 0)
+            {
+                pendingNetworkScorePlayer = FlickDomPlayerId.Player1;
+                pendingNetworkScoreGain = player1Gain;
+            }
+            else if (player2Gain > 0 && player1Gain <= 0)
+            {
+                pendingNetworkScorePlayer = FlickDomPlayerId.Player2;
+                pendingNetworkScoreGain = player2Gain;
+            }
+        }
+
+        private void StorePendingNetworkClaimedCard(PatternCardData card)
+        {
+            if (card == null)
+            {
+                return;
+            }
+
+            pendingNetworkClaimedCard = card;
+            pendingNetworkClaimedCardAt = Time.unscaledTime;
+        }
+
+        private void PresentPendingNetworkCardCompletion(PatternCardData card)
+        {
+            FlickDomPlayerId player = pendingNetworkScorePlayer;
+            int gainedScore = pendingNetworkScoreGain;
+            if (player == FlickDomPlayerId.None || gainedScore <= 0)
+            {
+                return;
+            }
+
+            PatternCardData completionCard = card != null ? card : ConsumePendingNetworkClaimedCard();
+            if (completionCard == null)
+            {
+                return;
+            }
+
+            ClearPendingNetworkScoreGain();
+            ClearPendingNetworkClaimedCard();
+            PresentNetworkCardCompletion(completionCard, player, gainedScore, new Vector2Int(-1, -1));
+        }
+
+        private void PresentNetworkCardCompletion(
+            PatternCardData card,
+            FlickDomPlayerId player,
+            int gainedScore,
+            Vector2Int matchOrigin)
+        {
+            if (card == null || player == FlickDomPlayerId.None)
+            {
+                return;
+            }
+
+            if (IsDuplicateNetworkCardPresentation(card, player))
+            {
+                return;
+            }
+
+            lastNetworkPresentedCardId = card.CardId ?? string.Empty;
+            lastNetworkPresentedPlayer = player;
+            lastNetworkPresentedDeckIndex = currentFallbackDeckIndex;
+            lastNetworkPresentedDrawSeed = cardDrawSeed;
+            lastNetworkPresentedAt = Time.unscaledTime;
+            CardCompleted?.Invoke(card, player, Mathf.Max(0, gainedScore), matchOrigin);
+        }
+
+        private bool IsDuplicateNetworkCardPresentation(PatternCardData card, FlickDomPlayerId player)
+        {
+            if (card == null || string.IsNullOrEmpty(lastNetworkPresentedCardId))
+            {
+                return false;
+            }
+
+            float elapsed = Time.unscaledTime - lastNetworkPresentedAt;
+            return player == lastNetworkPresentedPlayer
+                && currentFallbackDeckIndex == lastNetworkPresentedDeckIndex
+                && cardDrawSeed == lastNetworkPresentedDrawSeed
+                && elapsed >= 0f
+                && elapsed <= NetworkCardPresentationDuplicateWindowSeconds
+                && string.Equals(card.CardId, lastNetworkPresentedCardId, StringComparison.Ordinal);
+        }
+
+        private PatternCardData ConsumePendingNetworkClaimedCard()
+        {
+            PatternCardData card = pendingNetworkClaimedCard;
+            if (card == null)
+            {
+                return null;
+            }
+
+            float elapsed = Time.unscaledTime - pendingNetworkClaimedCardAt;
+            if (elapsed < 0f || elapsed > PendingNetworkCardSnapshotWindowSeconds)
+            {
+                ClearPendingNetworkClaimedCard();
+                return null;
+            }
+
+            ClearPendingNetworkClaimedCard();
+            return card;
+        }
+
+        private void ClearPendingNetworkScoreGain()
+        {
+            pendingNetworkScorePlayer = FlickDomPlayerId.None;
+            pendingNetworkScoreGain = 0;
+        }
+
+        private void ClearPendingNetworkClaimedCard()
+        {
+            pendingNetworkClaimedCard = null;
+            pendingNetworkClaimedCardAt = -999f;
         }
 
         private static bool CanControlScoreState()
@@ -614,6 +778,8 @@ namespace FlickDom.Gameplay
         private void ResetCardProgress()
         {
             currentFallbackDeckIndex = 0;
+            ClearPendingNetworkScoreGain();
+            ClearPendingNetworkClaimedCard();
             if (activeCard == null && !HasConfiguredDeck() && autoCreateEasyFallbackCard)
             {
                 cardDrawSeed = CreateCardDrawSeed();
@@ -753,6 +919,7 @@ namespace FlickDom.Gameplay
 
         private void ResetClaimedCards()
         {
+            ClearPendingNetworkClaimedCard();
             if (runtimeCards == null || runtimeCards.Length <= 0)
             {
                 RefreshRuntimeCards();
