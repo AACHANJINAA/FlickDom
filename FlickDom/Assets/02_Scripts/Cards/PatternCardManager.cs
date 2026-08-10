@@ -501,6 +501,12 @@ namespace FlickDom.Gameplay
             int nextCardDrawSeed,
             IReadOnlyList<bool> nextClaimedCards)
         {
+            if (!CanApplyNetworkCardStateSnapshot(nextFallbackDeckIndex, nextCardDrawSeed, nextClaimedCards))
+            {
+                Debug.Log("[PatternCard] Ignored stale network card snapshot. Current Stage: " + CurrentStageNumber + ", Incoming StageIndex: " + nextFallbackDeckIndex + ", DrawSeed: " + nextCardDrawSeed + ".", this);
+                return;
+            }
+
             ApplyNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed);
             PatternCardData newlyClaimedCard = FindFirstNewlyClaimedCard(nextClaimedCards);
             StorePendingNetworkClaimedCard(newlyClaimedCard);
@@ -516,6 +522,14 @@ namespace FlickDom.Gameplay
             Debug.Log("[PatternCard] Network card snapshot applied. Stage: " + CurrentStageNumber + ", DrawSeed: " + cardDrawSeed + ", Remaining: " + RemainingCardCount + ".", this);
         }
 
+        public bool CanApplyNetworkCardStateSnapshot(
+            int nextFallbackDeckIndex,
+            int nextCardDrawSeed,
+            IReadOnlyList<bool> nextClaimedCards)
+        {
+            return !IsStaleNetworkCardStateSnapshot(nextFallbackDeckIndex, nextCardDrawSeed, nextClaimedCards);
+        }
+
         public void ApplyNetworkCardCompletedPresentation(
             int nextFallbackDeckIndex,
             int nextCardDrawSeed,
@@ -524,6 +538,20 @@ namespace FlickDom.Gameplay
             int gainedScore,
             Vector2Int matchOrigin)
         {
+            if (IsStaleNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed))
+            {
+                PatternCardData staleCard = FindRuntimeCardById(Mathf.Max(0, nextFallbackDeckIndex), cardId);
+                if (staleCard != null)
+                {
+                    PresentNetworkCardCompletion(staleCard, player, Mathf.Max(0, gainedScore), matchOrigin);
+                    Debug.Log("[PatternCard] Applied stale network card completion presentation without reverting stage. Current Stage: " + CurrentStageNumber + ", Incoming StageIndex: " + nextFallbackDeckIndex + ", DrawSeed: " + nextCardDrawSeed + ".", this);
+                    return;
+                }
+
+                Debug.Log("[PatternCard] Ignored stale network card completion for unknown card " + cardId + ". Current Stage: " + CurrentStageNumber + ", Incoming StageIndex: " + nextFallbackDeckIndex + ", DrawSeed: " + nextCardDrawSeed + ".", this);
+                return;
+            }
+
             ApplyNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed);
             PatternCardData card = FindRuntimeCardById(cardId);
             if (card == null)
@@ -586,6 +614,43 @@ namespace FlickDom.Gameplay
             return null;
         }
 
+        private PatternCardData FindRuntimeCardById(int fallbackDeckIndex, string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId))
+            {
+                return null;
+            }
+
+            if (fallbackDeckIndex == currentFallbackDeckIndex)
+            {
+                return FindRuntimeCardById(cardId);
+            }
+
+            if (runtimeFallbackDecks == null
+                || fallbackDeckIndex < 0
+                || fallbackDeckIndex >= runtimeFallbackDecks.Length)
+            {
+                return null;
+            }
+
+            PatternCardData[] cards = runtimeFallbackDecks[fallbackDeckIndex];
+            if (cards == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < cards.Length; i++)
+            {
+                PatternCardData card = cards[i];
+                if (card != null && string.Equals(card.CardId, cardId, StringComparison.Ordinal))
+                {
+                    return card;
+                }
+            }
+
+            return null;
+        }
+
         private PatternCardData FindFirstNewlyClaimedCard(IReadOnlyList<bool> nextClaimedCards)
         {
             if (runtimeCards == null || claimedCards == null || nextClaimedCards == null)
@@ -603,6 +668,49 @@ namespace FlickDom.Gameplay
             }
 
             return null;
+        }
+
+        private bool IsStaleNetworkCardStateSnapshot(
+            int nextFallbackDeckIndex,
+            int nextCardDrawSeed,
+            IReadOnlyList<bool> nextClaimedCards)
+        {
+            if (cardDrawSeed != nextCardDrawSeed)
+            {
+                return false;
+            }
+
+            if (IsStaleNetworkCardDeckSnapshot(nextFallbackDeckIndex, nextCardDrawSeed))
+            {
+                return true;
+            }
+
+            int clampedDeckIndex = Mathf.Max(0, nextFallbackDeckIndex);
+            if (clampedDeckIndex > currentFallbackDeckIndex)
+            {
+                return false;
+            }
+
+            if (claimedCards == null || nextClaimedCards == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < claimedCards.Length; i++)
+            {
+                if (claimedCards[i] && (i >= nextClaimedCards.Count || !nextClaimedCards[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsStaleNetworkCardDeckSnapshot(int nextFallbackDeckIndex, int nextCardDrawSeed)
+        {
+            return cardDrawSeed == nextCardDrawSeed
+                && Mathf.Max(0, nextFallbackDeckIndex) < currentFallbackDeckIndex;
         }
 
         private void CapturePendingNetworkScoreGain(int previousPlayer1Score, int previousPlayer2Score)

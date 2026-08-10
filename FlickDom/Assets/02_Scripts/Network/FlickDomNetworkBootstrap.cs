@@ -3527,6 +3527,12 @@ namespace FlickDom.Networking
             ResolvePatternCardManager();
             if (patternCardManager != null)
             {
+                if (!patternCardManager.CanApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards))
+                {
+                    Debug.Log("[Network] Ignored stale score state from Host. StageIndex: " + deckIndex + ", DrawSeed: " + cardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+                    return;
+                }
+
                 patternCardManager.ApplyNetworkScoreSnapshot(player1Score, player2Score, (FlickDomPlayerId)winnerValue);
                 patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards);
             }
@@ -3592,6 +3598,12 @@ namespace FlickDom.Networking
             ResolvePatternCardManager();
             if (patternCardManager != null)
             {
+                if (!patternCardManager.CanApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards))
+                {
+                    Debug.Log("[Network] Ignored stale card state from Host. StageIndex: " + deckIndex + ", DrawSeed: " + cardDrawSeed + ", Claimed: " + BuildClaimedCardsLog(claimedCards) + ".", this);
+                    return;
+                }
+
                 patternCardManager.ApplyNetworkCardStateSnapshot(deckIndex, cardDrawSeed, claimedCards);
             }
 
@@ -4196,18 +4208,20 @@ namespace FlickDom.Networking
 
         private void HandlePatternActiveCardChanged(PatternCardData card)
         {
+            BroadcastScoreState();
             BroadcastCardState();
+            BroadcastBoardState();
         }
 
         private void HandlePatternCardCompleted(PatternCardData card, FlickDomPlayerId player, int score, Vector2Int matchOrigin)
         {
-            BroadcastCardState();
             BroadcastCardCompleted(card, player, score, matchOrigin);
         }
 
         private void HandlePatternCardsExhausted()
         {
-            BroadcastCardState();
+            // CardsExhausted fires before PatternCardManager optionally advances the stage.
+            // The final durable snapshot is broadcast by ActiveCardChanged after the stage/board state settles.
         }
 
         private void HandleGameModeStateChanged(FlickDomGameState previousState, FlickDomGameState nextState)
