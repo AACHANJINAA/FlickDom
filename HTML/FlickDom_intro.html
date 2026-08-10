@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlickDom 게임 소개서</title>
+  <style>
+    :root {
+      --bg: #07080d;
+      --panel: #101119;
+      --panel-2: #181922;
+      --text: #f4f5fb;
+      --muted: #b9bdc9;
+      --soft: #777d8f;
+      --orange: #ff6f2c;
+      --orange-2: #ff9a3d;
+      --cyan: #26c7ff;
+      --line: rgba(255, 111, 44, 0.36);
+      --white-line: rgba(255, 255, 255, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      word-break: keep-all;
+      overflow-wrap: normal;
+      font-family: "Pretendard", "Segoe UI", "Apple SD Gothic Neo", Arial, sans-serif;
+      background:
+        radial-gradient(ellipse at 50% 100%, rgba(255, 111, 44, 0.34), transparent 42%),
+        linear-gradient(180deg, #090a10 0%, #07080d 58%, #190b08 100%);
+    }
+
+    .toolbar {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 50;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(7, 8, 13, 0.84);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(12px);
+    }
+
+    .toolbar span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    button {
+      min-height: 40px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 999px;
+      color: #090a10;
+      background: #f4f5fb;
+      font: inherit;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .deck {
+      width: min(1500px, calc(100% - 64px));
+      margin: 0 auto;
+      padding: 34px 0 54px;
+    }
+
+    .slide {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 297 / 210;
+      min-height: 720px;
+      margin: 0 0 34px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(255, 111, 44, 0.08), transparent 42%),
+        linear-gradient(135deg, #11121a 0%, #08090f 62%, #210f0a 100%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .slide:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 12px;
+      background: linear-gradient(90deg, transparent, var(--orange), transparent);
+      box-shadow: 0 -10px 34px rgba(255, 111, 44, 0.52);
+    }
+
+    .slide-inner {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      padding: 88px 70px 58px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .event-mark {
+      position: absolute;
+      top: 30px;
+      left: 70px;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      color: #f4f5fb;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+
+    .event-mark .game {
+      color: var(--orange);
+    }
+
+    .event-mark .x {
+      color: transparent;
+      -webkit-text-stroke: 1px #f4f5fb;
+    }
+
+    .event-mark .ai {
+      color: var(--cyan);
+    }
+
+    .event-mark .sub {
+      margin-left: 8px;
+      color: rgba(244, 245, 251, 0.56);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+
+    .github-link {
+      position: absolute;
+      top: 30px;
+      right: 70px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--cyan);
+      font-size: 15px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .github-mark {
+      display: inline-flex;
+      width: 19px;
+      height: 19px;
+      color: currentColor;
+    }
+
+    .github-mark svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+
+    .github-link:hover {
+      color: var(--cyan);
+    }
+
+    .slide-no {
+      position: absolute;
+      right: 42px;
+      bottom: 30px;
+      color: rgba(244, 245, 251, 0.42);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+    }
+
+    .kicker {
+      margin: 0 0 18px;
+      color: var(--orange);
+      font-size: 15px;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p,
+    li {
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+
+    .meta-card,
+    .card,
+    .flow-card,
+    .mini-card,
+    .tip-box,
+    .link-box,
+    .screenshot-box {
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+
+    .term {
+      white-space: nowrap;
+    }
+
+    .step-label {
+      display: block;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      color: var(--text);
+      letter-spacing: 0;
+      line-height: 1.03;
+    }
+
+    h1 {
+      font-size: 104px;
+    }
+
+    h2 {
+      font-size: 52px;
+    }
+
+    h3 {
+      margin: 0 0 14px;
+      color: var(--orange-2);
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .lead {
+      max-width: 870px;
+      margin-top: 24px;
+      color: #dfe2eb;
+      font-size: 28px;
+      font-weight: 850;
+      line-height: 1.48;
+    }
+
+    .cover-layout {
+      display: grid;
+      grid-template-columns: 0.98fr 1.02fr;
+      gap: 54px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .cover-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .meta-row,
+    .three-grid,
+    .two-grid,
+    .flow-grid,
+    .dense-grid,
+    .shot-grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    .meta-row {
+      grid-template-columns: 1fr;
+      margin-top: 32px;
+    }
+
+    .three-grid {
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 30px;
+      flex: 1;
+    }
+
+    .two-grid {
+      grid-template-columns: repeat(2, 1fr);
+      margin-top: 30px;
+      flex: 1;
+    }
+
+    .flow-grid {
+      grid-template-columns: repeat(5, 1fr);
+      margin-top: 26px;
+    }
+
+    .dense-grid {
+      grid-template-columns: repeat(2, 1fr);
+      margin-top: 22px;
+      flex: 1;
+    }
+
+    .shot-grid {
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 20px;
+      flex: 1;
+    }
+
+    .single-link-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .link-stack {
+      width: min(100%, 760px);
+      margin: 12px auto 0;
+      display: grid;
+      gap: 14px;
+    }
+
+    .link-slide .link-stack {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      margin: 0;
+      transform: translate(-50%, -50%);
+    }
+
+    .link-stack .link-box {
+      min-height: 108px;
+      padding: 18px 24px;
+      font-size: 20px;
+      align-items: center;
+      text-align: center;
+    }
+
+    .link-title {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      color: #f5f6fb;
+      font-weight: 950;
+    }
+
+    .youtube-mark {
+      display: inline-flex;
+      width: 25px;
+      height: 18px;
+    }
+
+    .youtube-mark svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .single-shot {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .meta-card,
+    .card,
+    .placeholder,
+    .link-box,
+    .flow-card,
+    .tip-box,
+    .mini-card {
+      border: 1px solid var(--white-line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .meta-card {
+      min-height: 104px;
+      padding: 20px 22px;
+      color: #f6f7fd;
+      font-size: 20px;
+      font-weight: 850;
+      line-height: 1.45;
+    }
+
+    .meta-card strong,
+    .flow-card strong,
+    .mini-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--orange);
+      font-size: 15px;
+    }
+
+    .card {
+      padding: 28px;
+      font-size: 20px;
+      font-weight: 750;
+      line-height: 1.55;
+    }
+
+    .card.with-shot,
+    .mini-card.with-shot {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dense-grid .mini-card.with-shot {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      align-items: center;
+      gap: 16px;
+    }
+
+    .summary-grid {
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .summary-grid .card {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .summary-grid li + li {
+      margin-top: 8px;
+    }
+
+    .screenshot-box {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 0;
+      margin-top: auto;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border: 2px dashed rgba(255, 111, 44, 0.62);
+      border-radius: 8px;
+      color: var(--soft);
+      text-align: center;
+      background:
+        linear-gradient(180deg, rgba(255, 111, 44, 0.14), rgba(255, 111, 44, 0.035)),
+        rgba(255, 255, 255, 0.025);
+    }
+
+    .dense-grid .screenshot-box {
+      margin-top: 0;
+    }
+
+    .screenshot-box span {
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .screenshot-box img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .cover-image {
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .cover-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .mini-card {
+      padding: 22px 24px;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .flow-card {
+      min-height: 166px;
+      padding: 21px 19px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.43;
+    }
+
+    .tip-box {
+      margin-top: 24px;
+      padding: 20px 24px;
+      border-left: 5px solid var(--orange);
+      background: rgba(255, 111, 44, 0.13);
+      color: #ffe2cf;
+      font-size: 20px;
+      font-weight: 850;
+      line-height: 1.48;
+    }
+
+    .placeholder {
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+      border: 2px dashed rgba(255, 111, 44, 0.62);
+      color: #f5f6fb;
+      text-align: center;
+      background:
+        linear-gradient(180deg, rgba(255, 111, 44, 0.18), rgba(255, 111, 44, 0.04)),
+        rgba(255, 255, 255, 0.03);
+    }
+
+    .placeholder strong {
+      display: block;
+      font-size: 28px;
+    }
+
+    .placeholder span {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .cover-image {
+      width: 100%;
+      max-width: 760px;
+      aspect-ratio: 16 / 9;
+      align-self: center;
+      justify-self: center;
+      min-height: 0;
+      height: auto;
+    }
+
+    .link-box {
+      min-height: 182px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      color: #f5f6fb;
+      font-size: 25px;
+      font-weight: 950;
+      text-decoration: none;
+    }
+
+    .link-box span {
+      display: block;
+      margin-top: 14px;
+      color: var(--cyan);
+      font-size: 18px;
+      font-weight: 800;
+      word-break: break-all;
+    }
+
+    .single-shot .screenshot-box {
+      width: min(100%, 760px);
+      justify-self: center;
+    }
+
+    ul,
+    ol {
+      margin: 0;
+      padding-left: 24px;
+    }
+
+    li + li {
+      margin-top: 12px;
+    }
+
+    .source-note {
+      margin-top: auto;
+      color: var(--soft);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      html,
+      body {
+        width: auto !important;
+        height: auto !important;
+        min-height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #07080d !important;
+      }
+
+      .toolbar {
+        display: none !important;
+      }
+
+      .deck {
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      .slide {
+        width: 297mm !important;
+        height: 210mm !important;
+        min-height: 210mm !important;
+        aspect-ratio: auto !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+
+      .slide:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+
+      .slide-inner {
+        height: 100% !important;
+        padding: 20mm 18mm 18mm !important;
+      }
+
+      .event-mark {
+        top: 8mm !important;
+        left: 18mm !important;
+        font-size: 12pt !important;
+      }
+
+      .github-link {
+        top: 8mm !important;
+        right: 18mm !important;
+        font-size: 9pt !important;
+      }
+
+      .event-mark .sub {
+        font-size: 7pt !important;
+      }
+
+      .cover-layout {
+        grid-template-columns: 0.98fr 1.02fr !important;
+        gap: 13mm !important;
+      }
+
+      .meta-row {
+        gap: 4mm !important;
+        margin-top: 11mm !important;
+      }
+
+      .link-slide .link-stack {
+        width: 180mm !important;
+        margin: 0 !important;
+        gap: 3mm !important;
+      }
+
+      .link-stack .link-box {
+        min-height: 28mm !important;
+        padding: 4mm 5mm !important;
+        font-size: 12pt !important;
+      }
+
+      .three-grid,
+      .two-grid {
+        gap: 5mm !important;
+        margin-top: 9mm !important;
+      }
+
+      .flow-grid {
+        gap: 4mm !important;
+        margin-top: 8mm !important;
+      }
+
+      .dense-grid {
+        gap: 5mm !important;
+        margin-top: 7mm !important;
+      }
+
+      .summary-grid {
+        gap: 2.5mm !important;
+        margin-top: 3.5mm !important;
+      }
+
+      .summary-grid .card {
+        padding: 3.5mm !important;
+      }
+
+      .summary-grid li + li {
+        margin-top: 1.8mm !important;
+      }
+
+      .shot-grid {
+        gap: 5mm !important;
+        margin-top: 6mm !important;
+      }
+
+      .single-shot .screenshot-box {
+        width: min(100%, 220mm) !important;
+      }
+
+      h1 {
+        font-size: 50pt !important;
+      }
+
+      h2 {
+        font-size: 30pt !important;
+      }
+
+      h3 {
+        font-size: 14.5pt !important;
+        margin-bottom: 3.5mm !important;
+      }
+
+      .kicker {
+        font-size: 10pt !important;
+        margin-bottom: 4mm !important;
+      }
+
+      .lead {
+        margin-top: 7mm !important;
+        font-size: 15.5pt !important;
+        line-height: 1.43 !important;
+      }
+
+      .card {
+        padding: 6mm !important;
+        font-size: 10.7pt !important;
+        line-height: 1.43 !important;
+      }
+
+      .mini-card {
+        padding: 5mm 6mm !important;
+        font-size: 10.2pt !important;
+      }
+
+      .flow-card {
+        min-height: 31mm !important;
+        padding: 4.5mm !important;
+        font-size: 9.6pt !important;
+      }
+
+      .tip-box {
+        margin-top: 6mm !important;
+        padding: 4.5mm 6mm !important;
+        font-size: 10.8pt !important;
+      }
+
+      .meta-card {
+        min-height: 22mm !important;
+        padding: 5mm !important;
+        font-size: 10.8pt !important;
+      }
+
+      .meta-card strong,
+      .flow-card strong,
+      .mini-card strong {
+        font-size: 8.2pt !important;
+      }
+
+      .placeholder {
+        min-height: 0 !important;
+        height: 100% !important;
+      }
+
+      .cover-image {
+        width: 100% !important;
+        max-width: 136mm !important;
+        height: auto !important;
+        aspect-ratio: 16 / 9 !important;
+      }
+
+      .screenshot-box span {
+        font-size: 8.5pt !important;
+      }
+
+      .dense-grid .mini-card.with-shot {
+        gap: 4mm !important;
+      }
+
+      .placeholder strong {
+        font-size: 17pt !important;
+      }
+
+      .placeholder span,
+      .link-box span,
+      .source-note {
+        font-size: 9.5pt !important;
+      }
+
+      .link-box {
+        min-height: 37mm !important;
+        padding: 7mm !important;
+        font-size: 16pt !important;
+      }
+
+      .slide-no {
+        right: 9mm !important;
+        bottom: 7mm !important;
+        font-size: 9pt !important;
+      }
+
+      li + li {
+        margin-top: 2.6mm !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .deck {
+        width: min(100% - 24px, 1500px);
+      }
+
+      .slide {
+        min-height: auto;
+        aspect-ratio: auto;
+      }
+
+      .slide-inner,
+      .cover-layout,
+      .three-grid,
+      .two-grid,
+      .flow-grid,
+      .dense-grid,
+      .shot-grid,
+      .meta-row {
+        display: block;
+      }
+
+      .slide-inner {
+        padding: 72px 24px 34px;
+      }
+
+      .event-mark {
+        top: 26px;
+        left: 24px;
+      }
+
+      h1 {
+        font-size: 62px;
+      }
+
+      h2 {
+        font-size: 36px;
+      }
+
+      .lead {
+        font-size: 22px;
+      }
+
+      .card,
+      .placeholder,
+      .link-box,
+      .meta-card,
+      .flow-card,
+      .mini-card {
+        margin-top: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar" aria-label="PDF 저장">
+    <span>A4 가로 PDF 소개서</span>
+    <button type="button" onclick="window.print()">PDF 저장</button>
+  </div>
+
+  <main class="deck">
+    <section class="slide">
+      <div class="slide-inner cover-layout">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <a class="github-link" href="https://github.com/AACHANJINAA/FlickDom" target="_blank" rel="noreferrer"><span class="github-mark" aria-hidden="true"><svg viewBox="0 0 16 16" role="img"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg></span><span>https://github.com/AACHANJINAA/FlickDom</span></a>
+        <div class="cover-copy">
+          <p class="kicker">UNITY WEBGL / 1 VS 1 BOARD FLICK GAME</p>
+          <h1>FlickDom</h1>
+          <p class="lead">손끝으로 말을 튕겨 보드의 칸을 차지하고, 카드 패턴을 완성해 점수를 겨루는 1대1 전략 플릭 보드게임.</p>
+          <div class="meta-row">
+            <div class="meta-card"><strong>장르</strong>물리 기반 보드 전략</div>
+            <div class="meta-card"><strong>플레이</strong>싱글 테스트 / 2인 멀티플레이</div>
+            <div class="meta-card"><strong>승리 조건</strong>먼저 10점 달성</div>
+          </div>
+        </div>
+        <div class="placeholder cover-image">
+          <img src="FlickDom.png" alt="FlickDom 게임 대표 이미지">
+        </div>
+        <div class="slide-no">01 / 05</div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <p class="kicker">How To Play</p>
+        <h2>게임 방법: 목표 · 조작 · 종료 조건</h2>
+        <div class="three-grid">
+          <article class="card with-shot">
+            <h3>목표</h3>
+            <ul>
+              <li>각 플레이어는 3개의 플릭 디스크를 사용한다.</li>
+              <li>디스크를 보드 위에 배치해 카드가 요구하는 패턴을 완성한다.</li>
+              <li>카드는 난이도에 따라 Easy 1점, Normal 2점, Hard 3점을 준다.</li>
+            </ul>
+            <div class="screenshot-box"><img src="intro_2-1.png" alt="목표와 디스크 순서 안내 화면"></div>
+          </article>
+          <article class="card with-shot">
+            <h3>조작</h3>
+            <ul>
+              <li>라운드 시작 시 자신의 디스크 3개를 좌클릭해 사용할 순서를 정한다.</li>
+              <li>마우스 또는 터치 드래그로 방향과 힘을 잡고 놓으면 디스크가 발사된다.</li>
+              <li>발사된 디스크는 다른 디스크나 벽에 닿아야 배치 후보가 된다.</li>
+            </ul>
+            <div class="screenshot-box"><img src="intro_2-2.png" alt="디스크 조작 안내 화면"></div>
+          </article>
+          <article class="card with-shot">
+            <h3>종료 조건</h3>
+            <ul>
+              <li>매치는 3개의 스테이지 카드 흐름으로 진행된다.</li>
+              <li>점수 획득 직후 10점에 먼저 도달한 플레이어가 승리한다.</li>
+              <li>승리 시 중앙에 P1 WIN 또는 P2 WIN 화면이 표시된다.</li>
+            </ul>
+            <div class="screenshot-box"><img src="intro_2-3.png" alt="게임 승리 화면"></div>
+          </article>
+        </div>
+        <div class="tip-box">핵심 재미: 물리 발사로 위치를 만들고, 카드 패턴을 읽어 다음 턴의 배치를 계획하는 전략형 1대1 대결.</div>
+        <div class="slide-no">02 / 05</div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <p class="kicker">Multiplayer Setup</p>
+        <h2>멀티플레이 실행 방법</h2>
+        <div class="flow-grid">
+          <div class="flow-card"><strong>STEP 01</strong>메인 화면에서<br><span class="term step-label">MULTIPLAYER 버튼을</span>눌러 방 생성 및 참가 화면으로 이동한다.</div>
+          <div class="flow-card"><strong>STEP 02</strong>호스트가 <span class="term">Create Room을</span> 눌러 방을 만들고 <span class="term">Join Code를</span> 생성한다.</div>
+          <div class="flow-card"><strong>STEP 03</strong>호스트는 <span class="term">Copy 버튼</span> 또는 메신저로 <span class="term">Join Code를</span> 참가자에게 전달한다.</div>
+          <div class="flow-card"><strong>STEP 04</strong>참가자는 전달받은 <span class="term">코드를</span> 입력하고 <span class="term">Join Room을</span> 눌러 접속한다.</div>
+          <div class="flow-card"><strong>STEP 05</strong><span class="term">Players가</span> 2 / 2가 되면 호스트가 <span class="term">Start Game을</span> 눌러 시작한다.</div>
+        </div>
+        <div class="dense-grid">
+          <div class="mini-card with-shot"><div class="screenshot-box"><img src="intro_3-1.png" alt="멀티플레이 방 생성 화면"></div><div><strong>시작 전 준비</strong>호스트와 참가자 역할을 정하고, 두 플레이어 모두 게임 실행 및 네트워크 연결 상태를 확인한다.</div></div>
+          <div class="mini-card with-shot"><div class="screenshot-box"><img src="intro_3-2.png" alt="호스트 Join Code 화면"></div><div><strong>중요</strong>참가자는 새 방을 만들지 말고 호스트가 전달한 <span class="term">Join Code를</span> 입력해야 같은 방에 들어갈 수 있다.</div></div>
+          <div class="mini-card with-shot"><div class="screenshot-box"><img src="intro_3-3.png" alt="클라이언트 접속 상태 화면"></div><div><strong>상태 표시</strong>방 생성 전에는 <span class="term">Status</span>가 <span class="term">Offline</span>일 수 있고, 생성 후 호스트는 <span class="term">Host</span>, 참가자는 <span class="term">Client</span>로 표시될 수 있다.</div></div>
+          <div class="mini-card with-shot"><div class="screenshot-box"><img src="intro_3-4.png" alt="Join Code 전달 화면"></div><div><strong>코드 전달</strong>초대코드는 매번 달라질 수 있으므로 화면에 표시된 최신 <span class="term">Join Code</span>를 전달한다.</div></div>
+        </div>
+        <div class="slide-no">03 / 05</div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner link-slide">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <p class="kicker">Play Link & Video</p>
+        <h2>플레이 링크 · 플레이 영상</h2>
+        <div class="link-stack">
+          <a class="link-box" href="https://fantastic-pothos-5ab193.netlify.app/" target="_blank" rel="noreferrer">
+            <span class="link-title">웹 플레이 URL</span>
+            <span>https://fantastic-pothos-5ab193.netlify.app/</span>
+          </a>
+          <a class="link-box" href="https://www.youtube.com/watch?v=IR4KDTCyNKU" target="_blank" rel="noreferrer">
+            <span class="link-title"><span class="youtube-mark" aria-hidden="true"><svg viewBox="0 0 24 18" role="img"><path fill="#ff0033" d="M23.5 3.1a3 3 0 0 0-2.1-2.1C19.5.5 12 .5 12 .5s-7.5 0-9.4.5A3 3 0 0 0 .5 3.1 31 31 0 0 0 0 9a31 31 0 0 0 .5 5.9 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 9a31 31 0 0 0-.5-5.9Z"></path><path fill="#fff" d="m9.6 12.8 6.2-3.8-6.2-3.8v7.6Z"></path></svg></span>플레이 영상 URL</span>
+            <span>https://www.youtube.com/watch?v=IR4KDTCyNKU</span>
+          </a>
+        </div>
+        <div class="slide-no">04 / 05</div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <p class="kicker">Troubleshooting & Summary</p>
+        <h2>문제 해결과 구현 요약</h2>
+        <div class="dense-grid summary-grid">
+          <article class="card">
+            <h3>접속 문제 확인</h3>
+            <ul>
+              <li>코드 입력 후 접속이 안 되면 대소문자와 앞뒤 공백을 확인한다.</li>
+              <li>Players가 2 / 2로 바뀌지 않으면 Join Room 클릭 여부와 양쪽 네트워크 상태를 확인한다.</li>
+              <li><span class="term">Start Game은</span> 호스트 전용 버튼이므로 참가자 접속 완료 후 호스트가 시작한다.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>핵심 구현</h3>
+            <ul>
+              <li>보드, 디스크, 카드, 점수, 승리 흐름을 갖춘 물리 기반 실제 게임으로 구성했다.</li>
+              <li>Host-Client 기반 2인 멀티플레이, 로비, 역할 배정, 보드·카드·점수 동기화를 구현했다.</li>
+              <li>카드 획득 애니메이션, 카드 공개 연출, 효과음과 BGM을 추가했다.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>게임 흐름</h3>
+            <ul>
+              <li>메인 메뉴에서 멀티플레이 방을 생성하거나 초대코드로 참가한다.</li>
+              <li>각 턴마다 디스크를 선택하고 발사해 보드 위 점령 위치를 만든다.</li>
+              <li>카드 패턴이 완성되면 점수를 획득하고 10점 도달 시 승리한다.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>릴리스 형태</h3>
+            <ul>
+              <li>Unity Editor 테스트와 WebGL 브라우저 실행을 지원한다.</li>
+              <li>WebGL 빌드는 정적 호스팅에 업로드해 공유 가능한 URL로 배포한다.</li>
+              <li>발표 자료에는 웹 링크, 테스트 링크, 플레이 영상 링크를 기입한다.</li>
+            </ul>
+          </article>
+        </div>
+        <div class="slide-no">05 / 05</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

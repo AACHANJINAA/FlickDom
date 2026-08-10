@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlickDom 팀원 담당 역할</title>
+  <style>
+    :root {
+      --bg: #07080d;
+      --text: #f4f5fb;
+      --muted: #b9bdc9;
+      --orange: #ff6f2c;
+      --blue: #26c7ff;
+      --line: rgba(255, 111, 44, 0.34);
+      --cell: rgba(255, 255, 255, 0.048);
+      --cell-strong: rgba(255, 111, 44, 0.10);
+      --white-line: rgba(255, 255, 255, 0.13);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Pretendard", "Segoe UI", "Apple SD Gothic Neo", Arial, sans-serif;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      background: #07080d;
+    }
+    body {
+      background:
+        radial-gradient(ellipse at 50% 100%, rgba(255, 111, 44, 0.32), transparent 42%),
+        linear-gradient(180deg, #090a10 0%, #07080d 58%, #190b08 100%);
+    }
+    .toolbar {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 20;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(7, 8, 13, 0.84);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(12px);
+    }
+    .toolbar span { color: var(--muted); font-size: 13px; font-weight: 800; }
+    button {
+      min-height: 40px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 999px;
+      color: #090a10;
+      background: #f4f5fb;
+      font: inherit;
+      font-weight: 950;
+      cursor: pointer;
+    }
+    .deck { width: min(1500px, calc(100% - 64px)); margin: 0 auto; padding: 34px 0 54px; }
+    .page {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 297 / 210;
+      min-height: 720px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(255, 111, 44, 0.08), transparent 42%),
+        linear-gradient(135deg, #11121a 0%, #08090f 62%, #210f0a 100%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+    }
+    .page::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 12px;
+      background: linear-gradient(90deg, transparent, var(--orange), transparent);
+      box-shadow: 0 -10px 34px rgba(255, 111, 44, 0.52);
+    }
+    .inner { position: relative; z-index: 1; height: 100%; padding: 76px 58px 46px; display: flex; flex-direction: column; }
+    .event-mark {
+      position: absolute;
+      top: 30px;
+      left: 58px;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      color: #f4f5fb;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .event-mark .game { color: var(--orange); }
+    .event-mark .x { color: transparent; -webkit-text-stroke: 1px #f4f5fb; }
+    .event-mark .ai { color: var(--blue); }
+    .event-mark .sub { margin-left: 8px; color: rgba(244, 245, 251, 0.56); font-size: 11px; letter-spacing: 0.08em; }
+    .kicker { margin: 0 0 10px; color: var(--orange); font-size: 14px; font-weight: 950; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0; color: var(--text); font-size: 44px; line-height: 1.05; letter-spacing: 0; }
+    .caption { margin: 12px 0 24px; color: var(--muted); font-size: 16px; font-weight: 760; }
+    .role-table {
+      display: grid;
+      grid-template-columns: 0.62fr 1.25fr 2.95fr;
+      border: 1px solid var(--white-line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .th, .td {
+      padding: 18px 20px;
+      border-right: 1px solid var(--white-line);
+      border-bottom: 1px solid var(--white-line);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+    .th:nth-child(3n), .td:nth-child(3n) { border-right: 0; }
+    .td:nth-last-child(-n + 3) { border-bottom: 0; }
+    .th { color: #fff; background: rgba(255, 111, 44, 0.18); font-size: 16px; font-weight: 950; }
+    .td { color: #e9ecf5; background: var(--cell); font-weight: 720; }
+    .member { background: var(--cell-strong); }
+    .name { display: block; color: #fff; font-size: 22px; font-weight: 950; line-height: 1.1; }
+    .alias { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
+    .role { color: #ffe0c8; font-weight: 900; }
+    .note {
+      margin-top: 18px;
+      padding: 13px 16px;
+      border-left: 4px solid var(--orange);
+      border-radius: 8px;
+      background: rgba(255, 111, 44, 0.12);
+      color: #ffe2cf;
+      font-size: 14px;
+      font-weight: 780;
+      line-height: 1.5;
+    }
+    @page { size: A4 landscape; margin: 0; }
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { width: 297mm; height: 210mm; background: #07080d !important; }
+      .toolbar { display: none !important; }
+      .deck { width: 297mm !important; padding: 0 !important; margin: 0 !important; }
+      .page { width: 297mm !important; height: 210mm !important; min-height: 210mm !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+      .inner { height: 100% !important; padding: 17mm 14mm 12mm !important; }
+      .event-mark { top: 7mm !important; left: 14mm !important; font-size: 11pt !important; }
+      .event-mark .sub { font-size: 6.8pt !important; }
+      h1 { font-size: 27pt !important; }
+      .caption { margin: 3mm 0 5mm !important; font-size: 9.5pt !important; }
+      .th, .td { padding: 4mm 4.5mm !important; font-size: 9.6pt !important; line-height: 1.45 !important; }
+      .th { font-size: 9.2pt !important; }
+      .name { font-size: 14pt !important; }
+      .alias { font-size: 7.5pt !important; }
+      .note { margin-top: 4mm !important; padding: 3mm 4mm !important; font-size: 8.2pt !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><span>A4 가로 팀 역할 표</span><button type="button" onclick="window.print()">PDF 저장</button></div>
+  <main class="deck">
+    <section class="page">
+      <div class="inner">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <p class="kicker">Git Commit Based Role Summary</p>
+        <h1>FlickDom 팀원 담당 역할 정리</h1>
+        <p class="caption">Git author, 커밋 메시지, 변경 파일을 기준으로 팀원별 담당 역할과 실제 구현 영역을 정리했다.</p>
+        <div class="role-table">
+          <div class="th">팀원</div>
+          <div class="th">담당 역할</div>
+          <div class="th">실제 구현 영역</div>
+          <div class="td member"><span class="name">임찬진</span><span class="alias">IM CHANJIN</span></div>
+          <div class="td role">클라이언트 / 서버</div>
+          <div class="td">오브젝트 선택·드래그·발사, 궤적 표시, Flick 컴포넌트 분리, 토큰 물리/재질 데이터화, 버튼·충돌·점수·BGM·승리 사운드, 카드 획득 애니메이션, 서버 계획 및 초기 Host/Client 동기화, 소개서/AI 설명서 작성.</div>
+          <div class="td member"><span class="name">박신우</span><span class="alias">tlsdn0403</span></div>
+          <div class="td role">클라이언트 / 서버</div>
+          <div class="td">FSM 기반 턴 흐름, 5x5 보드 점령 로직, 칸 선택/배치 후보 처리, 카드 패턴 매칭과 스테이지 진행, 원숭이 조작/카메라 흐름, 메인 메뉴, 네트워크 구조 수정, WebGL 빌드·배포·최종 릴리스.</div>
+          <div class="td member"><span class="name">황인성</span><span class="alias">Hwang Inseong / His@Laptop</span></div>
+          <div class="td role">아트</div>
+          <div class="td">디스크·별 UV 수정, Triplanar 셰이더, 보드·그루터기·재질링, 아트 에셋 정리, 프리팹 13종 제작, 메인 메뉴 배경·스킨 HUD, UI 스프라이트, 게임룰/HUD 정리, 승리 이미지 UI 적용.</div>
+        </div>
+        <p class="note">참고: 커밋 author 계정 기준으로 `IM CHANJIN`은 임찬진, `tlsdn0403`은 박신우, `Hwang Inseong / His@Laptop`은 황인성으로 정리했다.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

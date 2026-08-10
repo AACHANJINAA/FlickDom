@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlickDom 팀원 담당 역할</title>
+  <style>
+    :root {
+      --bg: #07080d;
+      --text: #f4f5fb;
+      --muted: #b9bdc9;
+      --orange: #ff6f2c;
+      --blue: #26c7ff;
+      --line: rgba(255, 111, 44, 0.34);
+      --cell: rgba(255, 255, 255, 0.048);
+      --cell-strong: rgba(255, 111, 44, 0.10);
+      --white-line: rgba(255, 255, 255, 0.13);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Pretendard", "Segoe UI", "Apple SD Gothic Neo", Arial, sans-serif;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      background: #07080d;
+    }
+    body {
+      background:
+        radial-gradient(ellipse at 50% 100%, rgba(255, 111, 44, 0.32), transparent 42%),
+        linear-gradient(180deg, #090a10 0%, #07080d 58%, #190b08 100%);
+    }
+    .toolbar {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 20;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(7, 8, 13, 0.84);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(12px);
+    }
+    .toolbar span { color: var(--muted); font-size: 13px; font-weight: 800; }
+    button {
+      min-height: 40px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 999px;
+      color: #090a10;
+      background: #f4f5fb;
+      font: inherit;
+      font-weight: 950;
+      cursor: pointer;
+    }
+    .deck { width: min(1500px, calc(100% - 64px)); margin: 0 auto; padding: 34px 0 54px; }
+    .page {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 297 / 210;
+      min-height: 720px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(255, 111, 44, 0.08), transparent 42%),
+        linear-gradient(135deg, #11121a 0%, #08090f 62%, #210f0a 100%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+    }
+    .page::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 12px;
+      background: linear-gradient(90deg, transparent, var(--orange), transparent);
+      box-shadow: 0 -10px 34px rgba(255, 111, 44, 0.52);
+    }
+    .inner { position: relative; z-index: 1; height: 100%; padding: 76px 58px 46px; display: flex; flex-direction: column; }
+    .event-mark {
+      position: absolute;
+      top: 30px;
+      left: 58px;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      color: #f4f5fb;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 950;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .event-mark .game { color: var(--orange); }
+    .event-mark .x { color: transparent; -webkit-text-stroke: 1px #f4f5fb; }
+    .event-mark .ai { color: var(--blue); }
+    .event-mark .sub { margin-left: 8px; color: rgba(244, 245, 251, 0.56); font-size: 11px; letter-spacing: 0.08em; }
+    .kicker { margin: 0 0 10px; color: var(--orange); font-size: 14px; font-weight: 950; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0 0 24px; color: var(--text); font-size: 40px; line-height: 1.08; letter-spacing: 0; }
+    .caption { margin: 12px 0 24px; color: var(--muted); font-size: 16px; font-weight: 760; }
+    .role-table {
+      display: grid;
+      grid-template-columns: 0.62fr 1.25fr 2.95fr;
+      grid-template-rows: 64px repeat(3, 1fr);
+      border: 1px solid var(--white-line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.025);
+      flex: 1;
+      min-height: 0;
+      margin-top: 2px;
+    }
+    .th, .td {
+      padding: 24px 24px;
+      border-right: 1px solid var(--white-line);
+      border-bottom: 1px solid var(--white-line);
+      font-size: 19px;
+      line-height: 1.58;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .th:nth-child(3n), .td:nth-child(3n) { border-right: 0; }
+    .td:nth-last-child(-n + 3) { border-bottom: 0; }
+    .th { color: #fff; background: rgba(255, 111, 44, 0.18); font-size: 17px; font-weight: 950; justify-content: center; }
+    .td { color: #e9ecf5; background: var(--cell); font-weight: 720; }
+    .member { background: var(--cell-strong); }
+    .name { display: block; color: #fff; font-size: 28px; font-weight: 950; line-height: 1.1; }
+    .alias { display: block; margin-top: 10px; color: var(--muted); font-size: 14px; font-weight: 800; }
+    .role { color: #ffe0c8; font-size: 23px; font-weight: 950; line-height: 1.35; }
+    .impl-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-content: center;
+    }
+    .impl-list span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+      color: #f4f5fb;
+      font-weight: 820;
+      white-space: nowrap;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+    .impl-detail {
+      display: grid;
+      color: #f4f5fb;
+      font-weight: 780;
+      line-height: 1.38;
+    }
+    .detail-row {
+      display: grid;
+      grid-template-columns: 0.72fr 2.2fr;
+      border-bottom: 1px solid var(--white-line);
+    }
+    .detail-row:last-child {
+      border-bottom: 0;
+    }
+    .detail-topic,
+    .detail-content {
+      padding: 9px 12px;
+    }
+    .detail-topic {
+      color: var(--orange);
+      font-weight: 950;
+      border-right: 1px solid var(--white-line);
+    }
+    .detail-content {
+      color: #f4f5fb;
+      font-weight: 760;
+      word-break: keep-all;
+      overflow-wrap: normal;
+    }
+    .term {
+      white-space: nowrap;
+    }
+    .note {
+      margin-top: 18px;
+      padding: 13px 16px;
+      border-left: 4px solid var(--orange);
+      border-radius: 8px;
+      background: rgba(255, 111, 44, 0.12);
+      color: #ffe2cf;
+      font-size: 14px;
+      font-weight: 780;
+      line-height: 1.5;
+    }
+    @page { size: A4 landscape; margin: 0; }
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { width: 297mm; height: 210mm; background: #07080d !important; }
+      .toolbar { display: none !important; }
+      .deck { width: 297mm !important; padding: 0 !important; margin: 0 !important; }
+      .page { width: 297mm !important; height: 210mm !important; min-height: 210mm !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+      .inner { height: 100% !important; padding: 17mm 14mm 12mm !important; }
+      .event-mark { top: 7mm !important; left: 14mm !important; font-size: 11pt !important; }
+      .event-mark .sub { font-size: 6.8pt !important; }
+      h1 { margin-bottom: 6mm !important; font-size: 25pt !important; }
+      .caption { margin: 3mm 0 5mm !important; font-size: 9.5pt !important; }
+      .role-table { grid-template-rows: 15mm repeat(3, 1fr) !important; }
+      .th, .td { padding: 5mm 5mm !important; font-size: 10.8pt !important; line-height: 1.5 !important; }
+      .role { font-size: 13.2pt !important; line-height: 1.35 !important; }
+      .th { font-size: 10pt !important; }
+      .name { font-size: 17pt !important; }
+      .alias { font-size: 8.2pt !important; }
+      .impl-list { gap: 2mm !important; }
+      .impl-list span { min-height: 7mm !important; padding: 1mm 2.2mm !important; font-size: 8.5pt !important; }
+      .impl-detail { font-size: 8.9pt !important; line-height: 1.28 !important; }
+      .detail-topic, .detail-content { padding: 1.7mm 2mm !important; }
+      .note { margin-top: 4mm !important; padding: 3mm 4mm !important; font-size: 8.2pt !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><span>A4 가로 팀 역할 표</span><button type="button" onclick="window.print()">PDF 저장</button></div>
+  <main class="deck">
+    <section class="page">
+      <div class="inner">
+        <a class="event-mark" href="https://nan2026.nhn.com/" target="_blank" rel="noreferrer"><span>NHN</span><span class="game">GAME</span><span class="x">X</span><span class="ai">AI</span><span>HACKATHON</span><span class="sub">NAN2026</span></a>
+        <h1>FlickDom 팀원 담당 역할 제작</h1>
+        <div class="role-table">
+          <div class="th">팀원</div>
+          <div class="th">담당 역할</div>
+          <div class="th">상세 구현 내용</div>
+          <div class="td member"><span class="name">임찬진</span><span class="alias">IM CHANJIN</span></div>
+          <div class="td role">기획 / Shader /<br>Client / Server</div>
+          <div class="td"><div class="impl-detail"><div class="detail-row"><div class="detail-topic">기획</div><div class="detail-content">게임 규칙, 카드·점수·승리 조건, Stage 흐름, 멀티플레이 진행 구조 설계</div></div><div class="detail-row"><div class="detail-topic">Shader</div><div class="detail-content">Board와 Token의 Physics·Material 데이터 연동 및 시각 효과 적용</div></div><div class="detail-row"><div class="detail-topic">Client</div><div class="detail-content">Object 선택, Drag·Flick 발사, Trajectory 표시, <span class="term">Flick Component</span> 분리, Card 획득 Animation, Sound 제작</div></div><div class="detail-row"><div class="detail-topic">Server</div><div class="detail-content">Server 기반 구축, Host/Client 동기화, 턴·점수·게임 상태 관리</div></div></div></div>
+          <div class="td member"><span class="name">박신우</span><span class="alias">tlsdn0403</span></div>
+          <div class="td role">Client / Server /<br>Build</div>
+          <div class="td"><div class="impl-detail"><div class="detail-row"><div class="detail-topic">Client</div><div class="detail-content">5x5 Board 점령 Logic, Cell 선택·배치 후보 처리, <span class="term">Card Pattern Matching</span>, Stage 진행, Monkey 조작·Camera 흐름, <span class="term">Main Menu</span> 제작</div></div><div class="detail-row"><div class="detail-topic">Server</div><div class="detail-content">FSM 기반 턴 흐름, 멀티플레이 상태 전환, Network 구조 수정</div></div><div class="detail-row"><div class="detail-topic">Build</div><div class="detail-content"><span class="term">WebGL Build</span>·배포 환경 구성, 브라우저 실행 검증, 최종 Release</div></div></div></div>
+          <div class="td member"><span class="name">황인성</span><span class="alias">Hwang Inseong / His@Laptop</span></div>
+          <div class="td role">Material / Shader /<br>3D Art / 2D Art</div>
+          <div class="td"><div class="impl-detail"><div class="detail-row"><div class="detail-topic">Material</div><div class="detail-content">Disk·Star Asset UV 수정, Board·그루터기 Material 제작, Scene 적용</div></div><div class="detail-row"><div class="detail-topic">Shader</div><div class="detail-content">Triplanar Shader 적용, Unity Rendering 설정 및 표면 표현 조정</div></div><div class="detail-row"><div class="detail-topic">3D Art</div><div class="detail-content">Board 소품, <span class="term">Flick Disk</span>, <span class="term">Star Marker</span>, 그루터기 요소 제작, Scene용 Prefab 13종 구성</div></div><div class="detail-row"><div class="detail-topic">2D Art</div><div class="detail-content"><span class="term">Main Menu</span> 배경, Skin HUD, Gameplay HUD, Rule Screen, <span class="term">UI Sprite</span>, <span class="term">Victory Image UI</span> 제작</div></div></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
